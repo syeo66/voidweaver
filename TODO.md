@@ -6,10 +6,9 @@
 - [x] **Resolve 148 Flutter analyzer warnings** - All linting violations fixed (0 warnings!)
 - [x] **Code quality improvements** - Added const constructors, removed dead code, fixed deprecated APIs
 - [x] **Performance optimizations** - Improved widget efficiency and memory management
+- [x] **Put into git** - Initialize git repository and commit code
 
 ## 🚨 Critical Issues (Fix First)
-
-- [ ] **Put into git** - Initialize git repository and commit code
 - [ ] **UTF-8 encoding issues** - Track info broken with UTF-8 characters
 - [ ] **Player page not updating** - Skip/shuffle don't update UI properly
 - [ ] **Missing album covers in random play** - Only shows fallback icon
