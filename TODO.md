@@ -10,13 +10,14 @@
 - [x] **UTF-8 encoding issues** - Fixed track info display with UTF-8 characters using proper byte decoding
 - [x] **Player page not updating** - Fixed skip/shuffle UI updates by converting static widgets to use Consumer<AudioPlayerService> pattern
 - [x] **Missing album covers in random play** - Fixed by intelligently assigning cover art using albumId when coverArt is missing
+- [x] **Playlist auto-scroll** - Implemented smooth animated scrolling to center currently playing track when track changes
 
 ## 🚨 Critical Issues (Fix First)
 - [x] **Player page not updating** - Skip/shuffle don't update UI properly ✅
 - [x] **Missing album covers in random play** - Only shows fallback icon ✅
 - [x] **No current track highlighting** - Playlist doesn't show currently playing track ✅
+- [x] **Playlist auto-scroll** - Playlist should scroll to currently playing item on track change ✅
 - [ ] **Cover art reloading on skip** - Cover art refreshes/reloads when clicking skip button
-- [ ] **Playlist auto-scroll** - Playlist should scroll to currently playing item on track change
 - [ ] **Verify the played song status is sent** - The status of playing the song should be notified to the server
 
 ## 🔧 Core Functionality Gaps

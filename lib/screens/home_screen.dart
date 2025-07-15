@@ -148,6 +148,7 @@ class _StaticPlaylistInfo extends StatefulWidget {
 class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
   List<Song> _currentPlaylist = [];
   int _currentIndex = 0;
+  final ScrollController _scrollController = ScrollController();
   
   @override
   void initState() {
@@ -159,6 +160,7 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
   
   @override
   void dispose() {
+    _scrollController.dispose();
     widget.playerService.removeListener(_onPlayerServiceChanged);
     super.dispose();
   }
@@ -169,11 +171,43 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
     final newCurrentIndex = widget.playerService.currentIndex;
     
     if (newPlaylist != _currentPlaylist || newCurrentIndex != _currentIndex) {
+      final shouldAutoScroll = newCurrentIndex != _currentIndex;
+      
       setState(() {
         _currentPlaylist = newPlaylist;
         _currentIndex = newCurrentIndex;
       });
+      
+      // Auto-scroll to the current track after the widget rebuilds
+      if (shouldAutoScroll && _currentPlaylist.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToCurrentTrack();
+        });
+      }
     }
+  }
+  
+  void _scrollToCurrentTrack() {
+    if (!_scrollController.hasClients || _currentPlaylist.isEmpty) return;
+    
+    // Calculate the scroll position to center the current track
+    // Each item is 80 pixels wide (including margin)
+    const double itemWidth = 80.0 + 8.0; // width + margin
+    final double targetPosition = _currentIndex * itemWidth;
+    
+    // Get the viewport width to center the item
+    final double viewportWidth = _scrollController.position.viewportDimension;
+    final double centeredPosition = targetPosition - (viewportWidth / 2) + (itemWidth / 2);
+    
+    // Ensure we don't scroll beyond the bounds
+    final double maxScrollExtent = _scrollController.position.maxScrollExtent;
+    final double clampedPosition = centeredPosition.clamp(0.0, maxScrollExtent);
+    
+    _scrollController.animateTo(
+      clampedPosition,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
   }
 
   @override
@@ -191,6 +225,7 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
         SizedBox(
           height: 100,
           child: ListView.builder(
+            controller: _scrollController,
             scrollDirection: Axis.horizontal,
             itemCount: _currentPlaylist.length,
             itemBuilder: (context, index) {
