@@ -239,6 +239,11 @@ class AudioPlayerService extends ChangeNotifier {
       // Update the internal reference without notifying listeners
       _currentSong = updatedSong;
       
+      // Also update the playlist to keep consistency
+      if (_currentIndex >= 0 && _currentIndex < _playlist.length) {
+        _playlist[_currentIndex] = updatedSong;
+      }
+      
       // Apply the volume adjustment (this doesn't trigger UI updates)
       _applyReplayGainVolume();
     } catch (e) {

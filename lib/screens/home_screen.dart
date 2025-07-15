@@ -232,93 +232,116 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
               final song = _currentPlaylist[index];
               final isCurrentSong = index == _currentIndex;
               
-              return Container(
-                width: 80,
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                child: Column(
-                  children: [
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                        color: isCurrentSong ? Theme.of(context).primaryColor.withValues(alpha: 0.1) : Colors.grey[300],
-                        border: isCurrentSong ? Border.all(color: Theme.of(context).primaryColor, width: 3) : null,
-                        boxShadow: isCurrentSong ? [
-                          BoxShadow(
-                            color: Theme.of(context).primaryColor.withValues(alpha: 0.3),
-                            blurRadius: 8,
-                            spreadRadius: 1,
-                          )
-                        ] : null,
-                      ),
-                      child: Stack(
-                        children: [
-                          song.coverArt != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(
-                                    widget.api.getCoverArtUrl(song.coverArt!),
-                                    key: ValueKey('playlist-${song.coverArt}'),
-                                    fit: BoxFit.cover,
-                                    headers: const {
-                                      'Cache-Control': 'max-age=3600',
-                                    },
-                                    loadingBuilder: (context, child, loadingProgress) {
-                                      if (loadingProgress == null) return child;
-                                      return Icon(
-                                        Icons.music_note,
-                                        color: isCurrentSong ? Colors.white : Colors.grey,
-                                      );
-                                    },
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Icon(
-                                        Icons.music_note,
-                                        color: isCurrentSong ? Colors.white : Colors.grey,
-                                      );
-                                    },
-                                  ),
-                                )
-                              : Icon(
-                                  Icons.music_note,
-                                  color: isCurrentSong ? Colors.white : Colors.grey,
-                                ),
-                          if (isCurrentSong)
-                            Positioned.fill(
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  color: Colors.black.withValues(alpha: 0.3),
-                                ),
-                                child: const Icon(
-                                  Icons.play_arrow,
-                                  color: Colors.white,
-                                  size: 24,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      song.title,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: isCurrentSong ? FontWeight.bold : FontWeight.normal,
-                        color: isCurrentSong ? Theme.of(context).primaryColor : null,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
+              return _PlaylistItem(
+                key: ValueKey('playlist-item-${song.id}'),
+                song: song,
+                isCurrentSong: isCurrentSong,
+                api: widget.api,
               );
             },
           ),
         ),
       ],
+    );
+  }
+}
+
+class _PlaylistItem extends StatelessWidget {
+  final Song song;
+  final bool isCurrentSong;
+  final SubsonicApi api;
+
+  const _PlaylistItem({
+    super.key,
+    required this.song,
+    required this.isCurrentSong,
+    required this.api,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 80,
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      child: Column(
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              color: isCurrentSong ? Theme.of(context).primaryColor.withValues(alpha: 0.1) : Colors.grey[300],
+              border: isCurrentSong ? Border.all(color: Theme.of(context).primaryColor, width: 3) : null,
+              boxShadow: isCurrentSong ? [
+                BoxShadow(
+                  color: Theme.of(context).primaryColor.withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                )
+              ] : null,
+            ),
+            child: Stack(
+              children: [
+                song.coverArt != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          api.getCoverArtUrl(song.coverArt!),
+                          key: ValueKey('playlist-${song.id}-${song.coverArt}'),
+                          fit: BoxFit.cover,
+                          headers: const {
+                            'Cache-Control': 'max-age=3600',
+                          },
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Icon(
+                              Icons.music_note,
+                              color: isCurrentSong ? Colors.white : Colors.grey,
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            return Icon(
+                              Icons.music_note,
+                              color: isCurrentSong ? Colors.white : Colors.grey,
+                            );
+                          },
+                        ),
+                      )
+                    : Icon(
+                        Icons.music_note,
+                        color: isCurrentSong ? Colors.white : Colors.grey,
+                      ),
+                if (isCurrentSong)
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.black.withValues(alpha: 0.3),
+                      ),
+                      child: const Icon(
+                        Icons.play_arrow,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            song.title,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: isCurrentSong ? FontWeight.bold : FontWeight.normal,
+              color: isCurrentSong ? Theme.of(context).primaryColor : null,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -387,11 +410,14 @@ class _StaticAlbumArt extends StatefulWidget {
 
 class _StaticAlbumArtState extends State<_StaticAlbumArt> {
   Song? _currentSong;
+  String? _currentCoverArtUrl;
+  Widget? _cachedImageWidget;
   
   @override
   void initState() {
     super.initState();
     _currentSong = widget.playerService.currentSong;
+    _updateCoverArtUrl();
     widget.playerService.addListener(_onPlayerServiceChanged);
   }
   
@@ -401,12 +427,27 @@ class _StaticAlbumArtState extends State<_StaticAlbumArt> {
     super.dispose();
   }
   
+  void _updateCoverArtUrl() {
+    final newUrl = _currentSong?.coverArt != null 
+        ? widget.api.getCoverArtUrl(_currentSong!.coverArt!) 
+        : null;
+    
+    if (newUrl != _currentCoverArtUrl) {
+      _currentCoverArtUrl = newUrl;
+      _cachedImageWidget = null; // Clear cache when URL changes
+    }
+  }
+  
   void _onPlayerServiceChanged() {
-    // Only rebuild if the actual song changed, not just the playback state
     final newSong = widget.playerService.currentSong;
-    if (newSong?.id != _currentSong?.id || newSong?.coverArt != _currentSong?.coverArt) {
+    
+    // Update the display when the song actually changes
+    final songChanged = newSong?.id != _currentSong?.id;
+    
+    if (songChanged) {
       setState(() {
         _currentSong = newSong;
+        _updateCoverArtUrl();
       });
     }
   }
@@ -432,44 +473,54 @@ class _StaticAlbumArtState extends State<_StaticAlbumArt> {
         borderRadius: BorderRadius.circular(12),
         color: Colors.grey[300],
       ),
-      child: _currentSong!.coverArt != null
-          ? ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                widget.api.getCoverArtUrl(_currentSong!.coverArt!),
-                key: ValueKey('main-${_currentSong!.coverArt}'),
-                fit: BoxFit.cover,
-                headers: const {
-                  'Cache-Control': 'max-age=3600',
-                },
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Stack(
-                    children: [
-                      Container(
-                        color: Colors.grey[300],
-                        child: const Center(
-                          child: Icon(Icons.music_note, size: 64, color: Colors.grey),
-                        ),
-                      ),
-                      Center(
-                        child: CircularProgressIndicator(
-                          value: loadingProgress.expectedTotalBytes != null
-                              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                              : null,
-                          strokeWidth: 2,
-                        ),
-                      ),
-                    ],
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) {
-                  return const Icon(Icons.music_note, size: 64, color: Colors.grey);
-                },
-              ),
-            )
+      child: _currentCoverArtUrl != null
+          ? _buildCachedImage()
           : const Icon(Icons.music_note, size: 64, color: Colors.grey),
     );
+  }
+
+  Widget _buildCachedImage() {
+    if (_cachedImageWidget != null) {
+      return _cachedImageWidget!;
+    }
+
+    _cachedImageWidget = ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Image.network(
+        _currentCoverArtUrl!,
+        key: ValueKey('main-$_currentCoverArtUrl'),
+        fit: BoxFit.cover,
+        headers: const {
+          'Cache-Control': 'max-age=3600',
+        },
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Stack(
+            children: [
+              Container(
+                color: Colors.grey[300],
+                child: const Center(
+                  child: Icon(Icons.music_note, size: 64, color: Colors.grey),
+                ),
+              ),
+              Center(
+                child: CircularProgressIndicator(
+                  value: loadingProgress.expectedTotalBytes != null
+                      ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                      : null,
+                  strokeWidth: 2,
+                ),
+              ),
+            ],
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          return const Icon(Icons.music_note, size: 64, color: Colors.grey);
+        },
+      ),
+    );
+
+    return _cachedImageWidget!;
   }
 }
 
