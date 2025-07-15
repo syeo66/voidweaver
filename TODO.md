@@ -9,11 +9,10 @@
 - [x] **Put into git** - Initialize git repository and commit code
 - [x] **UTF-8 encoding issues** - Fixed track info display with UTF-8 characters using proper byte decoding
 - [x] **Player page not updating** - Fixed skip/shuffle UI updates by converting static widgets to use Consumer<AudioPlayerService> pattern
-- [x] **Missing album covers in random play** - Fixed by intelligently assigning cover art using albumId when coverArt is missing, with fallback to song ID
 
 ## 🚨 Critical Issues (Fix First)
 - [x] **Player page not updating** - Skip/shuffle don't update UI properly ✅
-- [x] **Missing album covers in random play** - Only shows fallback icon ✅
+- [ ] **Missing album covers in random play** - Only shows fallback icon
 - [ ] **No current track highlighting** - Playlist doesn't show currently playing track
 - [ ] **Playlist auto-scroll** - Playlist should scroll to currently playing item on track change
 - [ ] **Verify the played song status is sent** - The status of playing the song should be notified to the server
