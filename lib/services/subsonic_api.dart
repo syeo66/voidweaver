@@ -62,7 +62,15 @@ class SubsonicApi {
       final response = await http.get(uri, headers: headers);
       
       if (response.statusCode == 200) {
-        return XmlDocument.parse(response.body);
+        // Properly decode UTF-8 bytes with malformed character handling
+        String responseBody;
+        try {
+          responseBody = utf8.decode(response.bodyBytes, allowMalformed: true);
+        } catch (e) {
+          // Fallback to response.body if utf8.decode fails
+          responseBody = response.body;
+        }
+        return XmlDocument.parse(responseBody);
       } else {
         throw Exception('HTTP ${response.statusCode}: ${response.body}');
       }

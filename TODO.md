@@ -7,9 +7,9 @@
 - [x] **Code quality improvements** - Added const constructors, removed dead code, fixed deprecated APIs
 - [x] **Performance optimizations** - Improved widget efficiency and memory management
 - [x] **Put into git** - Initialize git repository and commit code
+- [x] **UTF-8 encoding issues** - Fixed track info display with UTF-8 characters using proper byte decoding
 
 ## 🚨 Critical Issues (Fix First)
-- [ ] **UTF-8 encoding issues** - Track info broken with UTF-8 characters
 - [ ] **Player page not updating** - Skip/shuffle don't update UI properly
 - [ ] **Missing album covers in random play** - Only shows fallback icon
 - [ ] **No current track highlighting** - Playlist doesn't show currently playing track
