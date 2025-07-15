@@ -207,43 +207,72 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
                       height: 60,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(8),
-                        color: Colors.grey[300],
-                        border: isCurrentSong ? Border.all(color: Theme.of(context).primaryColor, width: 2) : null,
+                        color: isCurrentSong ? Theme.of(context).primaryColor.withValues(alpha: 0.1) : Colors.grey[300],
+                        border: isCurrentSong ? Border.all(color: Theme.of(context).primaryColor, width: 3) : null,
+                        boxShadow: isCurrentSong ? [
+                          BoxShadow(
+                            color: Theme.of(context).primaryColor.withValues(alpha: 0.3),
+                            blurRadius: 8,
+                            spreadRadius: 1,
+                          )
+                        ] : null,
                       ),
-                      child: song.coverArt != null
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(
-                                widget.api.getCoverArtUrl(song.coverArt!),
-                                key: ValueKey('playlist-${song.coverArt}'),
-                                fit: BoxFit.cover,
-                                headers: const {
-                                  'Cache-Control': 'max-age=3600',
-                                },
-                                loadingBuilder: (context, child, loadingProgress) {
-                                  if (loadingProgress == null) return child;
-                                  return Icon(
-                                    Icons.music_note,
-                                    color: isCurrentSong ? Colors.white : Colors.grey,
-                                  );
-                                },
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Icon(
-                                    Icons.music_note,
-                                    color: isCurrentSong ? Colors.white : Colors.grey,
-                                  );
-                                },
+                      child: Stack(
+                        children: [
+                          song.coverArt != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    widget.api.getCoverArtUrl(song.coverArt!),
+                                    key: ValueKey('playlist-${song.coverArt}'),
+                                    fit: BoxFit.cover,
+                                    headers: const {
+                                      'Cache-Control': 'max-age=3600',
+                                    },
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return Icon(
+                                        Icons.music_note,
+                                        color: isCurrentSong ? Colors.white : Colors.grey,
+                                      );
+                                    },
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Icon(
+                                        Icons.music_note,
+                                        color: isCurrentSong ? Colors.white : Colors.grey,
+                                      );
+                                    },
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.music_note,
+                                  color: isCurrentSong ? Colors.white : Colors.grey,
+                                ),
+                          if (isCurrentSong)
+                            Positioned.fill(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: Colors.black.withValues(alpha: 0.3),
+                                ),
+                                child: const Icon(
+                                  Icons.play_arrow,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
                               ),
-                            )
-                          : Icon(
-                              Icons.music_note,
-                              color: isCurrentSong ? Colors.white : Colors.grey,
                             ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       song.title,
-                      style: const TextStyle(fontSize: 10),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: isCurrentSong ? FontWeight.bold : FontWeight.normal,
+                        color: isCurrentSong ? Theme.of(context).primaryColor : null,
+                      ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
