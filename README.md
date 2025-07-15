@@ -58,7 +58,7 @@ A high-quality Flutter music player application that connects to Subsonic API-co
   - Tap any album to start playback
   - Use the menu button (⋮) for additional options
 - **Now Playing Tab**: View currently playing song with album art and playlist
-- **Shuffle Button**: Play random songs from your collection
+- **Shuffle Button**: Play random songs from your collection with album cover art
 - **Settings**: Access via menu (⋮) → Settings
   - Configure ReplayGain normalization (Off/Track/Album modes)
   - Adjust preamp for overall volume control (-15dB to +15dB)
@@ -95,7 +95,7 @@ flutter run              # Run on connected device
 
 ```bash
 flutter analyze          # Static analysis (currently 0 issues)
-flutter test             # Run tests (1/1 passing)
+flutter test             # Run tests (4/4 passing)
 ```
 
 **Recent Improvements**:
@@ -104,6 +104,7 @@ flutter test             # Run tests (1/1 passing)
 - Removed dead code and unused imports for cleaner codebase
 - Updated deprecated APIs for future compatibility
 - Improved error handling with proper async context management
+- Fixed missing album covers in random play mode with intelligent cover art assignment
 
 ### Building
 

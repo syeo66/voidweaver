@@ -117,7 +117,39 @@ class SubsonicApi {
     
     final songElements = doc.findAllElements('song');
     for (final element in songElements) {
-      songs.add(Song.fromXml(element));
+      final song = Song.fromXml(element);
+      
+      // If the song doesn't have coverArt, try to use albumId or fallback to song id
+      String? coverArt = song.coverArt;
+      if (coverArt == null || coverArt.isEmpty) {
+        // Try to use albumId first (preferred for album cover art)
+        if (song.albumId != null && song.albumId!.isNotEmpty) {
+          coverArt = song.albumId;
+        } else {
+          // Fallback to song ID (some servers use this approach)
+          coverArt = song.id;
+        }
+      }
+      
+      // Create an enhanced song with proper cover art
+      final enhancedSong = Song(
+        id: song.id,
+        title: song.title,
+        artist: song.artist,
+        album: song.album,
+        albumId: song.albumId,
+        coverArt: coverArt,
+        duration: song.duration,
+        track: song.track,
+        contentType: song.contentType,
+        suffix: song.suffix,
+        replayGainTrackGain: song.replayGainTrackGain,
+        replayGainAlbumGain: song.replayGainAlbumGain,
+        replayGainTrackPeak: song.replayGainTrackPeak,
+        replayGainAlbumPeak: song.replayGainAlbumPeak,
+      );
+      
+      songs.add(enhancedSong);
     }
     
     return songs;
