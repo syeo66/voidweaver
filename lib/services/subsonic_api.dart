@@ -219,13 +219,19 @@ class Song {
   });
 
   factory Song.fromXml(XmlElement element) {
+    final songId = element.getAttribute('id') ?? '';
+    final title = element.getAttribute('title') ?? '';
+    final albumId = element.getAttribute('albumId');
+    final coverArt = element.getAttribute('coverArt') ?? albumId;
+    
+    
     return Song(
-      id: element.getAttribute('id') ?? '',
-      title: element.getAttribute('title') ?? '',
+      id: songId,
+      title: title,
       artist: element.getAttribute('artist') ?? '',
       album: element.getAttribute('album') ?? '',
-      albumId: element.getAttribute('albumId'),
-      coverArt: element.getAttribute('coverArt'),
+      albumId: albumId,
+      coverArt: coverArt,
       duration: int.tryParse(element.getAttribute('duration') ?? ''),
       track: int.tryParse(element.getAttribute('track') ?? ''),
       contentType: element.getAttribute('contentType'),

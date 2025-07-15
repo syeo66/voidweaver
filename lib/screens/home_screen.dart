@@ -132,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
 }
 
-class _StaticPlaylistInfo extends StatelessWidget {
+class _StaticPlaylistInfo extends StatefulWidget {
   final AudioPlayerService playerService;
   final SubsonicApi api;
 
@@ -142,81 +142,119 @@ class _StaticPlaylistInfo extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Consumer<AudioPlayerService>(
-      builder: (context, playerService, child) {
-        final currentPlaylist = playerService.playlist;
-        final currentIndex = playerService.currentIndex;
+  State<_StaticPlaylistInfo> createState() => _StaticPlaylistInfoState();
+}
 
-        if (currentPlaylist.isEmpty) return const SizedBox.shrink();
-        
-        return Column(
-          children: [
-            const Divider(),
-            Text(
-              'Playlist: ${currentIndex + 1} of ${currentPlaylist.length}',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 100,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: currentPlaylist.length,
-                itemBuilder: (context, index) {
-                  final song = currentPlaylist[index];
-                  final isCurrentSong = index == currentIndex;
-                  
-                  return Container(
-                    width: 80,
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 60,
-                          height: 60,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(8),
-                            color: Colors.grey[300],
-                            border: isCurrentSong ? Border.all(color: Theme.of(context).primaryColor, width: 2) : null,
-                          ),
-                          child: song.coverArt != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.network(
-                                    api.getCoverArtUrl(song.coverArt!),
-                                    key: ValueKey('playlist-${song.id}-${song.coverArt}'),
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Icon(
-                                        Icons.music_note,
-                                        color: isCurrentSong ? Colors.white : Colors.grey,
-                                      );
-                                    },
-                                  ),
-                                )
-                              : Icon(
-                                  Icons.music_note,
-                                  color: isCurrentSong ? Colors.white : Colors.grey,
-                                ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          song.title,
-                          style: const TextStyle(fontSize: 10),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
+class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
+  List<Song> _currentPlaylist = [];
+  int _currentIndex = 0;
+  
+  @override
+  void initState() {
+    super.initState();
+    _currentPlaylist = widget.playerService.playlist;
+    _currentIndex = widget.playerService.currentIndex;
+    widget.playerService.addListener(_onPlayerServiceChanged);
+  }
+  
+  @override
+  void dispose() {
+    widget.playerService.removeListener(_onPlayerServiceChanged);
+    super.dispose();
+  }
+  
+  void _onPlayerServiceChanged() {
+    // Only rebuild if the playlist or current index changed
+    final newPlaylist = widget.playerService.playlist;
+    final newCurrentIndex = widget.playerService.currentIndex;
+    
+    if (newPlaylist != _currentPlaylist || newCurrentIndex != _currentIndex) {
+      setState(() {
+        _currentPlaylist = newPlaylist;
+        _currentIndex = newCurrentIndex;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_currentPlaylist.isEmpty) return const SizedBox.shrink();
+    
+    return Column(
+      children: [
+        const Divider(),
+        Text(
+          'Playlist: ${_currentIndex + 1} of ${_currentPlaylist.length}',
+          style: TextStyle(color: Colors.grey[600]),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 100,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _currentPlaylist.length,
+            itemBuilder: (context, index) {
+              final song = _currentPlaylist[index];
+              final isCurrentSong = index == _currentIndex;
+              
+              return Container(
+                width: 80,
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.grey[300],
+                        border: isCurrentSong ? Border.all(color: Theme.of(context).primaryColor, width: 2) : null,
+                      ),
+                      child: song.coverArt != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.network(
+                                widget.api.getCoverArtUrl(song.coverArt!),
+                                key: ValueKey('playlist-${song.coverArt}'),
+                                fit: BoxFit.cover,
+                                headers: const {
+                                  'Cache-Control': 'max-age=3600',
+                                },
+                                loadingBuilder: (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return Icon(
+                                    Icons.music_note,
+                                    color: isCurrentSong ? Colors.white : Colors.grey,
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Icon(
+                                    Icons.music_note,
+                                    color: isCurrentSong ? Colors.white : Colors.grey,
+                                  );
+                                },
+                              ),
+                            )
+                          : Icon(
+                              Icons.music_note,
+                              color: isCurrentSong ? Colors.white : Colors.grey,
+                            ),
                     ),
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      },
+                    const SizedBox(height: 4),
+                    Text(
+                      song.title,
+                      style: const TextStyle(fontSize: 10),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -270,7 +308,7 @@ class _NowPlayingContent extends StatelessWidget {
   }
 }
 
-class _StaticAlbumArt extends StatelessWidget {
+class _StaticAlbumArt extends StatefulWidget {
   final AudioPlayerService playerService;
   final SubsonicApi api;
 
@@ -280,58 +318,93 @@ class _StaticAlbumArt extends StatelessWidget {
   });
 
   @override
+  State<_StaticAlbumArt> createState() => _StaticAlbumArtState();
+}
+
+class _StaticAlbumArtState extends State<_StaticAlbumArt> {
+  Song? _currentSong;
+  
+  @override
+  void initState() {
+    super.initState();
+    _currentSong = widget.playerService.currentSong;
+    widget.playerService.addListener(_onPlayerServiceChanged);
+  }
+  
+  @override
+  void dispose() {
+    widget.playerService.removeListener(_onPlayerServiceChanged);
+    super.dispose();
+  }
+  
+  void _onPlayerServiceChanged() {
+    // Only rebuild if the actual song changed, not just the playback state
+    final newSong = widget.playerService.currentSong;
+    if (newSong?.id != _currentSong?.id || newSong?.coverArt != _currentSong?.coverArt) {
+      setState(() {
+        _currentSong = newSong;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Consumer<AudioPlayerService>(
-      builder: (context, playerService, child) {
-        final currentSong = playerService.currentSong;
+    if (_currentSong == null) {
+      return Container(
+        width: 200,
+        height: 200,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: Colors.grey[300],
+        ),
+        child: const Icon(Icons.music_note, size: 64, color: Colors.grey),
+      );
+    }
 
-        if (currentSong == null) {
-          return Container(
-            width: 200,
-            height: 200,
-            decoration: BoxDecoration(
+    return Container(
+      width: 200,
+      height: 200,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: Colors.grey[300],
+      ),
+      child: _currentSong!.coverArt != null
+          ? ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              color: Colors.grey[300],
-            ),
-            child: const Icon(Icons.music_note, size: 64, color: Colors.grey),
-          );
-        }
-
-        return Container(
-          width: 200,
-          height: 200,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: Colors.grey[300],
-          ),
-          child: currentSong.coverArt != null
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    api.getCoverArtUrl(currentSong.coverArt!),
-                    key: ValueKey('main-${currentSong.id}-${currentSong.coverArt}'),
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Container(
+              child: Image.network(
+                widget.api.getCoverArtUrl(_currentSong!.coverArt!),
+                key: ValueKey('main-${_currentSong!.coverArt}'),
+                fit: BoxFit.cover,
+                headers: const {
+                  'Cache-Control': 'max-age=3600',
+                },
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Stack(
+                    children: [
+                      Container(
                         color: Colors.grey[300],
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                : null,
-                          ),
+                        child: const Center(
+                          child: Icon(Icons.music_note, size: 64, color: Colors.grey),
                         ),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Icon(Icons.music_note, size: 64, color: Colors.grey);
-                    },
-                  ),
-                )
-              : const Icon(Icons.music_note, size: 64, color: Colors.grey),
-        );
-      },
+                      ),
+                      Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                              : null,
+                          strokeWidth: 2,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return const Icon(Icons.music_note, size: 64, color: Colors.grey);
+                },
+              ),
+            )
+          : const Icon(Icons.music_note, size: 64, color: Colors.grey),
     );
   }
 }

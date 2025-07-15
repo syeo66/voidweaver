@@ -134,6 +134,7 @@ class AudioPlayerService extends ChangeNotifier {
     _currentIndex = index;
     _currentSong = _playlist[index];
     _playbackState = PlaybackState.loading;
+    
     notifyListeners();
 
     try {
@@ -205,18 +206,26 @@ class AudioPlayerService extends ChangeNotifier {
   Future<void> _readReplayGainAndApplyVolume(String streamUrl) async {
     if (_currentSong == null) return;
     
+    // Skip if we already have ReplayGain data to prevent duplicate processing
+    if (_currentSong!.replayGainTrackGain != null || _currentSong!.replayGainAlbumGain != null) {
+      _applyReplayGainVolume();
+      return;
+    }
+    
     try {
       // Read ReplayGain metadata directly from the audio file
       final replayGainData = await ReplayGainReader.readFromUrl(streamUrl);
       
-      // Update the current song with the read metadata
-      _currentSong = Song(
+      // Update the current song with the read metadata WITHOUT triggering UI updates
+      // We only update the ReplayGain fields, keeping everything else identical
+      final originalCoverArt = _currentSong!.coverArt;
+      final updatedSong = Song(
         id: _currentSong!.id,
         title: _currentSong!.title,
         artist: _currentSong!.artist,
         album: _currentSong!.album,
         albumId: _currentSong!.albumId,
-        coverArt: _currentSong!.coverArt,
+        coverArt: originalCoverArt,
         duration: _currentSong!.duration,
         track: _currentSong!.track,
         contentType: _currentSong!.contentType,
@@ -227,7 +236,10 @@ class AudioPlayerService extends ChangeNotifier {
         replayGainAlbumPeak: replayGainData.albumPeak,
       );
       
-      // Apply the volume adjustment
+      // Update the internal reference without notifying listeners
+      _currentSong = updatedSong;
+      
+      // Apply the volume adjustment (this doesn't trigger UI updates)
       _applyReplayGainVolume();
     } catch (e) {
       debugPrint('Error reading ReplayGain metadata: $e');
