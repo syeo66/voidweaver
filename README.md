@@ -104,6 +104,8 @@ flutter test             # Run tests (1/1 passing)
 - Removed dead code and unused imports for cleaner codebase
 - Updated deprecated APIs for future compatibility
 - Improved error handling with proper async context management
+- Fixed cover art reloading issue when skipping tracks by implementing proper equality operators
+- Optimized ReplayGain processing to prevent unnecessary UI rebuilds
 
 ### Building
 

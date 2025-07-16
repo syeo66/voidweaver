@@ -218,14 +218,13 @@ class AudioPlayerService extends ChangeNotifier {
       
       // Update the current song with the read metadata WITHOUT triggering UI updates
       // We only update the ReplayGain fields, keeping everything else identical
-      final originalCoverArt = _currentSong!.coverArt;
       final updatedSong = Song(
         id: _currentSong!.id,
         title: _currentSong!.title,
         artist: _currentSong!.artist,
         album: _currentSong!.album,
         albumId: _currentSong!.albumId,
-        coverArt: originalCoverArt,
+        coverArt: _currentSong!.coverArt,
         duration: _currentSong!.duration,
         track: _currentSong!.track,
         contentType: _currentSong!.contentType,
@@ -236,12 +235,15 @@ class AudioPlayerService extends ChangeNotifier {
         replayGainAlbumPeak: replayGainData.albumPeak,
       );
       
-      // Update the internal reference without notifying listeners
-      _currentSong = updatedSong;
-      
-      // Also update the playlist to keep consistency
-      if (_currentIndex >= 0 && _currentIndex < _playlist.length) {
-        _playlist[_currentIndex] = updatedSong;
+      // Only update if the new song is actually different (this should be true due to ReplayGain data)
+      if (updatedSong != _currentSong) {
+        // Update the internal reference without notifying listeners
+        _currentSong = updatedSong;
+        
+        // Also update the playlist to keep consistency
+        if (_currentIndex >= 0 && _currentIndex < _playlist.length) {
+          _playlist[_currentIndex] = updatedSong;
+        }
       }
       
       // Apply the volume adjustment (this doesn't trigger UI updates)

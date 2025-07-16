@@ -183,6 +183,44 @@ class Album {
       songs: songs,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is Album &&
+        other.id == id &&
+        other.name == name &&
+        other.artist == artist &&
+        other.artistId == artistId &&
+        other.coverArt == coverArt &&
+        other.songCount == songCount &&
+        other.duration == duration &&
+        other.created == created &&
+        _listEquals(other.songs, songs);
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(
+      id,
+      name,
+      artist,
+      artistId,
+      coverArt,
+      songCount,
+      duration,
+      created,
+      Object.hashAll(songs),
+    );
+  }
+
+  static bool _listEquals<T>(List<T> a, List<T> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
 }
 
 class Song {
@@ -249,6 +287,46 @@ class Song {
       replayGainAlbumPeak: double.tryParse(element.getAttribute('replayGainAlbumPeak') ?? '') ??
                           double.tryParse(element.getAttribute('rgAlbumPeak') ?? '') ??
                           double.tryParse(element.getAttribute('albumPeak') ?? ''),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is Song &&
+        other.id == id &&
+        other.title == title &&
+        other.artist == artist &&
+        other.album == album &&
+        other.albumId == albumId &&
+        other.coverArt == coverArt &&
+        other.duration == duration &&
+        other.track == track &&
+        other.contentType == contentType &&
+        other.suffix == suffix &&
+        other.replayGainTrackGain == replayGainTrackGain &&
+        other.replayGainAlbumGain == replayGainAlbumGain &&
+        other.replayGainTrackPeak == replayGainTrackPeak &&
+        other.replayGainAlbumPeak == replayGainAlbumPeak;
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(
+      id,
+      title,
+      artist,
+      album,
+      albumId,
+      coverArt,
+      duration,
+      track,
+      contentType,
+      suffix,
+      replayGainTrackGain,
+      replayGainAlbumGain,
+      replayGainTrackPeak,
+      replayGainAlbumPeak,
     );
   }
 }

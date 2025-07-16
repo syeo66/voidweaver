@@ -1,23 +1,6 @@
 # Voidweaver TODO
 
-## ✅ Recently Completed
-
-- [x] **Fix broken test suite** - Default widget test now passes (basic smoke test)
-- [x] **Resolve 148 Flutter analyzer warnings** - All linting violations fixed (0 warnings!)
-- [x] **Code quality improvements** - Added const constructors, removed dead code, fixed deprecated APIs
-- [x] **Performance optimizations** - Improved widget efficiency and memory management
-- [x] **Put into git** - Initialize git repository and commit code
-- [x] **UTF-8 encoding issues** - Fixed track info display with UTF-8 characters using proper byte decoding
-- [x] **Player page not updating** - Fixed skip/shuffle UI updates by converting static widgets to use Consumer<AudioPlayerService> pattern
-- [x] **Missing album covers in random play** - Fixed by intelligently assigning cover art using albumId when coverArt is missing
-- [x] **Playlist auto-scroll** - Implemented smooth animated scrolling to center currently playing track when track changes
-
 ## 🚨 Critical Issues (Fix First)
-- [x] **Player page not updating** - Skip/shuffle don't update UI properly ✅
-- [x] **Missing album covers in random play** - Only shows fallback icon ✅
-- [x] **No current track highlighting** - Playlist doesn't show currently playing track ✅
-- [x] **Playlist auto-scroll** - Playlist should scroll to currently playing item on track change ✅
-- [ ] **Cover art reloading on skip** - Cover art in the playlist refreshes/reloads when clicking skip button
 - [ ] **Verify the played song status is sent** - The status of playing the song should be notified to the server
 
 ## 🔧 Core Functionality Gaps
@@ -61,8 +44,6 @@
 ## ⚡ Performance & Architecture
 
 ### Code Quality
-- [x] **Add const constructors** - Improve performance throughout app ✅
-- [x] **Remove dead code** - Clean up unused methods and imports ✅
 - [ ] **Input validation** - Robust validation for all user inputs
 - [ ] **Error boundaries** - Prevent app crashes with proper error handling
 
@@ -94,7 +75,6 @@
 ## 🧪 Testing & Quality
 
 ### Test Coverage
-- [x] **Fix existing tests** - Make default test suite pass ✅
 - [ ] **Unit tests** - Test all services and business logic
 - [ ] **Integration tests** - Test complete user workflows
 - [ ] **Audio playback tests** - Test core playback functionality
@@ -104,7 +84,6 @@
 - [ ] **API documentation** - Document all public methods
 - [ ] **Contributor guide** - Setup and development instructions
 - [ ] **Deployment guide** - Release process documentation
-- [x] **Update CLAUDE.md** - Fix outdated dependency versions ✅
 
 ## 🎵 Advanced Features (Future)
 

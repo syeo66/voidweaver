@@ -112,6 +112,8 @@ if (preventClipping && peak > 0) {
 - **Error handling**: Graceful fallback when metadata extraction fails
 - **Optimized code quality**: Zero analyzer warnings with const constructors for minimal widget rebuilds
 - **Production logging**: Uses `debugPrint()` for proper debug output management
+- **Object equality optimization**: Proper equality operators prevent unnecessary UI rebuilds during ReplayGain processing
+- **Minimal object creation**: ReplayGain processing only creates new Song objects when metadata actually changes
 
 ## Troubleshooting
 
