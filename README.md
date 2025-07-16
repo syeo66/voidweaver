@@ -20,7 +20,8 @@ A high-quality Flutter music player application that connects to Subsonic API-co
 - **Settings Management**: Comprehensive settings page with real-time preview
 - **Robust Error Handling**: Comprehensive error handling for playback failures with user-friendly messages
 - **Background Sync**: Automatic synchronization with server every 5 minutes
-- **Persistent Login**: Remembers server credentials between sessions
+- **Secure Authentication**: Encrypted credential storage with automatic migration from legacy storage
+- **Persistent Login**: Remembers server credentials securely between sessions
 - **Cross-Platform**: Runs on Android, iOS, and Web
 
 ## Getting Started
@@ -104,6 +105,7 @@ flutter test             # Run tests (1/1 passing)
 ```
 
 **Recent Improvements**:
+- **Secure credential storage**: Implemented encrypted storage with automatic migration from legacy SharedPreferences
 - **Server notification implementation**: Added comprehensive scrobbling and now playing notifications
 - Fixed 148 Flutter analyzer warnings for optimal performance
 - Added const constructors throughout the app for better widget efficiency
@@ -192,7 +194,7 @@ Voidweaver uses a clean, optimized architecture with:
 
 - **Network Access**: Required for streaming music from your server and metadata extraction
 - **Audio Playback**: Uses device audio capabilities with volume control for ReplayGain
-- **Storage**: Minimal local storage for login credentials and ReplayGain settings
+- **Secure Storage**: Uses device-level encryption for login credentials and local storage for ReplayGain settings
 - **HTTP Range Requests**: Server must support partial content requests for metadata extraction
 
 ## License

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'subsonic_api.dart';
 import 'audio_player_service.dart';
 import 'settings_service.dart';
@@ -13,6 +14,15 @@ enum SyncStatus {
 }
 
 class AppState extends ChangeNotifier {
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage(
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: true,
+    ),
+    iOptions: IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+    ),
+  );
+  
   SubsonicApi? _api;
   AudioPlayerService? _audioPlayerService;
   SettingsService? _settingsService;
@@ -122,26 +132,42 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _saveServerConfig(String serverUrl, String username, String password) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('server_url', serverUrl);
-    await prefs.setString('username', username);
-    await prefs.setString('password', password);
+    try {
+      await _secureStorage.write(key: 'server_url', value: serverUrl);
+      await _secureStorage.write(key: 'username', value: username);
+      await _secureStorage.write(key: 'password', value: password);
+    } catch (e) {
+      debugPrint('Error saving secure credentials: $e');
+      rethrow;
+    }
   }
 
   Future<void> _loadServerConfig() async {
-    final prefs = await SharedPreferences.getInstance();
-    final serverUrl = prefs.getString('server_url');
-    final username = prefs.getString('username');
-    final password = prefs.getString('password');
+    try {
+      final serverUrl = await _secureStorage.read(key: 'server_url');
+      final username = await _secureStorage.read(key: 'username');
+      final password = await _secureStorage.read(key: 'password');
 
-    if (serverUrl != null && username != null && password != null) {
-      await configure(serverUrl, username, password);
+      if (serverUrl != null && username != null && password != null) {
+        await configure(serverUrl, username, password);
+      }
+    } catch (e) {
+      debugPrint('Error loading secure credentials: $e');
+      // Fallback to check old SharedPreferences for migration
+      await _migrateFromSharedPreferences();
     }
   }
 
   Future<void> clearConfiguration() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    try {
+      await _secureStorage.deleteAll();
+      
+      // Also clear old SharedPreferences for complete cleanup
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+    } catch (e) {
+      debugPrint('Error clearing secure credentials: $e');
+    }
     
     _stopBackgroundSync();
     _api = null;
@@ -154,6 +180,35 @@ class AppState extends ChangeNotifier {
     _lastSyncTime = null;
     
     notifyListeners();
+  }
+
+  /// Migrates credentials from old SharedPreferences to secure storage
+  Future<void> _migrateFromSharedPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final serverUrl = prefs.getString('server_url');
+      final username = prefs.getString('username');
+      final password = prefs.getString('password');
+
+      if (serverUrl != null && username != null && password != null) {
+        debugPrint('Migrating credentials from SharedPreferences to secure storage');
+        
+        // Save to secure storage
+        await _saveServerConfig(serverUrl, username, password);
+        
+        // Remove from SharedPreferences
+        await prefs.remove('server_url');
+        await prefs.remove('username');
+        await prefs.remove('password');
+        
+        // Configure with migrated credentials
+        await configure(serverUrl, username, password);
+        
+        debugPrint('Credential migration completed successfully');
+      }
+    } catch (e) {
+      debugPrint('Error during credential migration: $e');
+    }
   }
 
   @override
