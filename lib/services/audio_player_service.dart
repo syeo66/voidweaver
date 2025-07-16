@@ -24,6 +24,7 @@ class AudioPlayerService extends ChangeNotifier {
   Duration _currentPosition = Duration.zero;
   Duration _totalDuration = Duration.zero;
   Song? _currentSong;
+  DateTime? _currentSongStartTime;
   StreamSubscription? _positionSubscription;
   StreamSubscription? _durationSubscription;
   StreamSubscription? _playerCompleteSubscription;
@@ -140,7 +141,14 @@ class AudioPlayerService extends ChangeNotifier {
     try {
       final streamUrl = _api.getStreamUrl(_currentSong!.id);
       debugPrint('Playing song: ${_currentSong!.title} from URL: $streamUrl');
+      
+      // Record when this song started playing
+      _currentSongStartTime = DateTime.now();
+      
       await _audioPlayer.play(UrlSource(streamUrl));
+      
+      // Send now playing notification to server
+      _api.scrobbleNowPlaying(_currentSong!.id);
       
       // Read ReplayGain metadata from the audio file and apply volume adjustment
       _readReplayGainAndApplyVolume(streamUrl);
@@ -174,12 +182,16 @@ class AudioPlayerService extends ChangeNotifier {
 
   Future<void> next() async {
     if (hasNext) {
+      // Scrobble current song if it has been played enough
+      _scrobbleCurrentSongIfEligible();
       await _playSongAtIndex(_currentIndex + 1);
     }
   }
 
   Future<void> previous() async {
     if (hasPrevious) {
+      // Scrobble current song if it has been played enough
+      _scrobbleCurrentSongIfEligible();
       await _playSongAtIndex(_currentIndex - 1);
     }
   }
@@ -189,11 +201,52 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   void _onSongComplete() {
+    // Send scrobble submission for the completed song
+    _scrobbleCurrentSong();
+    
     if (hasNext) {
       _playSongAtIndex(_currentIndex + 1);
     } else {
       _playbackState = PlaybackState.stopped;
       notifyListeners();
+    }
+  }
+
+  void _scrobbleCurrentSong() {
+    if (_currentSong != null && _currentSongStartTime != null) {
+      // Send scrobble submission with the timestamp when the song started playing
+      _api.scrobbleSubmission(_currentSong!.id, playedAt: _currentSongStartTime!);
+    }
+  }
+
+  /// Checks if the current song should be scrobbled based on progress.
+  /// A song should be scrobbled if it has been played for at least 30 seconds
+  /// or 50% of its duration, whichever is shorter.
+  bool _shouldScrobbleCurrentSong() {
+    if (_currentSong == null || _currentSongStartTime == null) return false;
+    
+    final playedDuration = _currentPosition;
+    final songDuration = _totalDuration;
+    
+    // Minimum play time is 30 seconds
+    const minPlayTime = Duration(seconds: 30);
+    
+    // Check if we've played for at least 30 seconds
+    if (playedDuration >= minPlayTime) {
+      return true;
+    }
+    
+    // Check if we've played for at least 50% of the song
+    if (songDuration.inSeconds > 0 && playedDuration.inSeconds >= songDuration.inSeconds * 0.5) {
+      return true;
+    }
+    
+    return false;
+  }
+
+  void _scrobbleCurrentSongIfEligible() {
+    if (_shouldScrobbleCurrentSong()) {
+      _scrobbleCurrentSong();
     }
   }
 

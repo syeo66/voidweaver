@@ -1,7 +1,12 @@
 # Voidweaver TODO
 
 ## 🚨 Critical Issues (Fix First)
-- [ ] **Verify the played song status is sent** - The status of playing the song should be notified to the server
+- [x] **Verify the played song status is sent** - The status of playing the song should be notified to the server ✅ **COMPLETED**
+  - Added `scrobbleNowPlaying()` and `scrobbleSubmission()` methods to SubsonicApi 
+  - Implemented automatic now playing notifications when songs start playing
+  - Added scrobble submissions for completed songs and progress-based scrobbling for skipped tracks
+  - Smart scrobbling logic: only scrobbles songs played >30 seconds or >50% of duration
+  - Non-blocking implementation that won't interrupt playback on scrobble failures
 
 ## 🔧 Core Functionality Gaps
 
@@ -97,9 +102,9 @@
 ### Extended Features
 - [ ] **Offline caching** - Download for offline listening
 - [ ] **Lyrics display** - Show synchronized lyrics
-- [ ] **Scrobbling** - Last.fm integration
+- [x] **Scrobbling** - Last.fm integration ✅ **COMPLETED** (Server-side scrobbling implemented)
 - [ ] **Multiple servers** - Support multiple Subsonic servers
-- [ ] **Library statistics** - Play counts, listening time, etc.
+- [x] **Library statistics** - Play counts, listening time, etc. ✅ **COMPLETED** (Server now tracks play counts via scrobbling)
 - [ ] **Backup/restore** - Settings and playlist backup
 
 ## 🌐 Platform Support

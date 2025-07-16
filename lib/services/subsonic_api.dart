@@ -139,6 +139,45 @@ class SubsonicApi {
     final uri = Uri.parse('$serverUrl/rest/getCoverArt').replace(queryParameters: params);
     return uri.toString();
   }
+
+  /// Notifies the server that a song is now playing.
+  /// This updates the "now playing" status but doesn't affect play counts.
+  Future<void> scrobbleNowPlaying(String songId) async {
+    try {
+      final params = {
+        'id': songId,
+        'submission': 'false',
+      };
+      
+      await _makeRequest('scrobble', params);
+      debugPrint('Now playing notification sent for song: $songId');
+    } catch (e) {
+      debugPrint('Failed to send now playing notification: $e');
+      // Don't throw - we don't want to interrupt playback for scrobble failures
+    }
+  }
+
+  /// Submits a scrobble for a played song.
+  /// This updates play counts and last played timestamp.
+  Future<void> scrobbleSubmission(String songId, {DateTime? playedAt}) async {
+    try {
+      final params = {
+        'id': songId,
+        'submission': 'true',
+      };
+      
+      // Add timestamp if provided (milliseconds since epoch)
+      if (playedAt != null) {
+        params['time'] = playedAt.millisecondsSinceEpoch.toString();
+      }
+      
+      await _makeRequest('scrobble', params);
+      debugPrint('Scrobble submission sent for song: $songId');
+    } catch (e) {
+      debugPrint('Failed to send scrobble submission: $e');
+      // Don't throw - we don't want to interrupt playback for scrobble failures
+    }
+  }
 }
 
 class Album {

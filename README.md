@@ -7,6 +7,11 @@ A high-quality Flutter music player application that connects to Subsonic API-co
 - **Music Streaming**: Stream music from Subsonic, Airsonic, or Navidrome servers
 - **Album Browsing**: Browse and play entire albums with cover art
 - **Audio Playback**: Full-featured player with play/pause, skip, and progress tracking
+- **Server Scrobbling**: Automatic server notifications for played songs and listening statistics
+  - Now playing notifications when songs start
+  - Scrobble submissions for tracking play counts and listening history
+  - Smart scrobbling based on song progress (>30 seconds or >50% played)
+  - Last.fm integration support (if configured on server)
 - **ReplayGain Audio Normalization**: Intelligent volume normalization for consistent playback
   - Client-side ReplayGain metadata extraction from audio files
   - Support for Track and Album normalization modes
@@ -99,6 +104,7 @@ flutter test             # Run tests (1/1 passing)
 ```
 
 **Recent Improvements**:
+- **Server notification implementation**: Added comprehensive scrobbling and now playing notifications
 - Fixed 148 Flutter analyzer warnings for optimal performance
 - Added const constructors throughout the app for better widget efficiency
 - Removed dead code and unused imports for cleaner codebase
@@ -173,8 +179,9 @@ You can then:
 Voidweaver uses a clean, optimized architecture with:
 
 - **Provider** pattern for efficient state management
-- **Service layer** for API communication, audio playback, and ReplayGain processing
+- **Service layer** for API communication, audio playback, ReplayGain processing, and server scrobbling
 - **Client-side metadata extraction** for ReplayGain data from audio files
+- **Automatic server notifications** for played songs and listening statistics
 - **Responsive UI** with Material Design and comprehensive settings management
 - **Background synchronization** for keeping data fresh
 - **Efficient HTTP range requests** for metadata extraction with minimal bandwidth usage
