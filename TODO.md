@@ -49,6 +49,7 @@
 - [ ] **Mini player** - Collapsed player view for navigation
 - [ ] **Album art animations** - Smooth transitions and effects
 - [ ] **Better error messages** - User-friendly error displays
+- [ ] **Organize search results in tabs**
 
 ### Mobile Experience
 - [ ] **Lock screen controls** - Native media controls integration
