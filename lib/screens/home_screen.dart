@@ -8,6 +8,7 @@ import '../widgets/album_list.dart';
 import '../widgets/player_controls.dart';
 import '../widgets/sync_status_indicator.dart';
 import 'settings_screen.dart';
+import 'search_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,6 +27,14 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Voidweaver'),
         actions: [
           const SyncStatusIndicator(),
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const SearchScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.shuffle),
             onPressed: () async {

@@ -178,6 +178,31 @@ class SubsonicApi {
       // Don't throw - we don't want to interrupt playback for scrobble failures
     }
   }
+
+  /// Searches for artists, albums, and songs.
+  /// Returns a SearchResult containing separate lists for each type.
+  Future<SearchResult> search(String query, {int artistCount = 20, int albumCount = 20, int songCount = 20}) async {
+    try {
+      final params = {
+        'query': query,
+        'artistCount': artistCount.toString(),
+        'albumCount': albumCount.toString(),
+        'songCount': songCount.toString(),
+      };
+      
+      final doc = await _makeRequest('search3', params);
+      
+      // Debug: Print the XML response to understand the structure
+      if (kDebugMode) {
+        debugPrint('Search response: ${doc.toXmlString()}');
+      }
+      
+      return SearchResult.fromXml(doc);
+    } catch (e) {
+      debugPrint('Search failed: $e');
+      rethrow;
+    }
+  }
 }
 
 class Album {
@@ -368,4 +393,112 @@ class Song {
       replayGainAlbumPeak,
     );
   }
+}
+
+class Artist {
+  final String id;
+  final String name;
+  final String? coverArt;
+  final int? albumCount;
+
+  Artist({
+    required this.id,
+    required this.name,
+    this.coverArt,
+    this.albumCount,
+  });
+
+  factory Artist.fromXml(XmlElement element) {
+    return Artist(
+      id: element.getAttribute('id') ?? '',
+      name: element.getAttribute('name') ?? '',
+      coverArt: element.getAttribute('coverArt'),
+      albumCount: int.tryParse(element.getAttribute('albumCount') ?? ''),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is Artist &&
+        other.id == id &&
+        other.name == name &&
+        other.coverArt == coverArt &&
+        other.albumCount == albumCount;
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(id, name, coverArt, albumCount);
+  }
+}
+
+class SearchResult {
+  final List<Artist> artists;
+  final List<Album> albums;
+  final List<Song> songs;
+
+  SearchResult({
+    required this.artists,
+    required this.albums,
+    required this.songs,
+  });
+
+  factory SearchResult.fromXml(XmlDocument doc) {
+    // Try to find searchResult3 elements with and without namespace
+    final searchResultElements = doc.findAllElements('searchResult3');
+    
+    final artists = <Artist>[];
+    final albums = <Album>[];
+    final songs = <Song>[];
+    
+    if (searchResultElements.isNotEmpty) {
+      final searchResult = searchResultElements.first;
+      
+      final artistElements = searchResult.findAllElements('artist');
+      if (kDebugMode) {
+        debugPrint('Found ${artistElements.length} artists');
+      }
+      for (final element in artistElements) {
+        artists.add(Artist.fromXml(element));
+      }
+      
+      final albumElements = searchResult.findAllElements('album');
+      if (kDebugMode) {
+        debugPrint('Found ${albumElements.length} albums');
+      }
+      for (final element in albumElements) {
+        albums.add(Album.fromXml(element));
+      }
+      
+      final songElements = searchResult.findAllElements('song');
+      if (kDebugMode) {
+        debugPrint('Found ${songElements.length} songs');
+      }
+      for (final element in songElements) {
+        songs.add(Song.fromXml(element));
+      }
+    } else {
+      if (kDebugMode) {
+        debugPrint('No searchResult3 elements found');
+        debugPrint('Available elements: ${doc.findAllElements('*').map((e) => e.name.local).toList()}');
+      }
+    }
+    
+    final result = SearchResult(
+      artists: artists,
+      albums: albums,
+      songs: songs,
+    );
+    
+    if (kDebugMode) {
+      debugPrint('SearchResult created: ${artists.length} artists, ${albums.length} albums, ${songs.length} songs');
+      debugPrint('SearchResult isEmpty: ${result.isEmpty}');
+    }
+    
+    return result;
+  }
+
+  bool get isEmpty => artists.isEmpty && albums.isEmpty && songs.isEmpty;
+  bool get isNotEmpty => !isEmpty;
 }

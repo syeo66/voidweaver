@@ -18,7 +18,14 @@
   - Memory efficient implementation that only preloads URLs, not audio data
   - Preload state is cleared when playlist changes to prevent stale data
   - Added preload status tracking with `isPreloading` and `preloadedSong` getters
-- [ ] **Search functionality** - Search albums, artists, songs
+- [x] **Search functionality** - Search albums, artists, songs ✅ **COMPLETED**
+  - Added comprehensive search using Subsonic search3 endpoint
+  - Real-time search with 500ms debounce and categorized results display
+  - Created dedicated search screen with Artists, Albums, and Songs sections
+  - Seamless integration with existing audio player functionality
+  - Robust XML parsing with namespace support for Subsonic API responses
+  - Advanced image caching for search result cover art
+  - Search accessible via search icon in home screen app bar
 - [ ] **Artist browsing** - Browse by artist (not just albums)
 - [ ] **Queue management** - View, reorder, edit playback queue
 - [x] **Progress seeking** - Scrub through tracks with seek bar ✅ **COMPLETED**
