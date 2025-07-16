@@ -11,9 +11,15 @@
 ## 🔧 Core Functionality Gaps
 
 ### Essential Music Player Features
+- [x] **Preload next track** ✅ **COMPLETED**
+  - Automatically preloads the next song's stream URL when current song starts playing
+  - Uses preloaded URL for instant playback when user skips to next track
+  - Smart caching prevents unnecessary preloading of already cached tracks
+  - Memory efficient implementation that only preloads URLs, not audio data
+  - Preload state is cleared when playlist changes to prevent stale data
+  - Added preload status tracking with `isPreloading` and `preloadedSong` getters
 - [ ] **Search functionality** - Search albums, artists, songs
 - [ ] **Artist browsing** - Browse by artist (not just albums)
-- [ ] **Genre browsing** - Browse music by genre
 - [ ] **Queue management** - View, reorder, edit playback queue
 - [x] **Progress seeking** - Scrub through tracks with seek bar ✅ **COMPLETED**
   - Replaced read-only progress bar with interactive slider
@@ -21,13 +27,12 @@
   - Implemented real-time time labels showing current position and total duration
   - Custom slider styling with proper thumb size and visual feedback
   - Seamless integration with existing AudioPlayerService seekTo() method
-- [ ] **Repeat modes** - Repeat track/album/off controls
 
 ### Playlist Management (Can those be done on the server side?)
-- [ ] **User playlists** - Create, edit, delete custom playlists
-- [ ] **Favorite songs** - Mark and browse favorite tracks
-- [ ] **Recently played** - Track and display listening history
-- [ ] **Smart playlists** - Auto-generated playlists (most played, recent, etc.)
+- [ ] **User playlists** - Create, edit, delete custom playlists (if Subsonic allows it)
+- [ ] **Favorite songs** - Mark and browse favorite tracks (if Subsonic allows it)
+- [ ] **Recently played** - Track and display listening history (if Subsonic allows it)
+- [ ] **Smart playlists** - Auto-generated playlists (most played, recent, etc.) (if subsonic allows it)
 
 ## 🎨 UI/UX Improvements
 
@@ -39,17 +44,11 @@
 - [ ] **Better error messages** - User-friendly error displays
 
 ### Mobile Experience
-- [ ] **Swipe gestures** - Swipe to skip, seek, etc.
 - [ ] **Lock screen controls** - Native media controls integration
+- [ ] **Swipe gestures** - Swipe to skip, seek, etc.
 - [ ] **Playback notifications** - Show current track in notifications
 - [ ] **Landscape support** - Optimize layout for landscape mode
 - [ ] **Accessibility** - Screen reader support, better touch targets
-
-### Desktop Experience
-- [ ] **Keyboard shortcuts** - Global hotkeys for playback control
-- [ ] **System tray** - Minimize to system tray
-- [ ] **Native menus** - Platform-appropriate menu bars
-- [ ] **File associations** - Open audio files directly
 
 ## ⚡ Performance & Architecture
 

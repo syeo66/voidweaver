@@ -28,6 +28,11 @@ class AudioPlayerService extends ChangeNotifier {
   StreamSubscription? _positionSubscription;
   StreamSubscription? _durationSubscription;
   StreamSubscription? _playerCompleteSubscription;
+  
+  // Preload state
+  Song? _preloadedSong;
+  bool _isPreloading = false;
+  String? _preloadedStreamUrl;
 
   AudioPlayerService(this._api, this._settingsService) {
     _initializePlayer();
@@ -41,6 +46,8 @@ class AudioPlayerService extends ChangeNotifier {
   Song? get currentSong => _currentSong;
   bool get hasNext => _currentIndex < _playlist.length - 1;
   bool get hasPrevious => _currentIndex > 0;
+  bool get isPreloading => _isPreloading;
+  Song? get preloadedSong => _preloadedSong;
 
   void _initializePlayer() {
     _positionSubscription = _audioPlayer.onPositionChanged.listen((position) {
@@ -84,6 +91,9 @@ class AudioPlayerService extends ChangeNotifier {
       _playbackState = PlaybackState.loading;
       notifyListeners();
       
+      // Clear any existing preload since we're changing playlist
+      _clearPreload();
+      
       if (album.songs.isEmpty) {
         debugPrint('Album ${album.name} has no songs, trying to fetch from API...');
         try {
@@ -118,12 +128,18 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   Future<void> playRandomSongs([int count = 50]) async {
+    // Clear any existing preload since we're changing playlist
+    _clearPreload();
+    
     _playlist = await _api.getRandomSongs(count);
     _currentIndex = 0;
     await _playSongAtIndex(0);
   }
 
   Future<void> playSong(Song song) async {
+    // Clear any existing preload since we're changing playlist
+    _clearPreload();
+    
     _playlist = [song];
     _currentIndex = 0;
     await _playSongAtIndex(0);
@@ -139,8 +155,20 @@ class AudioPlayerService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final streamUrl = _api.getStreamUrl(_currentSong!.id);
-      debugPrint('Playing song: ${_currentSong!.title} from URL: $streamUrl');
+      String streamUrl;
+      
+      // Check if this song is already preloaded
+      if (_preloadedSong?.id == _currentSong!.id && _preloadedStreamUrl != null) {
+        debugPrint('Using preloaded URL for song: ${_currentSong!.title}');
+        streamUrl = _preloadedStreamUrl!;
+        
+        // Clear preload state since we're using it now
+        _preloadedSong = null;
+        _preloadedStreamUrl = null;
+      } else {
+        streamUrl = _api.getStreamUrl(_currentSong!.id);
+        debugPrint('Playing song: ${_currentSong!.title} from URL: $streamUrl');
+      }
       
       // Record when this song started playing
       _currentSongStartTime = DateTime.now();
@@ -152,6 +180,9 @@ class AudioPlayerService extends ChangeNotifier {
       
       // Read ReplayGain metadata from the audio file and apply volume adjustment
       _readReplayGainAndApplyVolume(streamUrl);
+      
+      // Preload next song if available
+      _preloadNextSong();
     } catch (e) {
       debugPrint('Error playing song at index $index: $e');
       _playbackState = PlaybackState.stopped;
@@ -338,6 +369,45 @@ class AudioPlayerService extends ChangeNotifier {
 
   Future<void> refreshReplayGainVolume() async {
     _applyReplayGainVolume();
+  }
+
+  /// Preloads the next song in the playlist for seamless playback
+  Future<void> _preloadNextSong() async {
+    if (!hasNext || _isPreloading) return;
+    
+    final nextIndex = _currentIndex + 1;
+    final nextSong = _playlist[nextIndex];
+    
+    // Don't preload if it's already preloaded
+    if (_preloadedSong?.id == nextSong.id) return;
+    
+    _isPreloading = true;
+    notifyListeners();
+    
+    try {
+      final streamUrl = _api.getStreamUrl(nextSong.id);
+      debugPrint('Preloading next song: ${nextSong.title}');
+      
+      // Store the preloaded URL (this is instant, just generates the URL)
+      _preloadedSong = nextSong;
+      _preloadedStreamUrl = streamUrl;
+      
+      debugPrint('Successfully preloaded URL for: ${nextSong.title}');
+    } catch (e) {
+      debugPrint('Error preloading next song: $e');
+      _preloadedSong = null;
+      _preloadedStreamUrl = null;
+    } finally {
+      _isPreloading = false;
+      notifyListeners();
+    }
+  }
+  
+  /// Clears the preloaded song (called when playlist changes)
+  void _clearPreload() {
+    _preloadedSong = null;
+    _preloadedStreamUrl = null;
+    _isPreloading = false;
   }
 
   @override
