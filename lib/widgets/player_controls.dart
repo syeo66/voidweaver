@@ -28,6 +28,7 @@ class PlayerControls extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               _buildProgressBar(playerService),
+              _buildTimeLabels(playerService),
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
@@ -61,16 +62,68 @@ class PlayerControls extends StatelessWidget {
   }
   
   Widget _buildProgressBar(AudioPlayerService playerService) {
+    final double value = playerService.totalDuration.inMilliseconds > 0
+        ? playerService.currentPosition.inMilliseconds / playerService.totalDuration.inMilliseconds
+        : 0;
+    
     return SizedBox(
-      height: 4,
-      child: LinearProgressIndicator(
-        value: playerService.totalDuration.inMilliseconds > 0
-            ? playerService.currentPosition.inMilliseconds / playerService.totalDuration.inMilliseconds
-            : 0,
-        backgroundColor: Colors.grey[300],
-        valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+      height: 20,
+      child: Builder(
+        builder: (context) => SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 4,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+            activeTrackColor: Colors.blue,
+            inactiveTrackColor: Colors.grey[300],
+            thumbColor: Colors.blue,
+            overlayColor: Colors.blue.withValues(alpha: 0.2),
+          ),
+          child: Slider(
+            value: value.clamp(0.0, 1.0),
+            onChanged: (newValue) {
+              if (playerService.totalDuration.inMilliseconds > 0) {
+                final newPosition = Duration(
+                  milliseconds: (newValue * playerService.totalDuration.inMilliseconds).round(),
+                );
+                playerService.seekTo(newPosition);
+              }
+            },
+          ),
+        ),
       ),
     );
+  }
+  
+  Widget _buildTimeLabels(AudioPlayerService playerService) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            _formatDuration(playerService.currentPosition),
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 12,
+            ),
+          ),
+          Text(
+            _formatDuration(playerService.totalDuration),
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes;
+    final seconds = duration.inSeconds % 60;
+    return '${minutes.toString().padLeft(1, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
   
   Widget _buildControlButtons(AudioPlayerService playerService) {

@@ -5,8 +5,8 @@ A high-quality Flutter music player application that connects to Subsonic API-co
 ## Features
 
 - **Music Streaming**: Stream music from Subsonic, Airsonic, or Navidrome servers
-- **Album Browsing**: Browse and play entire albums with cover art
-- **Audio Playback**: Full-featured player with play/pause, skip, and progress tracking
+- **Album Browsing**: Browse and play entire albums with cached cover art for fast loading
+- **Audio Playback**: Full-featured player with play/pause, skip, and interactive progress seeking
 - **Server Scrobbling**: Automatic server notifications for played songs and listening statistics
   - Now playing notifications when songs start
   - Scrobble submissions for tracking play counts and listening history
@@ -22,6 +22,7 @@ A high-quality Flutter music player application that connects to Subsonic API-co
 - **Background Sync**: Automatic synchronization with server every 5 minutes
 - **Secure Authentication**: Encrypted credential storage with automatic migration from legacy storage
 - **Persistent Login**: Remembers server credentials securely between sessions
+- **Advanced Image Caching**: Intelligent disk-based caching for album art with offline persistence
 - **Cross-Platform**: Runs on Android, iOS, and Web
 
 ## Getting Started
@@ -63,7 +64,7 @@ A high-quality Flutter music player application that connects to Subsonic API-co
 - **Albums Tab**: Browse your music collection by albums
   - Tap any album to start playback
   - Use the menu button (⋮) for additional options
-- **Now Playing Tab**: View currently playing song with album art and playlist
+- **Now Playing Tab**: View currently playing song with album art, playlist, and interactive progress seeking
 - **Shuffle Button**: Play random songs from your collection
 - **Settings**: Access via menu (⋮) → Settings
   - Configure ReplayGain normalization (Off/Track/Album modes)
@@ -105,6 +106,8 @@ flutter test             # Run tests (1/1 passing)
 ```
 
 **Recent Improvements**:
+- **Interactive progress seeking**: Enhanced music player with tap-to-seek and drag-to-scrub functionality
+- **Advanced image caching**: Implemented robust disk-based caching for all album art with automatic persistence
 - **Secure credential storage**: Implemented encrypted storage with automatic migration from legacy SharedPreferences
 - **Server notification implementation**: Added comprehensive scrobbling and now playing notifications
 - Fixed 148 Flutter analyzer warnings for optimal performance
@@ -188,6 +191,7 @@ Voidweaver uses a clean, optimized architecture with:
 - **Background synchronization** for keeping data fresh
 - **Efficient HTTP range requests** for metadata extraction with minimal bandwidth usage
 - **Performance-optimized widgets** with const constructors and minimal rebuilds
+- **Advanced image caching system** with disk-based storage and intelligent placeholder handling
 - **Production-ready logging** with proper error handling and debugging capabilities
 
 ## Requirements

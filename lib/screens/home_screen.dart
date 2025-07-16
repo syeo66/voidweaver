@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../services/app_state.dart';
 import '../services/audio_player_service.dart';
 import '../services/subsonic_api.dart';
@@ -285,26 +286,18 @@ class _PlaylistItem extends StatelessWidget {
                 song.coverArt != null
                     ? ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          api.getCoverArtUrl(song.coverArt!),
+                        child: CachedNetworkImage(
+                          imageUrl: api.getCoverArtUrl(song.coverArt!),
                           key: ValueKey('playlist-${song.id}-${song.coverArt}'),
                           fit: BoxFit.cover,
-                          headers: const {
-                            'Cache-Control': 'max-age=3600',
-                          },
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Icon(
-                              Icons.music_note,
-                              color: isCurrentSong ? Colors.white : Colors.grey,
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return Icon(
-                              Icons.music_note,
-                              color: isCurrentSong ? Colors.white : Colors.grey,
-                            );
-                          },
+                          placeholder: (context, url) => Icon(
+                            Icons.music_note,
+                            color: isCurrentSong ? Colors.white : Colors.grey,
+                          ),
+                          errorWidget: (context, url, error) => Icon(
+                            Icons.music_note,
+                            color: isCurrentSong ? Colors.white : Colors.grey,
+                          ),
                         ),
                       )
                     : Icon(
@@ -486,37 +479,19 @@ class _StaticAlbumArtState extends State<_StaticAlbumArt> {
 
     _cachedImageWidget = ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: Image.network(
-        _currentCoverArtUrl!,
+      child: CachedNetworkImage(
+        imageUrl: _currentCoverArtUrl!,
         key: ValueKey('main-$_currentCoverArtUrl'),
         fit: BoxFit.cover,
-        headers: const {
-          'Cache-Control': 'max-age=3600',
-        },
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Stack(
-            children: [
-              Container(
-                color: Colors.grey[300],
-                child: const Center(
-                  child: Icon(Icons.music_note, size: 64, color: Colors.grey),
-                ),
-              ),
-              Center(
-                child: CircularProgressIndicator(
-                  value: loadingProgress.expectedTotalBytes != null
-                      ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                      : null,
-                  strokeWidth: 2,
-                ),
-              ),
-            ],
-          );
-        },
-        errorBuilder: (context, error, stackTrace) {
-          return const Icon(Icons.music_note, size: 64, color: Colors.grey);
-        },
+        placeholder: (context, url) => Container(
+          color: Colors.grey[300],
+          child: const Center(
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+            ),
+          ),
+        ),
+        errorWidget: (context, url, error) => const Icon(Icons.music_note, size: 64, color: Colors.grey),
       ),
     );
 

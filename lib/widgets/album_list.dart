@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../services/app_state.dart';
 import '../services/subsonic_api.dart';
 
@@ -86,14 +87,16 @@ class AlbumTile extends StatelessWidget {
             child: album.coverArt != null
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      context.read<AppState>().api!.getCoverArtUrl(album.coverArt!),
+                    child: CachedNetworkImage(
+                      imageUrl: context.read<AppState>().api!.getCoverArtUrl(album.coverArt!),
                       fit: BoxFit.cover,
                       width: 56,
                       height: 56,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Icon(Icons.album, color: Colors.grey);
-                      },
+                      placeholder: (context, url) => Container(
+                        color: Colors.grey[300],
+                        child: const Icon(Icons.album, color: Colors.grey),
+                      ),
+                      errorWidget: (context, url, error) => const Icon(Icons.album, color: Colors.grey),
                     ),
                   )
                 : const Icon(Icons.album, color: Colors.grey),
