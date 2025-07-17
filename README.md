@@ -6,6 +6,7 @@ A high-quality Flutter music player application that connects to Subsonic API-co
 
 - **Music Streaming**: Stream music from Subsonic, Airsonic, or Navidrome servers
 - **Album Browsing**: Browse and play entire albums with cached cover art for fast loading
+- **Artist Browsing**: Browse music by artist with alphabetically sorted lists and album grid views
 - **Search Functionality**: Comprehensive search for artists, albums, and songs with real-time results
 - **Audio Playback**: Full-featured player with play/pause, skip, interactive progress seeking, and next track preloading for seamless transitions
 - **Server Scrobbling**: Automatic server notifications for played songs and listening statistics

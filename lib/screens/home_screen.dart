@@ -9,6 +9,7 @@ import '../widgets/player_controls.dart';
 import '../widgets/sync_status_indicator.dart';
 import 'settings_screen.dart';
 import 'search_screen.dart';
+import 'artist_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -85,6 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
               index: _currentIndex,
               children: [
                 const AlbumList(),
+                const ArtistScreen(),
                 _buildNowPlayingScreen(),
               ],
             ),
@@ -103,6 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
         currentIndex: _currentIndex,
         onTap: (index) {
           setState(() {
@@ -113,6 +116,10 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.library_music),
             label: 'Albums',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Artists',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.music_note),

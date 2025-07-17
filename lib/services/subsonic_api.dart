@@ -203,6 +203,47 @@ class SubsonicApi {
       rethrow;
     }
   }
+
+  /// Gets all artists from the server.
+  /// Returns a list of Artist objects ordered alphabetically.
+  Future<List<Artist>> getArtists() async {
+    try {
+      final doc = await _makeRequest('getArtists');
+      final artists = <Artist>[];
+      
+      final artistElements = doc.findAllElements('artist');
+      for (final element in artistElements) {
+        artists.add(Artist.fromXml(element));
+      }
+      
+      // Sort artists alphabetically by name
+      artists.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      
+      return artists;
+    } catch (e) {
+      debugPrint('Failed to get artists: $e');
+      rethrow;
+    }
+  }
+
+  /// Gets all albums for a specific artist.
+  /// Returns a list of Album objects for the given artist ID.
+  Future<List<Album>> getArtistAlbums(String artistId) async {
+    try {
+      final doc = await _makeRequest('getArtist', {'id': artistId});
+      final albums = <Album>[];
+      
+      final albumElements = doc.findAllElements('album');
+      for (final element in albumElements) {
+        albums.add(Album.fromXml(element));
+      }
+      
+      return albums;
+    } catch (e) {
+      debugPrint('Failed to get albums for artist $artistId: $e');
+      rethrow;
+    }
+  }
 }
 
 class Album {

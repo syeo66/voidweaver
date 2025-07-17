@@ -26,7 +26,13 @@
   - Robust XML parsing with namespace support for Subsonic API responses
   - Advanced image caching for search result cover art
   - Search accessible via search icon in home screen app bar
-- [ ] **Artist browsing** - Browse by artist (not just albums)
+- [x] **Artist browsing** - Browse by artist (not just albums) ✅ **COMPLETED**
+  - Added `getArtists()` and `getArtistAlbums()` methods to SubsonicApi
+  - Created dedicated artist browsing screen with alphabetically sorted artist list
+  - Artist avatars using cover art or initials with album counts
+  - Album grid view for selected artists with tap-to-play functionality
+  - Integrated into home screen bottom navigation as "Artists" tab
+  - Comprehensive error handling and loading states
 - [ ] **Queue management** - View, reorder, edit playback queue
 - [x] **Progress seeking** - Scrub through tracks with seek bar ✅ **COMPLETED**
   - Replaced read-only progress bar with interactive slider
