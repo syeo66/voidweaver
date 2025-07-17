@@ -15,13 +15,24 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (context) => AppState(),
-      child: MaterialApp(
-        title: 'Voidweaver',
-        theme: ThemeData(
-          primarySwatch: Colors.deepPurple,
-          visualDensity: VisualDensity.adaptivePlatformDensity,
-        ),
-        home: const AppRouter(),
+      child: Consumer<AppState>(
+        builder: (context, appState, child) {
+          return MaterialApp(
+            title: 'Voidweaver',
+            theme: ThemeData(
+              primarySwatch: Colors.deepPurple,
+              visualDensity: VisualDensity.adaptivePlatformDensity,
+              brightness: Brightness.light,
+            ),
+            darkTheme: ThemeData(
+              primarySwatch: Colors.deepPurple,
+              visualDensity: VisualDensity.adaptivePlatformDensity,
+              brightness: Brightness.dark,
+            ),
+            themeMode: appState.settingsService?.themeMode ?? ThemeMode.system,
+            home: const AppRouter(),
+          );
+        },
       ),
     );
   }

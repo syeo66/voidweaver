@@ -50,7 +50,13 @@
 ## 🎨 UI/UX Improvements
 
 ### Visual Enhancements
-- [ ] **Dark mode** - Add dark theme support
+- [x] **Dark mode** - Add dark theme support ✅ **COMPLETED**
+  - Added `ThemeMode` support to SettingsService with System/Light/Dark options
+  - Updated main.dart to support light/dark themes with system detection
+  - Created appearance settings section in settings screen
+  - Persistent theme preference storage using SharedPreferences
+  - Seamless theme switching without app restart through reactive Provider pattern
+  - Consistent theming across all screens using Flutter's built-in theme system
 - [ ] **Loading states** - Add progress indicators for all operations
 - [ ] **Mini player** - Collapsed player view for navigation
 - [ ] **Album art animations** - Smooth transitions and effects

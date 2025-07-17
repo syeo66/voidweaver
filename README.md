@@ -19,6 +19,7 @@ A high-quality Flutter music player application that connects to Subsonic API-co
   - Support for Track and Album normalization modes
   - Real-time volume adjustment with preamp control
   - Automatic fallback for files without ReplayGain data
+- **Dark Mode Support**: System-aware dark theme with manual override options
 - **Settings Management**: Comprehensive settings page with real-time preview
 - **Robust Error Handling**: Comprehensive error handling for playback failures with user-friendly messages
 - **Background Sync**: Automatic synchronization with server every 5 minutes
@@ -72,7 +73,8 @@ A high-quality Flutter music player application that connects to Subsonic API-co
 - **Now Playing Tab**: View currently playing song with album art, playlist, and interactive progress seeking
 - **Shuffle Button**: Play random songs from your collection
 - **Settings**: Access via menu (⋮) → Settings
-  - Configure ReplayGain normalization (Off/Track/Album modes)
+  - **Appearance**: Choose between Light, Dark, or System theme
+  - **ReplayGain**: Configure normalization (Off/Track/Album modes)
   - Adjust preamp for overall volume control (-15dB to +15dB)
   - Enable prevent clipping to avoid audio distortion
   - Set fallback gain for files without ReplayGain metadata
@@ -111,6 +113,7 @@ flutter test             # Run tests (1/1 passing)
 ```
 
 **Recent Improvements**:
+- **Dark mode support**: Added comprehensive theme management with System/Light/Dark options
 - **Comprehensive search functionality**: Added real-time search for artists, albums, and songs with categorized results
 - **Next track preloading**: Implemented seamless playback transitions with automatic URL preloading
 - **Interactive progress seeking**: Enhanced music player with tap-to-seek and drag-to-scrub functionality

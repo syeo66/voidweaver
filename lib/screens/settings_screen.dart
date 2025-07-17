@@ -43,10 +43,52 @@ class _SettingsContent extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.all(16.0),
           children: [
+            _buildAppearanceSection(context, settingsService),
+            const SizedBox(height: 16),
             _buildReplayGainSection(context, settingsService),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildAppearanceSection(BuildContext context, SettingsService settingsService) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Appearance',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 16),
+            
+            // Theme Mode
+            Text(
+              'Theme',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Column(
+              children: ThemeMode.values.map((mode) {
+                return RadioListTile<ThemeMode>(
+                  title: Text(_getThemeModeTitle(mode)),
+                  subtitle: Text(_getThemeModeDescription(mode)),
+                  value: mode,
+                  groupValue: settingsService.themeMode,
+                  onChanged: (ThemeMode? value) {
+                    if (value != null) {
+                      settingsService.setThemeMode(value);
+                    }
+                  },
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -207,6 +249,28 @@ class _SettingsContent extends StatelessWidget {
         return 'Normalize each track individually';
       case ReplayGainMode.album:
         return 'Normalize based on album levels';
+    }
+  }
+
+  String _getThemeModeTitle(ThemeMode mode) {
+    switch (mode) {
+      case ThemeMode.system:
+        return 'System';
+      case ThemeMode.light:
+        return 'Light';
+      case ThemeMode.dark:
+        return 'Dark';
+    }
+  }
+
+  String _getThemeModeDescription(ThemeMode mode) {
+    switch (mode) {
+      case ThemeMode.system:
+        return 'Follow system theme settings';
+      case ThemeMode.light:
+        return 'Always use light theme';
+      case ThemeMode.dark:
+        return 'Always use dark theme';
     }
   }
 

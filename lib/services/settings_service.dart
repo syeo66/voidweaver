@@ -1,5 +1,5 @@
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum ReplayGainMode {
@@ -13,6 +13,7 @@ class SettingsService extends ChangeNotifier {
   static const String _replayGainPreampKey = 'replayGainPreamp';
   static const String _replayGainPreventClippingKey = 'replayGainPreventClipping';
   static const String _replayGainFallbackGainKey = 'replayGainFallbackGain';
+  static const String _themeModeKey = 'themeMode';
 
   SharedPreferences? _prefs;
   
@@ -20,11 +21,13 @@ class SettingsService extends ChangeNotifier {
   double _replayGainPreamp = 0.0; // dB
   bool _replayGainPreventClipping = true;
   double _replayGainFallbackGain = 0.0; // dB for files without ReplayGain data
+  ThemeMode _themeMode = ThemeMode.system;
 
   ReplayGainMode get replayGainMode => _replayGainMode;
   double get replayGainPreamp => _replayGainPreamp;
   bool get replayGainPreventClipping => _replayGainPreventClipping;
   double get replayGainFallbackGain => _replayGainFallbackGain;
+  ThemeMode get themeMode => _themeMode;
 
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
@@ -40,6 +43,9 @@ class SettingsService extends ChangeNotifier {
     _replayGainPreamp = _prefs!.getDouble(_replayGainPreampKey) ?? 0.0;
     _replayGainPreventClipping = _prefs!.getBool(_replayGainPreventClippingKey) ?? true;
     _replayGainFallbackGain = _prefs!.getDouble(_replayGainFallbackGainKey) ?? 0.0;
+    
+    final themeModeIndex = _prefs!.getInt(_themeModeKey) ?? 0;
+    _themeMode = ThemeMode.values[themeModeIndex];
     
     notifyListeners();
   }
@@ -109,5 +115,11 @@ class SettingsService extends ChangeNotifier {
 
   double _dbToLinear(double db) {
     return math.pow(10.0, db / 20.0).toDouble();
+  }
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    _themeMode = mode;
+    await _prefs?.setInt(_themeModeKey, mode.index);
+    notifyListeners();
   }
 }
