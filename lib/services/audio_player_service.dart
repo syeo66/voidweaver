@@ -128,12 +128,30 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   Future<void> playRandomSongs([int count = 50]) async {
-    // Clear any existing preload since we're changing playlist
-    _clearPreload();
-    
-    _playlist = await _api.getRandomSongs(count);
-    _currentIndex = 0;
-    await _playSongAtIndex(0);
+    try {
+      _playbackState = PlaybackState.loading;
+      notifyListeners();
+      
+      // Clear any existing preload since we're changing playlist
+      _clearPreload();
+      
+      _playlist = await _api.getRandomSongs(count);
+      
+      if (_playlist.isEmpty) {
+        _playbackState = PlaybackState.stopped;
+        notifyListeners();
+        throw Exception('No random songs available');
+      }
+      
+      debugPrint('Playing random songs: ${_playlist.length} songs loaded');
+      _currentIndex = 0;
+      await _playSongAtIndex(0);
+    } catch (e) {
+      debugPrint('Error playing random songs: $e');
+      _playbackState = PlaybackState.stopped;
+      notifyListeners();
+      throw Exception('Failed to play random songs: ${e.toString()}');
+    }
   }
 
   Future<void> playSong(Song song) async {
