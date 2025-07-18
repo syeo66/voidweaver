@@ -10,14 +10,18 @@ String formatDuration(Duration duration) {
 }
 
 double? parseReplayGainValue(String value) {
-  final cleanValue = value.replaceAll(RegExp(r'[^\d.-]'), '');
-  return double.tryParse(cleanValue);
+  // Extract numeric value including decimal point, scientific notation, and sign
+  final match = RegExp(r'[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?').firstMatch(value);
+  if (match == null) return null;
+  return double.tryParse(match.group(0)!);
 }
 
 bool isValidUrl(String url) {
   try {
     final uri = Uri.parse(url);
-    return uri.hasScheme && (uri.scheme == 'http' || uri.scheme == 'https');
+    return uri.hasScheme && 
+           (uri.scheme == 'http' || uri.scheme == 'https') &&
+           uri.host.isNotEmpty;
   } catch (e) {
     return false;
   }
@@ -28,8 +32,8 @@ String sanitizeFilename(String filename) {
 }
 
 int calculateProgressPercentage(Duration current, Duration total) {
-  if (total.inMilliseconds == 0) return 0;
-  final percentage = (current.inMilliseconds / total.inMilliseconds * 100).round();
+  if (total.inMicroseconds == 0) return 0;
+  final percentage = (current.inMicroseconds / total.inMicroseconds * 100).round();
   return percentage.clamp(0, 100);
 }
 
