@@ -15,6 +15,13 @@ enum SyncStatus {
   error,
 }
 
+enum LoadingState {
+  idle,
+  loading,
+  success,
+  error,
+}
+
 class AppState extends ChangeNotifier {
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage(
     aOptions: AndroidOptions(
@@ -36,6 +43,12 @@ class AppState extends ChangeNotifier {
   SyncStatus _syncStatus = SyncStatus.idle;
   Timer? _syncTimer;
   DateTime? _lastSyncTime;
+  
+  // Enhanced loading states
+  LoadingState _configurationLoadingState = LoadingState.idle;
+  LoadingState _albumLoadingState = LoadingState.idle;
+  String? _configurationError;
+  String? _albumError;
 
   SubsonicApi? get api => _api;
   AudioPlayerService? get audioPlayerService => _audioPlayerService;
@@ -46,6 +59,12 @@ class AppState extends ChangeNotifier {
   bool get isConfigured => _isConfigured;
   SyncStatus get syncStatus => _syncStatus;
   DateTime? get lastSyncTime => _lastSyncTime;
+  
+  // Enhanced loading state getters
+  LoadingState get configurationLoadingState => _configurationLoadingState;
+  LoadingState get albumLoadingState => _albumLoadingState;
+  String? get configurationError => _configurationError;
+  String? get albumError => _albumError;
 
   Future<void> initialize() async {
     _settingsService = SettingsService();
@@ -54,6 +73,10 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> configure(String serverUrl, String username, String password) async {
+    _configurationLoadingState = LoadingState.loading;
+    _configurationError = null;
+    notifyListeners();
+    
     try {
       _api = SubsonicApi(
         serverUrl: serverUrl,
@@ -67,13 +90,16 @@ class AppState extends ChangeNotifier {
       await _initializeAudioService();
       
       _isConfigured = true;
+      _configurationLoadingState = LoadingState.success;
       
       await _saveServerConfig(serverUrl, username, password);
       await loadAlbums();
       _startBackgroundSync();
       notifyListeners();
     } catch (e) {
+      _configurationError = e.toString();
       _error = e.toString();
+      _configurationLoadingState = LoadingState.error;
       _isConfigured = false;
       _isLoading = false;
       notifyListeners();
@@ -105,13 +131,18 @@ class AppState extends ChangeNotifier {
     if (_api == null) return;
     
     _isLoading = true;
+    _albumLoadingState = LoadingState.loading;
     _error = null;
+    _albumError = null;
     notifyListeners();
 
     try {
       _albums = await _api!.getAlbumList();
+      _albumLoadingState = LoadingState.success;
     } catch (e) {
       _error = e.toString();
+      _albumError = e.toString();
+      _albumLoadingState = LoadingState.error;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -207,6 +238,12 @@ class AppState extends ChangeNotifier {
     _error = null;
     _syncStatus = SyncStatus.idle;
     _lastSyncTime = null;
+    
+    // Reset loading states
+    _configurationLoadingState = LoadingState.idle;
+    _albumLoadingState = LoadingState.idle;
+    _configurationError = null;
+    _albumError = null;
     
     notifyListeners();
   }

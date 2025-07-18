@@ -20,6 +20,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  bool _isPlayingRandomSongs = false;
 
   @override
   Widget build(BuildContext context) {
@@ -37,10 +38,35 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.shuffle),
-            onPressed: () async {
+            icon: _isPlayingRandomSongs
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.shuffle),
+            onPressed: _isPlayingRandomSongs ? null : () async {
+              setState(() => _isPlayingRandomSongs = true);
+              
               final appState = context.read<AppState>();
-              await appState.audioPlayerService?.playRandomSongs();
+              final messenger = ScaffoldMessenger.of(context);
+              
+              try {
+                await appState.audioPlayerService?.playRandomSongs();
+              } catch (e) {
+                if (mounted) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to play random songs: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              } finally {
+                if (mounted) {
+                  setState(() => _isPlayingRandomSongs = false);
+                }
+              }
             },
           ),
           PopupMenuButton(

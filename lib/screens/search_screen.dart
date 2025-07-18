@@ -74,10 +74,28 @@ class _SearchScreenState extends State<SearchScreen> {
             padding: const EdgeInsets.all(16.0),
             child: TextField(
               controller: _searchController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: 'Search artists, albums, songs...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
+                prefixIcon: _isLoading 
+                    ? const Padding(
+                        padding: EdgeInsets.all(14.0),
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : const Icon(Icons.search),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          _performSearch('');
+                        },
+                      )
+                    : null,
+                border: const OutlineInputBorder(),
                 filled: true,
                 fillColor: Colors.white,
               ),

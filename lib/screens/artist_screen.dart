@@ -76,8 +76,19 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   Future<void> _playAlbum(Album album) async {
-    final appState = context.read<AppState>();
-    await appState.audioPlayerService?.playAlbum(album);
+    try {
+      final appState = context.read<AppState>();
+      await appState.audioPlayerService?.playAlbum(album);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to play album: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _backToArtists() {
@@ -142,21 +153,46 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
   Widget _buildArtistList() {
     if (_isLoadingArtists) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_artists.isEmpty) {
       return const Center(
-        child: Text('No artists found'),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading artists...'),
+          ],
+        ),
       );
     }
 
-    return ListView.builder(
-      itemCount: _artists.length,
-      itemBuilder: (context, index) {
-        final artist = _artists[index];
-        return _buildArtistTile(artist);
-      },
+    if (_artists.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.person_outline, size: 64, color: Colors.grey),
+            const SizedBox(height: 16),
+            const Text('No artists found'),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _loadArtists,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Refresh'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadArtists,
+      child: ListView.builder(
+        itemCount: _artists.length,
+        itemBuilder: (context, index) {
+          final artist = _artists[index];
+          return _buildArtistTile(artist);
+        },
+      ),
     );
   }
 
@@ -199,28 +235,57 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
   Widget _buildAlbumList() {
     if (_isLoadingAlbums) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_albums.isEmpty) {
       return const Center(
-        child: Text('No albums found for this artist'),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading albums...'),
+          ],
+        ),
       );
     }
 
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.8,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
+    if (_albums.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.album_outlined, size: 64, color: Colors.grey),
+            const SizedBox(height: 16),
+            const Text('No albums found for this artist'),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _selectedArtist != null
+                  ? () => _loadArtistAlbums(_selectedArtist!)
+                  : null,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Refresh'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _selectedArtist != null
+          ? () => _loadArtistAlbums(_selectedArtist!)
+          : () async {},
+      child: GridView.builder(
+        padding: const EdgeInsets.all(16),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.8,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+        ),
+        itemCount: _albums.length,
+        itemBuilder: (context, index) {
+          final album = _albums[index];
+          return _buildAlbumCard(album);
+        },
       ),
-      itemCount: _albums.length,
-      itemBuilder: (context, index) {
-        final album = _albums[index];
-        return _buildAlbumCard(album);
-      },
     );
   }
 

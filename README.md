@@ -22,6 +22,12 @@ A high-quality Flutter music player application that connects to Subsonic API-co
   - Automatic fallback for files without ReplayGain data
 - **Dark Mode Support**: System-aware dark theme with manual override options
 - **Settings Management**: Comprehensive settings page with real-time preview
+- **Comprehensive Loading States**: Extensive loading indicators and user feedback throughout the app
+  - Visual feedback for all operations (server connection, album loading, search, etc.)
+  - Granular loading states for different operations with proper error handling
+  - Disabled controls during loading to prevent user confusion
+  - Pull-to-refresh functionality on album and artist lists
+  - Enhanced error messages with retry mechanisms
 - **Robust Error Handling**: Comprehensive error handling for playback failures with user-friendly messages
 - **Background Sync**: Automatic synchronization with server every 5 minutes
 - **Secure Authentication**: Encrypted credential storage with automatic migration from legacy storage
@@ -116,6 +122,11 @@ flutter test             # Run tests (1/1 passing)
 ```
 
 **Recent Improvements**:
+- **Comprehensive loading states**: Implemented extensive loading state management across the entire application
+  - Added granular loading states for server operations, audio playback, search, and artist browsing
+  - Enhanced all screens with proper loading indicators and user feedback
+  - Implemented context-safe async operations with proper error handling
+  - Added pull-to-refresh functionality and retry mechanisms throughout the app
 - **Native media controls**: Added comprehensive system-level media control integration with lock screen controls, notification panel controls, and external device support
 - **Dark mode support**: Added comprehensive theme management with System/Light/Dark options
 - **Comprehensive search functionality**: Added real-time search for artists, albums, and songs with categorized results
@@ -197,16 +208,17 @@ You can then:
 
 Voidweaver uses a clean, optimized architecture with:
 
-- **Provider** pattern for efficient state management
+- **Provider** pattern for efficient state management with comprehensive loading states
 - **Service layer** for API communication, audio playback, ReplayGain processing, and server scrobbling
 - **Native audio service integration** for system-level media controls and background playback
 - **Client-side metadata extraction** for ReplayGain data from audio files
 - **Automatic server notifications** for played songs and listening statistics
-- **Responsive UI** with Material Design and comprehensive settings management
-- **Background synchronization** for keeping data fresh
+- **Responsive UI** with Material Design, comprehensive settings management, and extensive loading state feedback
+- **Background synchronization** for keeping data fresh with proper status indicators
 - **Efficient HTTP range requests** for metadata extraction with minimal bandwidth usage
 - **Performance-optimized widgets** with const constructors and minimal rebuilds
 - **Advanced image caching system** with disk-based storage and intelligent placeholder handling
+- **Comprehensive loading state management** with granular states for all operations and proper error handling
 - **Production-ready logging** with proper error handling and debugging capabilities
 
 ## Requirements

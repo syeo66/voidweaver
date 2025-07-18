@@ -13,6 +13,15 @@ enum PlaybackState {
   loading,
 }
 
+enum AudioLoadingState {
+  idle,
+  loadingAlbum,
+  loadingRandomSongs,
+  loadingSong,
+  preloading,
+  error,
+}
+
 class AudioPlayerService extends ChangeNotifier {
   final AudioPlayer _audioPlayer = AudioPlayer();
   final SubsonicApi _api;
@@ -28,6 +37,10 @@ class AudioPlayerService extends ChangeNotifier {
   StreamSubscription? _positionSubscription;
   StreamSubscription? _durationSubscription;
   StreamSubscription? _playerCompleteSubscription;
+  
+  // Enhanced loading states
+  AudioLoadingState _audioLoadingState = AudioLoadingState.idle;
+  String? _audioLoadingError;
   
   // Preload state
   Song? _preloadedSong;
@@ -48,6 +61,10 @@ class AudioPlayerService extends ChangeNotifier {
   bool get hasPrevious => _currentIndex > 0;
   bool get isPreloading => _isPreloading;
   Song? get preloadedSong => _preloadedSong;
+  
+  // Enhanced loading state getters
+  AudioLoadingState get audioLoadingState => _audioLoadingState;
+  String? get audioLoadingError => _audioLoadingError;
 
   void _initializePlayer() {
     _positionSubscription = _audioPlayer.onPositionChanged.listen((position) {
@@ -89,6 +106,8 @@ class AudioPlayerService extends ChangeNotifier {
   Future<void> playAlbum(Album album) async {
     try {
       _playbackState = PlaybackState.loading;
+      _audioLoadingState = AudioLoadingState.loadingAlbum;
+      _audioLoadingError = null;
       notifyListeners();
       
       // Clear any existing preload since we're changing playlist
@@ -103,6 +122,8 @@ class AudioPlayerService extends ChangeNotifier {
           debugPrint('Failed to fetch album details: $e');
           // If we can't get album details, we can't play it
           _playbackState = PlaybackState.stopped;
+          _audioLoadingState = AudioLoadingState.error;
+          _audioLoadingError = 'Could not load album songs: ${e.toString()}';
           notifyListeners();
           throw Exception('Could not load album songs: ${e.toString()}');
         }
@@ -112,6 +133,8 @@ class AudioPlayerService extends ChangeNotifier {
       
       if (_playlist.isEmpty) {
         _playbackState = PlaybackState.stopped;
+        _audioLoadingState = AudioLoadingState.error;
+        _audioLoadingError = 'Album has no songs';
         notifyListeners();
         throw Exception('Album has no songs');
       }
@@ -122,6 +145,8 @@ class AudioPlayerService extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error playing album: $e');
       _playbackState = PlaybackState.stopped;
+      _audioLoadingState = AudioLoadingState.error;
+      _audioLoadingError = 'Failed to play album: ${e.toString()}';
       notifyListeners();
       throw Exception('Failed to play album: ${e.toString()}');
     }
@@ -130,6 +155,8 @@ class AudioPlayerService extends ChangeNotifier {
   Future<void> playRandomSongs([int count = 50]) async {
     try {
       _playbackState = PlaybackState.loading;
+      _audioLoadingState = AudioLoadingState.loadingRandomSongs;
+      _audioLoadingError = null;
       notifyListeners();
       
       // Clear any existing preload since we're changing playlist
@@ -139,6 +166,8 @@ class AudioPlayerService extends ChangeNotifier {
       
       if (_playlist.isEmpty) {
         _playbackState = PlaybackState.stopped;
+        _audioLoadingState = AudioLoadingState.error;
+        _audioLoadingError = 'No random songs available';
         notifyListeners();
         throw Exception('No random songs available');
       }
@@ -149,12 +178,18 @@ class AudioPlayerService extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error playing random songs: $e');
       _playbackState = PlaybackState.stopped;
+      _audioLoadingState = AudioLoadingState.error;
+      _audioLoadingError = 'Failed to play random songs: ${e.toString()}';
       notifyListeners();
       throw Exception('Failed to play random songs: ${e.toString()}');
     }
   }
 
   Future<void> playSong(Song song) async {
+    _audioLoadingState = AudioLoadingState.loadingSong;
+    _audioLoadingError = null;
+    notifyListeners();
+    
     // Clear any existing preload since we're changing playlist
     _clearPreload();
     
@@ -193,6 +228,10 @@ class AudioPlayerService extends ChangeNotifier {
       
       await _audioPlayer.play(UrlSource(streamUrl));
       
+      // Song successfully started, reset loading state
+      _audioLoadingState = AudioLoadingState.idle;
+      _audioLoadingError = null;
+      
       // Send now playing notification to server
       _api.scrobbleNowPlaying(_currentSong!.id);
       
@@ -204,6 +243,8 @@ class AudioPlayerService extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error playing song at index $index: $e');
       _playbackState = PlaybackState.stopped;
+      _audioLoadingState = AudioLoadingState.error;
+      _audioLoadingError = 'Failed to play song: $e';
       notifyListeners();
       throw Exception('Failed to play song: $e');
     }
@@ -400,6 +441,7 @@ class AudioPlayerService extends ChangeNotifier {
     if (_preloadedSong?.id == nextSong.id) return;
     
     _isPreloading = true;
+    _audioLoadingState = AudioLoadingState.preloading;
     notifyListeners();
     
     try {
@@ -417,6 +459,10 @@ class AudioPlayerService extends ChangeNotifier {
       _preloadedStreamUrl = null;
     } finally {
       _isPreloading = false;
+      // Only reset loading state if we're not in an error state
+      if (_audioLoadingState == AudioLoadingState.preloading) {
+        _audioLoadingState = AudioLoadingState.idle;
+      }
       notifyListeners();
     }
   }

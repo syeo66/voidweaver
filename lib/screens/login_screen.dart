@@ -14,7 +14,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _serverUrlController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isLoading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -24,75 +23,119 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.music_note,
-                size: 80,
-                color: Theme.of(context).primaryColor,
+        child: Consumer<AppState>(
+          builder: (context, appState, child) {
+            final isLoading = appState.configurationLoadingState == LoadingState.loading;
+            final hasError = appState.configurationLoadingState == LoadingState.error;
+            
+            return Form(
+              key: _formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.music_note,
+                    size: 80,
+                    color: Theme.of(context).primaryColor,
+                  ),
+                  const SizedBox(height: 32),
+                  if (hasError && appState.configurationError != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.shade300),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.error, color: Colors.red.shade700),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              appState.configurationError!,
+                              style: TextStyle(color: Colors.red.shade700),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  TextFormField(
+                    controller: _serverUrlController,
+                    enabled: !isLoading,
+                    decoration: const InputDecoration(
+                      labelText: 'Server URL',
+                      hintText: 'https://your-subsonic-server.com',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter server URL';
+                      }
+                      if (!Uri.tryParse(value)!.isAbsolute) {
+                        return 'Please enter a valid URL';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _usernameController,
+                    enabled: !isLoading,
+                    decoration: const InputDecoration(
+                      labelText: 'Username',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter username';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _passwordController,
+                    enabled: !isLoading,
+                    decoration: const InputDecoration(
+                      labelText: 'Password',
+                      border: OutlineInputBorder(),
+                    ),
+                    obscureText: true,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter password';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: isLoading ? null : _login,
+                      child: isLoading
+                          ? const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                                SizedBox(width: 8),
+                                Text('Connecting...'),
+                              ],
+                            )
+                          : const Text('Connect'),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 32),
-              TextFormField(
-                controller: _serverUrlController,
-                decoration: const InputDecoration(
-                  labelText: 'Server URL',
-                  hintText: 'https://your-subsonic-server.com',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter server URL';
-                  }
-                  if (!Uri.tryParse(value)!.isAbsolute) {
-                    return 'Please enter a valid URL';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _usernameController,
-                decoration: const InputDecoration(
-                  labelText: 'Username',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter username';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _passwordController,
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(),
-                ),
-                obscureText: true,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter password';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _login,
-                  child: _isLoading
-                      ? const CircularProgressIndicator()
-                      : const Text('Connect'),
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -101,10 +144,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (mounted) {
-      setState(() => _isLoading = true);
-    }
-
     try {
       await context.read<AppState>().configure(
         _serverUrlController.text.trim(),
@@ -112,14 +151,15 @@ class _LoginScreenState extends State<LoginScreen> {
         _passwordController.text.trim(),
       );
     } catch (e) {
+      // Error is already handled by AppState loading states
+      // Just ensure we still show a snackbar for immediate feedback
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Connection failed: $e')),
+          SnackBar(
+            content: Text('Connection failed: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
       }
     }
   }
