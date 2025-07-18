@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/app_state.dart';
 import '../services/subsonic_api.dart';
+import 'artist_detail_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -11,15 +12,23 @@ class SearchScreen extends StatefulWidget {
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> {
+class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   SearchResult? _searchResult;
   bool _isLoading = false;
   String _errorMessage = '';
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -69,10 +78,12 @@ class _SearchScreenState extends State<SearchScreen> {
       appBar: AppBar(
         title: const Text('Search'),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60.0),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: TextField(
+          preferredSize: const Size.fromHeight(110.0),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'Search artists, albums, songs...',
@@ -97,7 +108,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     : null,
                 border: const OutlineInputBorder(),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: Theme.of(context).colorScheme.surface,
               ),
               onChanged: (value) {
                 // Debounce search to avoid too many requests
@@ -108,7 +119,24 @@ class _SearchScreenState extends State<SearchScreen> {
                 });
               },
               onSubmitted: _performSearch,
-            ),
+                ),
+              ),
+              if (_searchResult != null && _searchResult!.isNotEmpty)
+                TabBar(
+                  controller: _tabController,
+                  tabs: [
+                    Tab(
+                      text: 'Artists (${_searchResult!.artists.length})',
+                    ),
+                    Tab(
+                      text: 'Albums (${_searchResult!.albums.length})',
+                    ),
+                    Tab(
+                      text: 'Songs (${_searchResult!.songs.length})',
+                    ),
+                  ],
+                ),
+            ],
           ),
         ),
       ),
@@ -176,34 +204,88 @@ class _SearchScreenState extends State<SearchScreen> {
       );
     }
 
-    return ListView(
+    return TabBarView(
+      controller: _tabController,
       children: [
-        if (_searchResult!.artists.isNotEmpty) ...[
-          _buildSectionHeader('Artists'),
-          ..._searchResult!.artists.map((artist) => _buildArtistItem(artist)),
-        ],
-        if (_searchResult!.albums.isNotEmpty) ...[
-          _buildSectionHeader('Albums'),
-          ..._searchResult!.albums.map((album) => _buildAlbumItem(album)),
-        ],
-        if (_searchResult!.songs.isNotEmpty) ...[
-          _buildSectionHeader('Songs'),
-          ..._searchResult!.songs.map((song) => _buildSongItem(song)),
-        ],
+        _buildArtistsList(),
+        _buildAlbumsList(),
+        _buildSongsList(),
       ],
     );
   }
 
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
+  Widget _buildArtistsList() {
+    if (_searchResult!.artists.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.person_search, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text(
+              'No artists found',
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+          ],
         ),
-      ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: _searchResult!.artists.length,
+      itemBuilder: (context, index) {
+        return _buildArtistItem(_searchResult!.artists[index]);
+      },
+    );
+  }
+
+  Widget _buildAlbumsList() {
+    if (_searchResult!.albums.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.album, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text(
+              'No albums found',
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: _searchResult!.albums.length,
+      itemBuilder: (context, index) {
+        return _buildAlbumItem(_searchResult!.albums[index]);
+      },
+    );
+  }
+
+  Widget _buildSongsList() {
+    if (_searchResult!.songs.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.music_note, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text(
+              'No songs found',
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: _searchResult!.songs.length,
+      itemBuilder: (context, index) {
+        return _buildSongItem(_searchResult!.songs[index]);
+      },
     );
   }
 
@@ -222,9 +304,11 @@ class _SearchScreenState extends State<SearchScreen> {
           ? Text('${artist.albumCount} albums')
           : null,
       onTap: () {
-        // TODO: Navigate to artist view when implemented
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Artist browsing not implemented yet')),
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ArtistDetailScreen(artist: artist),
+          ),
         );
       },
     );
