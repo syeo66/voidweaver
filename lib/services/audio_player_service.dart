@@ -23,7 +23,7 @@ enum AudioLoadingState {
 }
 
 class AudioPlayerService extends ChangeNotifier {
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  final AudioPlayer _audioPlayer;
   final SubsonicApi _api;
   final SettingsService _settingsService;
   
@@ -53,7 +53,8 @@ class AudioPlayerService extends ChangeNotifier {
   DateTime? _sleepTimerStartTime;
   bool _isSleepTimerActive = false;
 
-  AudioPlayerService(this._api, this._settingsService) {
+  AudioPlayerService(this._api, this._settingsService, {AudioPlayer? audioPlayer}) 
+      : _audioPlayer = audioPlayer ?? AudioPlayer() {
     _initializePlayer();
   }
 

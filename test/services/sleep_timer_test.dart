@@ -5,6 +5,7 @@ import 'package:voidweaver/services/settings_service.dart';
 import 'package:mockito/annotations.dart';
 
 import 'sleep_timer_test.mocks.dart';
+import '../test_helpers/mock_audio_player.dart';
 
 @GenerateMocks([SubsonicApi, SettingsService])
 void main() {
@@ -12,6 +13,7 @@ void main() {
     late AudioPlayerService audioPlayerService;
     late MockSubsonicApi mockApi;
     late MockSettingsService mockSettingsService;
+    late MockAudioPlayer mockAudioPlayer;
 
     setUpAll(() {
       TestWidgetsFlutterBinding.ensureInitialized();
@@ -20,11 +22,13 @@ void main() {
     setUp(() {
       mockApi = MockSubsonicApi();
       mockSettingsService = MockSettingsService();
-      audioPlayerService = AudioPlayerService(mockApi, mockSettingsService);
+      mockAudioPlayer = MockAudioPlayer();
+      audioPlayerService = AudioPlayerService(mockApi, mockSettingsService, audioPlayer: mockAudioPlayer);
     });
 
     tearDown(() {
       audioPlayerService.dispose();
+      mockAudioPlayer.dispose();
     });
 
     test('should start sleep timer correctly', () {
