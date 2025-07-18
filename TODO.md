@@ -11,7 +11,6 @@
 - [x] **Organize search results in tabs** - ✅ Implemented tabbed search with Artists, Albums, Songs tabs and result counts
 
 ### Mobile Experience
-- [ ] **Swipe gestures** - Swipe to skip, seek, etc.
 - [ ] **Landscape support** - Optimize layout for landscape mode
 
 ## ⚡ Performance & Architecture
@@ -27,7 +26,7 @@
 - [ ] **Background sync optimization** - Smart sync based on usage patterns
 
 ### State Management
-- [ ] **Optimize Provider usage** - More specific notifiers to reduce rebuilds
+- [x] **Optimize Provider usage** - ✅ Implemented Selector patterns in PlayerControls to reduce rebuilds
 - [ ] **Memory leak prevention** - Proper disposal in all widgets
 - [ ] **Local database** - Replace SharedPreferences with SQLite for complex data
 
