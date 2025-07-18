@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../services/app_state.dart';
 import '../services/subsonic_api.dart';
 import '../services/audio_player_service.dart';
+import '../services/image_cache_manager.dart';
 
 class AlbumList extends StatelessWidget {
   const AlbumList({super.key});
@@ -95,19 +95,10 @@ class _AlbumTileState extends State<AlbumTile> {
                   color: Colors.grey[300],
                 ),
                 child: widget.album.coverArt != null
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: CachedNetworkImage(
-                          imageUrl: appState.api!.getCoverArtUrl(widget.album.coverArt!),
-                          fit: BoxFit.cover,
-                          width: 56,
-                          height: 56,
-                          placeholder: (context, url) => Container(
-                            color: Colors.grey[300],
-                            child: const Icon(Icons.album, color: Colors.grey),
-                          ),
-                          errorWidget: (context, url, error) => const Icon(Icons.album, color: Colors.grey),
-                        ),
+                    ? ImageCacheManager.buildAlbumArt(
+                        imageUrl: appState.api!.getCoverArtUrl(widget.album.coverArt!),
+                        size: 56,
+                        cacheKey: widget.album.coverArt,
                       )
                     : const Icon(Icons.album, color: Colors.grey),
               ),

@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
+import 'api_cache.dart';
 
 class SubsonicApi {
   final String serverUrl;
@@ -11,12 +12,15 @@ class SubsonicApi {
   final String password;
   final String clientName = 'voidweaver';
   final String version = '1.16.1';
+  final ApiCache _cache = ApiCache();
 
   SubsonicApi({
     required this.serverUrl,
     required this.username,
     required this.password,
-  });
+  }) {
+    _cache.initialize();
+  }
 
   String _generateSalt() {
     final random = Random.secure();
@@ -84,43 +88,67 @@ class SubsonicApi {
   }
 
   Future<List<Album>> getAlbumList() async {
-    final doc = await _makeRequest('getAlbumList2', {'type': 'recent', 'size': '500'});
-    final albums = <Album>[];
-    
-    final albumElements = doc.findAllElements('album');
-    for (final element in albumElements) {
-      albums.add(Album.fromXml(element));
-    }
-    
-    return albums;
+    return await _cache.getOrFetch<List<Album>>(
+      'getAlbumList2',
+      {'type': 'recent', 'size': '500'},
+      () async {
+        final doc = await _makeRequest('getAlbumList2', {'type': 'recent', 'size': '500'});
+        final albums = <Album>[];
+        
+        final albumElements = doc.findAllElements('album');
+        for (final element in albumElements) {
+          albums.add(Album.fromXml(element));
+        }
+        
+        return albums;
+      },
+      cacheDuration: const Duration(minutes: 3),
+      usePersistentCache: true,
+    );
   }
 
   Future<Album> getAlbum(String id) async {
-    try {
-      final doc = await _makeRequest('getAlbum', {'id': id});
-      final albumElements = doc.findAllElements('album');
-      if (albumElements.isEmpty) {
-        // Debug: log the full response to understand the structure
-        debugPrint('getAlbum response for ID $id: ${doc.toXmlString()}');
-        throw Exception('Album not found: $id');
-      }
-      return Album.fromXml(albumElements.first);
-    } catch (e) {
-      debugPrint('getAlbum failed for ID $id: $e');
-      rethrow;
-    }
+    return await _cache.getOrFetch<Album>(
+      'getAlbum',
+      {'id': id},
+      () async {
+        try {
+          final doc = await _makeRequest('getAlbum', {'id': id});
+          final albumElements = doc.findAllElements('album');
+          if (albumElements.isEmpty) {
+            // Debug: log the full response to understand the structure
+            debugPrint('getAlbum response for ID $id: ${doc.toXmlString()}');
+            throw Exception('Album not found: $id');
+          }
+          return Album.fromXml(albumElements.first);
+        } catch (e) {
+          debugPrint('getAlbum failed for ID $id: $e');
+          rethrow;
+        }
+      },
+      cacheDuration: const Duration(minutes: 10),
+      usePersistentCache: true,
+    );
   }
 
   Future<List<Song>> getRandomSongs([int count = 50]) async {
-    final doc = await _makeRequest('getRandomSongs', {'size': count.toString()});
-    final songs = <Song>[];
-    
-    final songElements = doc.findAllElements('song');
-    for (final element in songElements) {
-      songs.add(Song.fromXml(element));
-    }
-    
-    return songs;
+    return await _cache.getOrFetch<List<Song>>(
+      'getRandomSongs',
+      {'size': count.toString()},
+      () async {
+        final doc = await _makeRequest('getRandomSongs', {'size': count.toString()});
+        final songs = <Song>[];
+        
+        final songElements = doc.findAllElements('song');
+        for (final element in songElements) {
+          songs.add(Song.fromXml(element));
+        }
+        
+        return songs;
+      },
+      cacheDuration: const Duration(minutes: 1), // Random songs cache for shorter time
+      usePersistentCache: false, // Don't persist random songs
+    );
   }
 
   String getStreamUrl(String id) {
@@ -182,67 +210,132 @@ class SubsonicApi {
   /// Searches for artists, albums, and songs.
   /// Returns a SearchResult containing separate lists for each type.
   Future<SearchResult> search(String query, {int artistCount = 20, int albumCount = 20, int songCount = 20}) async {
-    try {
-      final params = {
+    return await _cache.getOrFetch<SearchResult>(
+      'search3',
+      {
         'query': query,
         'artistCount': artistCount.toString(),
         'albumCount': albumCount.toString(),
         'songCount': songCount.toString(),
-      };
-      
-      final doc = await _makeRequest('search3', params);
-      
-      // Debug: Print the XML response to understand the structure
-      if (kDebugMode) {
-        debugPrint('Search response: ${doc.toXmlString()}');
-      }
-      
-      return SearchResult.fromXml(doc);
-    } catch (e) {
-      debugPrint('Search failed: $e');
-      rethrow;
-    }
+      },
+      () async {
+        try {
+          final params = {
+            'query': query,
+            'artistCount': artistCount.toString(),
+            'albumCount': albumCount.toString(),
+            'songCount': songCount.toString(),
+          };
+          
+          final doc = await _makeRequest('search3', params);
+          
+          // Debug: Print the XML response to understand the structure
+          if (kDebugMode) {
+            debugPrint('Search response: ${doc.toXmlString()}');
+          }
+          
+          return SearchResult.fromXml(doc);
+        } catch (e) {
+          debugPrint('Search failed: $e');
+          rethrow;
+        }
+      },
+      cacheDuration: const Duration(minutes: 5),
+      usePersistentCache: true,
+    );
   }
 
   /// Gets all artists from the server.
   /// Returns a list of Artist objects ordered alphabetically.
   Future<List<Artist>> getArtists() async {
-    try {
-      final doc = await _makeRequest('getArtists');
-      final artists = <Artist>[];
-      
-      final artistElements = doc.findAllElements('artist');
-      for (final element in artistElements) {
-        artists.add(Artist.fromXml(element));
-      }
-      
-      // Sort artists alphabetically by name
-      artists.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-      
-      return artists;
-    } catch (e) {
-      debugPrint('Failed to get artists: $e');
-      rethrow;
-    }
+    return await _cache.getOrFetch<List<Artist>>(
+      'getArtists',
+      null,
+      () async {
+        try {
+          final doc = await _makeRequest('getArtists');
+          final artists = <Artist>[];
+          
+          final artistElements = doc.findAllElements('artist');
+          for (final element in artistElements) {
+            artists.add(Artist.fromXml(element));
+          }
+          
+          // Sort artists alphabetically by name
+          artists.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+          
+          return artists;
+        } catch (e) {
+          debugPrint('Failed to get artists: $e');
+          rethrow;
+        }
+      },
+      cacheDuration: const Duration(minutes: 15),
+      usePersistentCache: true,
+    );
   }
 
   /// Gets all albums for a specific artist.
   /// Returns a list of Album objects for the given artist ID.
   Future<List<Album>> getArtistAlbums(String artistId) async {
-    try {
-      final doc = await _makeRequest('getArtist', {'id': artistId});
-      final albums = <Album>[];
-      
-      final albumElements = doc.findAllElements('album');
-      for (final element in albumElements) {
-        albums.add(Album.fromXml(element));
-      }
-      
-      return albums;
-    } catch (e) {
-      debugPrint('Failed to get albums for artist $artistId: $e');
-      rethrow;
-    }
+    return await _cache.getOrFetch<List<Album>>(
+      'getArtist',
+      {'id': artistId},
+      () async {
+        try {
+          final doc = await _makeRequest('getArtist', {'id': artistId});
+          final albums = <Album>[];
+          
+          final albumElements = doc.findAllElements('album');
+          for (final element in albumElements) {
+            albums.add(Album.fromXml(element));
+          }
+          
+          return albums;
+        } catch (e) {
+          debugPrint('Failed to get albums for artist $artistId: $e');
+          rethrow;
+        }
+      },
+      cacheDuration: const Duration(minutes: 10),
+      usePersistentCache: true,
+    );
+  }
+
+  /// Clear all cached data
+  Future<void> clearCache() async {
+    await _cache.clearAll();
+  }
+
+  /// Clear specific cache entry
+  void clearCacheEntry(String endpoint, [Map<String, String>? params]) {
+    _cache.clearEntry(endpoint, params);
+  }
+
+  /// Clear expired cache entries
+  void clearExpiredCache() {
+    _cache.clearExpired();
+  }
+
+  /// Get cache statistics
+  Map<String, dynamic> getCacheStats() {
+    return _cache.getStats();
+  }
+
+  /// Invalidate all album-related cache entries
+  void invalidateAlbumCache() {
+    _cache.invalidatePattern('getAlbumList');
+    _cache.invalidatePattern('getAlbum');
+  }
+
+  /// Invalidate all artist-related cache entries
+  void invalidateArtistCache() {
+    _cache.invalidatePattern('getArtist');
+  }
+
+  /// Invalidate search cache entries
+  void invalidateSearchCache() {
+    _cache.invalidatePattern('search');
   }
 }
 

@@ -1,247 +1,152 @@
 # Voidweaver
 
-A high-quality Flutter music player application that connects to Subsonic API-compatible servers for streaming personal music collections. Features advanced ReplayGain audio normalization and clean, optimized code architecture.
+A high-quality Flutter music player application that streams music from your personal Subsonic-compatible server. Features advanced audio normalization, native media controls, and a clean, responsive interface.
 
 ## Features
 
-- **Music Streaming**: Stream music from Subsonic, Airsonic, or Navidrome servers
-- **Album Browsing**: Browse and play entire albums with cached cover art for fast loading
-- **Artist Browsing**: Browse music by artist with alphabetically sorted lists and album grid views
-- **Search Functionality**: Comprehensive search for artists, albums, and songs with real-time results
-- **Audio Playback**: Full-featured player with play/pause, skip, interactive progress seeking, and next track preloading for seamless transitions
-- **Native Media Controls**: Lock screen controls, notification panel controls, and external device support (headphone buttons, Bluetooth)
-- **Server Scrobbling**: Automatic server notifications for played songs and listening statistics
-  - Now playing notifications when songs start
-  - Scrobble submissions for tracking play counts and listening history
-  - Smart scrobbling based on song progress (>30 seconds or >50% played)
-  - Last.fm integration support (if configured on server)
+### 🎵 **Music Streaming**
+- **Server Support**: Works with Subsonic, Airsonic, and Navidrome servers
+- **Album & Artist Browsing**: Browse your music collection with cached cover art
+- **Search**: Real-time search across artists, albums, and songs
+- **Playlist Management**: Full-featured player with skip, seek, and queue controls
+- **Random Play**: Shuffle through your entire music library
+
+### 🎧 **Audio Experience**
 - **ReplayGain Audio Normalization**: Intelligent volume normalization for consistent playback
-  - Client-side ReplayGain metadata extraction from audio files
-  - Support for Track and Album normalization modes
-  - Real-time volume adjustment with preamp control
-  - Automatic fallback for files without ReplayGain data
-- **Dark Mode Support**: System-aware dark theme with manual override options
-- **Settings Management**: Comprehensive settings page with real-time preview
-- **Comprehensive Loading States**: Extensive loading indicators and user feedback throughout the app
-  - Visual feedback for all operations (server connection, album loading, search, etc.)
-  - Granular loading states for different operations with proper error handling
-  - Disabled controls during loading to prevent user confusion
-  - Pull-to-refresh functionality on album and artist lists
-  - Enhanced error messages with retry mechanisms
-- **Robust Error Handling**: Comprehensive error handling for playback failures with user-friendly messages
-- **Background Sync**: Automatic synchronization with server every 5 minutes
-- **Secure Authentication**: Encrypted credential storage with automatic migration from legacy storage
-- **Persistent Login**: Remembers server credentials securely between sessions
-- **Advanced Image Caching**: Intelligent disk-based caching for album art with offline persistence
-- **Cross-Platform**: Runs on Android, iOS, and Web
+  - Automatic volume adjustment based on track metadata
+  - Track or Album normalization modes
+  - Preamp control for personal preference
+  - Works with MP3, FLAC, and OGG files
+- **Native Media Controls**: Control playback from lock screen, notification panel, and Bluetooth devices
+- **Interactive Progress**: Tap or drag to seek to any position in tracks
+- **Sleep Timer**: Auto-pause with preset durations (5min to 2 hours)
+- **Seamless Playback**: Next track preloading for instant transitions
+
+### 🎨 **Interface & Experience**
+- **Dark Mode**: System-aware theme with manual override
+- **Fast Loading**: Advanced caching system for instant response
+- **Offline Capability**: Browse cached content without network
+- **Real-time Updates**: Background sync keeps your library fresh
+- **Comprehensive Feedback**: Clear loading states and error messages
+- **Pull-to-Refresh**: Manual refresh on album and artist lists
+
+### 🔒 **Security & Reliability**
+- **Secure Login**: Encrypted credential storage with automatic session management
+- **Server Scrobbling**: Automatic play count tracking and listening statistics
+- **Robust Error Handling**: Graceful recovery from network issues
+- **Background Sync**: Automatic library updates every 5 minutes
 
 ## Getting Started
 
 ### Prerequisites
-
-- Flutter SDK 3.0.0 or later
 - A Subsonic-compatible music server (Subsonic, Airsonic, Navidrome, etc.)
+- Flutter SDK 3.0.0 or later (for development)
 
 ### Installation
 
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd voidweaver
-   ```
+#### Download APK (Recommended)
+1. Download the latest APK from releases
+2. Install on your Android device
+3. Enable "Install from unknown sources" if prompted
 
-2. Install dependencies:
-   ```bash
-   flutter pub get
-   ```
-
-3. Run the application:
-   ```bash
-   flutter run
-   ```
+#### Build from Source
+```bash
+git clone <repository-url>
+cd voidweaver
+flutter pub get
+flutter build apk --release
+```
 
 ### First Time Setup
 
-1. Launch the app
-2. Enter your server details:
+1. **Launch the app**
+2. **Enter your server details**:
    - **Server URL**: Your Subsonic server URL (e.g., `https://music.example.com`)
    - **Username**: Your Subsonic username
    - **Password**: Your Subsonic password
-3. Tap "Login" to connect
+3. **Tap "Login"** to connect
+4. **Start listening** to your music!
 
-## Usage
+## Usage Guide
 
-- **Albums Tab**: Browse your music collection by albums
-  - Tap any album to start playback
-  - Use the menu button (⋮) for additional options
-- **Search**: Tap the search icon to find artists, albums, and songs
-  - Real-time search with categorized results
-  - Tap any result to start playback immediately
-- **Now Playing Tab**: View currently playing song with album art, playlist, and interactive progress seeking
-- **Lock Screen Controls**: Control playback directly from your device's lock screen with full track information and album art
-- **External Device Support**: Use headphone buttons, Bluetooth controls, and other media devices to control playback
-- **Shuffle Button**: Play random songs from your collection
-- **Settings**: Access via menu (⋮) → Settings
-  - **Appearance**: Choose between Light, Dark, or System theme
-  - **ReplayGain**: Configure normalization (Off/Track/Album modes)
-  - Adjust preamp for overall volume control (-15dB to +15dB)
-  - Enable prevent clipping to avoid audio distortion
-  - Set fallback gain for files without ReplayGain metadata
-- **Sync Indicator**: Shows background synchronization status
-- **Error Messages**: Clear feedback when playback fails with actionable error messages
+### Navigation
+- **Albums**: Browse your music collection by albums
+- **Artists**: Browse by artist with album listings
+- **Search**: Find specific artists, albums, or songs
+- **Now Playing**: View current track with player controls
 
-### ReplayGain Audio Normalization
+### Player Controls
+- **Play/Pause**: Tap the play button or use media controls
+- **Skip**: Previous/next track buttons
+- **Seek**: Tap or drag the progress bar to jump to any position
+- **Shuffle**: Random songs button for discovery
+- **Sleep Timer**: Bedtime icon in top bar for auto-pause
 
-Voidweaver includes advanced ReplayGain support for consistent volume levels:
+### Settings
+Access via menu (⋮) → Settings:
 
-1. **Automatic Detection**: Reads ReplayGain metadata directly from your audio files
-2. **Multiple Formats**: Supports ID3v2 (MP3), APE tags, and Vorbis comments (FLAC/OGG)
-3. **Normalization Modes**:
-   - **Off**: No volume normalization
-   - **Track**: Normalize each song individually for consistent volume
-   - **Album**: Preserve album dynamics while normalizing overall level
-4. **Real-time Adjustment**: Changes apply immediately to currently playing audio
-5. **Intelligent Fallback**: Uses preamp and fallback gain for files without ReplayGain data
+#### **Appearance**
+- **Theme**: Light, Dark, or System (follows device setting)
 
-## Development
+#### **ReplayGain Audio Normalization**
+- **Mode**: Off, Track (consistent volume), or Album (preserves dynamics)
+- **Preamp**: Global volume adjustment (-15dB to +15dB)
+- **Prevent Clipping**: Automatic volume reduction to avoid distortion
+- **Fallback Gain**: Volume for files without ReplayGain metadata
 
-### Running the App
+## ReplayGain Audio Normalization
 
-```bash
-flutter run -d chrome    # Run in web browser
-flutter run              # Run on connected device
-```
+Voidweaver automatically normalizes audio volume for consistent playback:
 
-### Code Quality
+1. **Automatic Detection**: Reads volume metadata from your music files
+2. **Multiple Modes**:
+   - **Track**: Each song at consistent volume
+   - **Album**: Preserves album dynamics while normalizing overall level
+3. **Real-time Adjustment**: Settings apply immediately to current playback
+4. **Smart Fallback**: Handles files without metadata gracefully
 
-✅ **Current Status**: Zero analyzer warnings, optimized performance, comprehensive test coverage
+## Native Media Controls
 
-```bash
-flutter analyze          # Static analysis (currently 0 issues)
-flutter test             # Run tests (42/42 passing)
-flutter test --coverage  # Run tests with coverage report
-```
+Control your music from anywhere:
 
-**Test Coverage**: 42 comprehensive tests covering:
-- Data model validation (Song, Album, Artist, SearchResult)
-- Utility functions (time formatting, ReplayGain parsing, URL validation)
-- Sleep timer functionality with comprehensive edge case testing
-- Widget instantiation and basic UI components
-- Mock infrastructure for AudioPlayer plugin testing
+- **Lock Screen**: Full playback control with track info and album art
+- **Notification Panel**: Persistent media controls in notification area
+- **Bluetooth Devices**: Headphone buttons and car stereo controls
+- **Background Playback**: Continues playing when app is backgrounded
 
-**Recent Improvements**:
-- **Testable architecture and comprehensive test coverage**: Fixed all failing tests and implemented robust testing infrastructure
-  - Refactored AudioPlayerService to accept optional dependency injection for testing
-  - Created comprehensive MockAudioPlayer with stream simulation for reliable testing
-  - Fixed all plugin-related test failures that prevented CI/CD workflows
-  - Achieved 100% test pass rate (42/42 tests) with comprehensive coverage
-  - Added robust mock infrastructure for future audio functionality testing
-  - Maintained backward compatibility while enabling reliable automated testing
-- **Comprehensive loading states**: Implemented extensive loading state management across the entire application
-  - Added granular loading states for server operations, audio playback, search, and artist browsing
-  - Enhanced all screens with proper loading indicators and user feedback
-  - Implemented context-safe async operations with proper error handling
-  - Added pull-to-refresh functionality and retry mechanisms throughout the app
-- **Native media controls**: Added comprehensive system-level media control integration with lock screen controls, notification panel controls, and external device support
-- **Dark mode support**: Added comprehensive theme management with System/Light/Dark options
-- **Comprehensive search functionality**: Added real-time search for artists, albums, and songs with categorized results
-- **Next track preloading**: Implemented seamless playback transitions with automatic URL preloading
-- **Interactive progress seeking**: Enhanced music player with tap-to-seek and drag-to-scrub functionality
-- **Advanced image caching**: Implemented robust disk-based caching for all album art with automatic persistence
-- **Secure credential storage**: Implemented encrypted storage with automatic migration from legacy SharedPreferences
-- **Server notification implementation**: Added comprehensive scrobbling and now playing notifications
-- Fixed 148 Flutter analyzer warnings for optimal performance
-- Added const constructors throughout the app for better widget efficiency
-- Removed dead code and unused imports for cleaner codebase
-- Updated deprecated APIs for future compatibility
-- Improved error handling with proper async context management
-- Fixed cover art reloading issue when skipping tracks by implementing proper equality operators
-- Optimized ReplayGain processing to prevent unnecessary UI rebuilds
+## Troubleshooting
 
-### Building
+### **Connection Issues**
+- Verify server URL is correct and accessible
+- Check username and password
+- Ensure server supports Subsonic API
 
-```bash
-flutter build web        # Build for web
-flutter build apk        # Build Android APK
-flutter build ios        # Build iOS app
-```
+### **Audio Issues**
+- **Volume too quiet/loud**: Adjust ReplayGain preamp setting
+- **Distortion**: Enable "Prevent Clipping" in ReplayGain settings
+- **Inconsistent volume**: Use Track mode for consistent levels
 
-## Running on Android Phone
-
-### Prerequisites
-- Android phone with USB debugging enabled
-- Android SDK and ADB installed (comes with Flutter)
-
-### Quick Setup
-
-1. **Enable Developer Options** on your Android phone:
-   - Go to Settings → About phone
-   - Tap "Build number" 7 times
-   - Go back to Settings → Developer options
-   - Enable "USB debugging"
-
-2. **Connect your phone**:
-   ```bash
-   # Connect phone via USB cable
-   # Allow USB debugging when prompted on phone
-   
-   # Verify connection
-   flutter devices
-   ```
-
-3. **Run the app**:
-   ```bash
-   flutter run
-   ```
-   The app will automatically install and launch on your connected Android device.
-
-### Building APK for Easy Installation
-
-To create an APK file you can install on any Android phone:
-
-```bash
-# Build release APK
-flutter build apk --release
-
-# The APK will be located at:
-# build/app/outputs/flutter-apk/app-release.apk
-```
-
-You can then:
-- Copy the APK to your phone via USB, email, or cloud storage
-- Install it by opening the APK file on your phone
-- Enable "Install from unknown sources" if prompted
-
-### Troubleshooting Android Setup
-
-- **Device not found**: Ensure USB debugging is enabled and try different USB cables
-- **Permission denied**: Accept the USB debugging prompt on your phone
-- **Build errors**: Run `flutter doctor` to check for Android SDK issues
-- **App crashes**: Check `flutter logs` for detailed error information
-
-## Architecture
-
-Voidweaver uses a clean, optimized architecture with:
-
-- **Provider** pattern for efficient state management with comprehensive loading states
-- **Service layer** for API communication, audio playback, ReplayGain processing, and server scrobbling
-- **Native audio service integration** for system-level media controls and background playback
-- **Client-side metadata extraction** for ReplayGain data from audio files
-- **Automatic server notifications** for played songs and listening statistics
-- **Responsive UI** with Material Design, comprehensive settings management, and extensive loading state feedback
-- **Background synchronization** for keeping data fresh with proper status indicators
-- **Efficient HTTP range requests** for metadata extraction with minimal bandwidth usage
-- **Performance-optimized widgets** with const constructors and minimal rebuilds
-- **Advanced image caching system** with disk-based storage and intelligent placeholder handling
-- **Comprehensive loading state management** with granular states for all operations and proper error handling
-- **Production-ready logging** with proper error handling and debugging capabilities
+### **Performance**
+- **Slow loading**: App uses advanced caching - performance improves with use
+- **Missing covers**: Check server configuration for cover art support
+- **Sync issues**: Use pull-to-refresh or restart app if needed
 
 ## Requirements
 
-- **Network Access**: Required for streaming music from your server and metadata extraction
-- **Audio Playback**: Uses device audio capabilities with volume control for ReplayGain
-- **Secure Storage**: Uses device-level encryption for login credentials and local storage for ReplayGain settings
-- **HTTP Range Requests**: Server must support partial content requests for metadata extraction
+- **Android 6.0+** (API level 23) or **iOS 12.0+**
+- **Network connection** for streaming and library sync
+- **Subsonic-compatible server** with API access enabled
+
+## Privacy & Data
+
+- **No tracking**: No analytics or data collection
+- **Local storage**: Only server credentials and app settings
+- **Encrypted storage**: Login credentials stored securely on device
+- **Server communication**: Only with your configured music server
+
+## Development
+
+For developers interested in contributing or building from source, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed setup instructions, architecture overview, and development guidelines.
 
 ## License
 
