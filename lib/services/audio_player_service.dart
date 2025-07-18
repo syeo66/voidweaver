@@ -46,6 +46,12 @@ class AudioPlayerService extends ChangeNotifier {
   Song? _preloadedSong;
   bool _isPreloading = false;
   String? _preloadedStreamUrl;
+  
+  // Sleep timer state
+  Timer? _sleepTimer;
+  Duration? _sleepTimerDuration;
+  DateTime? _sleepTimerStartTime;
+  bool _isSleepTimerActive = false;
 
   AudioPlayerService(this._api, this._settingsService) {
     _initializePlayer();
@@ -65,6 +71,18 @@ class AudioPlayerService extends ChangeNotifier {
   // Enhanced loading state getters
   AudioLoadingState get audioLoadingState => _audioLoadingState;
   String? get audioLoadingError => _audioLoadingError;
+  
+  // Sleep timer getters
+  bool get isSleepTimerActive => _isSleepTimerActive;
+  Duration? get sleepTimerDuration => _sleepTimerDuration;
+  Duration? get sleepTimerRemaining {
+    if (!_isSleepTimerActive || _sleepTimerStartTime == null || _sleepTimerDuration == null) {
+      return null;
+    }
+    final elapsed = DateTime.now().difference(_sleepTimerStartTime!);
+    final remaining = _sleepTimerDuration! - elapsed;
+    return remaining.isNegative ? Duration.zero : remaining;
+  }
 
   void _initializePlayer() {
     _positionSubscription = _audioPlayer.onPositionChanged.listen((position) {
@@ -473,12 +491,82 @@ class AudioPlayerService extends ChangeNotifier {
     _preloadedStreamUrl = null;
     _isPreloading = false;
   }
+  
+  /// Starts the sleep timer with the specified duration
+  void startSleepTimer(Duration duration) {
+    // Cancel any existing timer
+    _sleepTimer?.cancel();
+    
+    _sleepTimerDuration = duration;
+    _sleepTimerStartTime = DateTime.now();
+    _isSleepTimerActive = true;
+    
+    debugPrint('Sleep timer started for ${formatDuration(duration)}');
+    
+    // Start the timer
+    _sleepTimer = Timer(duration, () {
+      _onSleepTimerComplete();
+    });
+    
+    notifyListeners();
+  }
+  
+  /// Cancels the active sleep timer
+  void cancelSleepTimer() {
+    _sleepTimer?.cancel();
+    _sleepTimer = null;
+    _sleepTimerDuration = null;
+    _sleepTimerStartTime = null;
+    _isSleepTimerActive = false;
+    
+    debugPrint('Sleep timer canceled');
+    notifyListeners();
+  }
+  
+  /// Extends the sleep timer by the specified duration
+  void extendSleepTimer(Duration extension) {
+    if (!_isSleepTimerActive) return;
+    
+    final currentRemaining = sleepTimerRemaining;
+    if (currentRemaining != null) {
+      // Cancel current timer and start a new one with extended duration
+      _sleepTimer?.cancel();
+      
+      final newDuration = currentRemaining + extension;
+      _sleepTimerDuration = _sleepTimerDuration! + extension;
+      
+      debugPrint('Sleep timer extended by ${formatDuration(extension)}, new remaining: ${formatDuration(newDuration)}');
+      
+      _sleepTimer = Timer(newDuration, () {
+        _onSleepTimerComplete();
+      });
+      
+      notifyListeners();
+    }
+  }
+  
+  /// Called when the sleep timer expires
+  void _onSleepTimerComplete() {
+    debugPrint('Sleep timer expired - pausing playback');
+    
+    // Pause the audio
+    pause();
+    
+    // Reset timer state
+    _sleepTimer = null;
+    _sleepTimerDuration = null;
+    _sleepTimerStartTime = null;
+    _isSleepTimerActive = false;
+    
+    notifyListeners();
+  }
 
   @override
   void dispose() {
     _positionSubscription?.cancel();
     _durationSubscription?.cancel();
     _playerCompleteSubscription?.cancel();
+    _sleepTimer?.cancel();
     _audioPlayer.dispose();
     super.dispose();
   }

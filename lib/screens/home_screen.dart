@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -67,6 +68,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   setState(() => _isPlayingRandomSongs = false);
                 }
               }
+            },
+          ),
+          Consumer<AppState>(
+            builder: (context, appState, child) {
+              if (appState.audioPlayerService == null || !appState.isConfigured) {
+                return const SizedBox(width: 0, height: 0);
+              }
+              return ListenableBuilder(
+                listenable: appState.audioPlayerService!,
+                builder: (context, child) {
+                  return IconButton(
+                    icon: appState.audioPlayerService!.isSleepTimerActive
+                        ? const Icon(Icons.bedtime, color: Colors.orange)
+                        : const Icon(Icons.bedtime_outlined),
+                    onPressed: () => _showSleepTimerDialog(context, appState.audioPlayerService!),
+                  );
+                },
+              );
             },
           ),
           PopupMenuButton(
@@ -167,6 +186,15 @@ class _HomeScreenState extends State<HomeScreen> {
           value: appState.audioPlayerService!,
           child: _NowPlayingContent(appState: appState),
         );
+      },
+    );
+  }
+
+  void _showSleepTimerDialog(BuildContext context, AudioPlayerService playerService) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return _SleepTimerDialog(playerService: playerService);
       },
     );
   }
@@ -581,5 +609,144 @@ class _StaticSongInfo extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _SleepTimerDialog extends StatefulWidget {
+  final AudioPlayerService playerService;
+
+  const _SleepTimerDialog({required this.playerService});
+
+  @override
+  State<_SleepTimerDialog> createState() => _SleepTimerDialogState();
+}
+
+class _SleepTimerDialogState extends State<_SleepTimerDialog> {
+  static const List<Duration> _presetDurations = [
+    Duration(minutes: 5),
+    Duration(minutes: 10),
+    Duration(minutes: 15),
+    Duration(minutes: 30),
+    Duration(minutes: 45),
+    Duration(minutes: 60),
+    Duration(minutes: 90),
+    Duration(minutes: 120),
+  ];
+
+  Timer? _updateTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Update remaining time every second
+    _updateTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _updateTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Sleep Timer'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (widget.playerService.isSleepTimerActive) ...[
+            const Text('Timer Active'),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                children: [
+                  const Icon(Icons.bedtime, color: Colors.orange, size: 32),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Time remaining:',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                  Text(
+                    widget.playerService.sleepTimerRemaining != null
+                        ? _formatDuration(widget.playerService.sleepTimerRemaining!)
+                        : '00:00',
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.add),
+                  label: const Text('+15m'),
+                  onPressed: () {
+                    widget.playerService.extendSleepTimer(const Duration(minutes: 15));
+                  },
+                ),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.cancel),
+                  label: const Text('Cancel'),
+                  onPressed: () {
+                    widget.playerService.cancelSleepTimer();
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            ),
+          ] else ...[
+            const Text('Set sleep timer duration:'),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _presetDurations.map((duration) {
+                return ElevatedButton(
+                  onPressed: () {
+                    widget.playerService.startSleepTimer(duration);
+                    Navigator.of(context).pop();
+                  },
+                  child: Text(_formatDuration(duration)),
+                );
+              }).toList(),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+
+  String _formatDuration(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
+    
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    } else {
+      return '${minutes}m';
+    }
   }
 }

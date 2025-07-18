@@ -29,6 +29,7 @@ class PlayerControls extends StatelessWidget {
             children: [
               _buildProgressBar(playerService),
               _buildTimeLabels(playerService),
+              if (playerService.isSleepTimerActive) _buildSleepTimerIndicator(playerService),
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
@@ -113,6 +114,37 @@ class PlayerControls extends StatelessWidget {
             style: TextStyle(
               color: Colors.grey[600],
               fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildSleepTimerIndicator(AudioPlayerService playerService) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.bedtime,
+            size: 16,
+            color: Colors.orange,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Sleep timer: ${playerService.sleepTimerRemaining != null ? _formatDuration(playerService.sleepTimerRemaining!) : "0:00"}',
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.orange,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],

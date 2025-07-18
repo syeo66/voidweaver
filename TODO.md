@@ -54,7 +54,7 @@
 ## 🎵 Advanced Features (Future)
 
 ### Audio Features
-- [ ] **Sleep timer** - Auto-stop functionality
+- [x] **Sleep timer** - ✅ Implemented auto-pause functionality with preset durations, visual indicators, and timer management
 - [ ] **Equalizer** - Add audio EQ controls
 - [ ] **Crossfade/gapless playback** - Smooth track transitions
 - [ ] **Audio visualizer** - Visual representation of audio
