@@ -2,8 +2,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:audio_service/audio_service.dart';
 import 'subsonic_api.dart';
 import 'audio_player_service.dart';
+import 'audio_handler.dart';
 import 'settings_service.dart';
 
 enum SyncStatus {
@@ -26,6 +28,7 @@ class AppState extends ChangeNotifier {
   SubsonicApi? _api;
   AudioPlayerService? _audioPlayerService;
   SettingsService? _settingsService;
+  VoidweaverAudioHandler? _audioHandler;
   List<Album> _albums = [];
   bool _isLoading = false;
   String? _error;
@@ -59,6 +62,10 @@ class AppState extends ChangeNotifier {
       );
       
       _audioPlayerService = AudioPlayerService(_api!, _settingsService!);
+      
+      // Initialize audio service for native controls
+      await _initializeAudioService();
+      
       _isConfigured = true;
       
       await _saveServerConfig(serverUrl, username, password);
@@ -71,6 +78,26 @@ class AppState extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       rethrow;
+    }
+  }
+
+  Future<void> _initializeAudioService() async {
+    if (_audioPlayerService == null) return;
+    
+    try {
+      await AudioService.init(
+        builder: () => VoidweaverAudioHandler(_audioPlayerService!, _api!),
+        config: const AudioServiceConfig(
+          androidNotificationChannelId: 'com.voidweaver.audio',
+          androidNotificationChannelName: 'Voidweaver Audio',
+          androidNotificationOngoing: true,
+          androidStopForegroundOnPause: true,
+        ),
+      );
+      debugPrint('Audio service initialized successfully');
+    } catch (e) {
+      debugPrint('Error initializing audio service: $e');
+      // Don't throw - app should still work without native controls
     }
   }
 
@@ -173,6 +200,8 @@ class AppState extends ChangeNotifier {
     _api = null;
     _audioPlayerService?.dispose();
     _audioPlayerService = null;
+    _audioHandler?.dispose();
+    _audioHandler = null;
     _albums.clear();
     _isConfigured = false;
     _error = null;

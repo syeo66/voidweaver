@@ -9,6 +9,7 @@ A high-quality Flutter music player application that connects to Subsonic API-co
 - **Artist Browsing**: Browse music by artist with alphabetically sorted lists and album grid views
 - **Search Functionality**: Comprehensive search for artists, albums, and songs with real-time results
 - **Audio Playback**: Full-featured player with play/pause, skip, interactive progress seeking, and next track preloading for seamless transitions
+- **Native Media Controls**: Lock screen controls, notification panel controls, and external device support (headphone buttons, Bluetooth)
 - **Server Scrobbling**: Automatic server notifications for played songs and listening statistics
   - Now playing notifications when songs start
   - Scrobble submissions for tracking play counts and listening history
@@ -71,6 +72,8 @@ A high-quality Flutter music player application that connects to Subsonic API-co
   - Real-time search with categorized results
   - Tap any result to start playback immediately
 - **Now Playing Tab**: View currently playing song with album art, playlist, and interactive progress seeking
+- **Lock Screen Controls**: Control playback directly from your device's lock screen with full track information and album art
+- **External Device Support**: Use headphone buttons, Bluetooth controls, and other media devices to control playback
 - **Shuffle Button**: Play random songs from your collection
 - **Settings**: Access via menu (⋮) → Settings
   - **Appearance**: Choose between Light, Dark, or System theme
@@ -113,6 +116,7 @@ flutter test             # Run tests (1/1 passing)
 ```
 
 **Recent Improvements**:
+- **Native media controls**: Added comprehensive system-level media control integration with lock screen controls, notification panel controls, and external device support
 - **Dark mode support**: Added comprehensive theme management with System/Light/Dark options
 - **Comprehensive search functionality**: Added real-time search for artists, albums, and songs with categorized results
 - **Next track preloading**: Implemented seamless playback transitions with automatic URL preloading
@@ -195,6 +199,7 @@ Voidweaver uses a clean, optimized architecture with:
 
 - **Provider** pattern for efficient state management
 - **Service layer** for API communication, audio playback, ReplayGain processing, and server scrobbling
+- **Native audio service integration** for system-level media controls and background playback
 - **Client-side metadata extraction** for ReplayGain data from audio files
 - **Automatic server notifications** for played songs and listening statistics
 - **Responsive UI** with Material Design and comprehensive settings management
