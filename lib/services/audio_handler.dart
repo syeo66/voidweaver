@@ -16,8 +16,8 @@ class VoidweaverAudioHandler extends BaseAudioHandler {
     // Listen to playback state changes from AudioPlayerService
     _audioPlayerService.addListener(_updatePlaybackState);
     
-    // Update position periodically
-    _positionSubscription = Stream.periodic(const Duration(seconds: 1)).listen((_) {
+    // Listen directly to the audio player's position stream for real-time updates
+    _positionSubscription = _audioPlayerService.onPositionChanged.listen((position) {
       _updatePosition();
     });
 

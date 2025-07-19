@@ -85,6 +85,9 @@ class AudioPlayerService extends ChangeNotifier {
     return remaining.isNegative ? Duration.zero : remaining;
   }
 
+  // Position stream for real-time updates
+  Stream<Duration> get onPositionChanged => _audioPlayer.onPositionChanged;
+
   void _initializePlayer() {
     _positionSubscription = _audioPlayer.onPositionChanged.listen((position) {
       _currentPosition = position;
