@@ -29,7 +29,7 @@ Voidweaver uses a clean, optimized architecture with:
 - **Native audio service integration** for system-level media controls and background playback
 - **Client-side metadata extraction** for ReplayGain data from audio files
 - **Automatic server notifications** for played songs and listening statistics
-- **Responsive UI** with Material Design, comprehensive settings management, and extensive loading state feedback
+- **Responsive UI** with Material Design, comprehensive landscape support, settings management, and extensive loading state feedback
 - **Background synchronization** for keeping data fresh with proper status indicators
 - **Efficient HTTP range requests** for metadata extraction with minimal bandwidth usage
 - **Performance-optimized widgets** with const constructors and minimal rebuilds
@@ -81,6 +81,13 @@ flutter test --coverage  # Run tests with coverage report
   - Added pull-to-refresh functionality and retry mechanisms throughout the app
 - **Native media controls**: Added comprehensive system-level media control integration with lock screen controls, notification panel controls, and external device support
 - **Dark mode support**: Added comprehensive theme management with System/Light/Dark options
+- **Comprehensive landscape support**: Implemented responsive layouts for optimal mobile experience
+  - Login screen with side-by-side layout (branding + form) in landscape mode
+  - Now playing screen with horizontal album art and song info layout
+  - Player controls with compact landscape layout for efficient space usage
+  - Album list with responsive 3-column grid view in landscape mode
+  - Playlist view with compact items in landscape for space efficiency
+  - Orientation detection using MediaQuery for seamless layout switching
 - **Comprehensive search functionality**: Added real-time search for artists, albums, and songs with categorized results
 - **Next track preloading**: Implemented seamless playback transitions with automatic URL preloading
 - **Interactive progress seeking**: Enhanced music player with tap-to-seek and drag-to-scrub functionality

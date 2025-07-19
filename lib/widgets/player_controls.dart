@@ -7,6 +7,8 @@ class PlayerControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    
     return Selector<AudioPlayerService, bool>(
       selector: (context, service) => service.currentSong != null,
       builder: (context, hasSong, child) {
@@ -25,27 +27,64 @@ class PlayerControls extends StatelessWidget {
               ),
             ],
           ),
-          child: const Column(
-            mainAxisSize: MainAxisSize.min,
+          child: isLandscape ? _buildLandscapeLayout() : _buildPortraitLayout(),
+        );
+      },
+    );
+  }
+
+  Widget _buildPortraitLayout() {
+    return const Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _ProgressSection(),
+        _TimeLabels(),
+        _SleepTimerIndicator(),
+        Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Row(
             children: [
-              _ProgressSection(),
-              _TimeLabels(),
-              _SleepTimerIndicator(),
-              Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Row(
+              Expanded(
+                child: _SongInfo(),
+              ),
+              _ControlButtons(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLandscapeLayout() {
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              // Left side: Song info and sleep timer
+              Expanded(
+                flex: 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: _SongInfo(),
-                    ),
-                    _ControlButtons(),
+                    _SongInfo(),
+                    _SleepTimerIndicator(),
                   ],
                 ),
               ),
+              SizedBox(width: 16),
+              // Right side: Controls
+              _ControlButtons(),
             ],
           ),
-        );
-      },
+          SizedBox(height: 8),
+          // Progress section spans full width
+          _ProgressSection(),
+          _TimeLabels(),
+        ],
+      ),
     );
   }
 }

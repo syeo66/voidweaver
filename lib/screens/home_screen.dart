@@ -206,10 +206,12 @@ class _HomeScreenState extends State<HomeScreen> {
 class _StaticPlaylistInfo extends StatefulWidget {
   final AudioPlayerService playerService;
   final SubsonicApi api;
+  final bool isCompact;
 
   const _StaticPlaylistInfo({
     required this.playerService,
     required this.api,
+    this.isCompact = false,
   });
 
   @override
@@ -262,8 +264,8 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
     if (!_scrollController.hasClients || _currentPlaylist.isEmpty) return;
     
     // Calculate the scroll position to center the current track
-    // Each item is 80 pixels wide (including margin)
-    const double itemWidth = 80.0 + 8.0; // width + margin
+    // Item width depends on compact mode
+    final double itemWidth = widget.isCompact ? 60.0 + 8.0 : 80.0 + 8.0; // width + margin
     final double targetPosition = _currentIndex * itemWidth;
     
     // Get the viewport width to center the item
@@ -285,6 +287,40 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
   Widget build(BuildContext context) {
     if (_currentPlaylist.isEmpty) return const SizedBox.shrink();
     
+    if (widget.isCompact) {
+      // Compact mode for landscape - smaller height and items
+      return Column(
+        children: [
+          Text(
+            'Playlist: ${_currentIndex + 1} of ${_currentPlaylist.length}',
+            style: TextStyle(color: Colors.grey[600], fontSize: 12),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 60,
+            child: ListView.builder(
+              controller: _scrollController,
+              scrollDirection: Axis.horizontal,
+              itemCount: _currentPlaylist.length,
+              itemBuilder: (context, index) {
+                final song = _currentPlaylist[index];
+                final isCurrentSong = index == _currentIndex;
+                
+                return _PlaylistItem(
+                  key: ValueKey('playlist-item-${song.id}'),
+                  song: song,
+                  isCurrentSong: isCurrentSong,
+                  api: widget.api,
+                  isCompact: true,
+                );
+              },
+            ),
+          ),
+        ],
+      );
+    }
+    
+    // Full mode for portrait
     return Column(
       children: [
         const Divider(),
@@ -308,6 +344,7 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
                 song: song,
                 isCurrentSong: isCurrentSong,
                 api: widget.api,
+                isCompact: false,
               );
             },
           ),
@@ -321,33 +358,40 @@ class _PlaylistItem extends StatelessWidget {
   final Song song;
   final bool isCurrentSong;
   final SubsonicApi api;
+  final bool isCompact;
 
   const _PlaylistItem({
     super.key,
     required this.song,
     required this.isCurrentSong,
     required this.api,
+    this.isCompact = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final itemSize = isCompact ? 40.0 : 60.0;
+    final containerWidth = isCompact ? 60.0 : 80.0;
+    final fontSize = isCompact ? 8.0 : 10.0;
+    final iconSize = isCompact ? 16.0 : 24.0;
+    
     return Container(
-      width: 80,
+      width: containerWidth,
       margin: const EdgeInsets.symmetric(horizontal: 4),
       child: Column(
         children: [
           Container(
-            width: 60,
-            height: 60,
+            width: itemSize,
+            height: itemSize,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(isCompact ? 6 : 8),
               color: isCurrentSong ? Theme.of(context).primaryColor.withValues(alpha: 0.1) : Colors.grey[300],
-              border: isCurrentSong ? Border.all(color: Theme.of(context).primaryColor, width: 3) : null,
+              border: isCurrentSong ? Border.all(color: Theme.of(context).primaryColor, width: isCompact ? 2 : 3) : null,
               boxShadow: isCurrentSong ? [
                 BoxShadow(
                   color: Theme.of(context).primaryColor.withValues(alpha: 0.3),
-                  blurRadius: 8,
-                  spreadRadius: 1,
+                  blurRadius: isCompact ? 4 : 8,
+                  spreadRadius: isCompact ? 0.5 : 1,
                 )
               ] : null,
             ),
@@ -355,7 +399,7 @@ class _PlaylistItem extends StatelessWidget {
               children: [
                 song.coverArt != null
                     ? ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(isCompact ? 6 : 8),
                         child: CachedNetworkImage(
                           imageUrl: api.getCoverArtUrl(song.coverArt!),
                           key: ValueKey('playlist-${song.id}-${song.coverArt}'),
@@ -363,46 +407,51 @@ class _PlaylistItem extends StatelessWidget {
                           placeholder: (context, url) => Icon(
                             Icons.music_note,
                             color: isCurrentSong ? Colors.white : Colors.grey,
+                            size: iconSize * 0.8,
                           ),
                           errorWidget: (context, url, error) => Icon(
                             Icons.music_note,
                             color: isCurrentSong ? Colors.white : Colors.grey,
+                            size: iconSize * 0.8,
                           ),
                         ),
                       )
                     : Icon(
                         Icons.music_note,
                         color: isCurrentSong ? Colors.white : Colors.grey,
+                        size: iconSize * 0.8,
                       ),
                 if (isCurrentSong)
                   Positioned.fill(
                     child: Container(
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(isCompact ? 6 : 8),
                         color: Colors.black.withValues(alpha: 0.3),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.play_arrow,
                         color: Colors.white,
-                        size: 24,
+                        size: iconSize,
                       ),
                     ),
                   ),
               ],
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            song.title,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: isCurrentSong ? FontWeight.bold : FontWeight.normal,
-              color: isCurrentSong ? Theme.of(context).primaryColor : null,
+          if (!isCompact) ...[
+            const SizedBox(height: 4),
+            Text(
+              song.title,
+              style: TextStyle(
+                fontSize: fontSize,
+                fontWeight: isCurrentSong ? FontWeight.bold : FontWeight.normal,
+                color: isCurrentSong ? Theme.of(context).primaryColor : null,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
             ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-          ),
+          ],
         ],
       ),
     );
@@ -416,6 +465,8 @@ class _NowPlayingContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    
     return Consumer<AudioPlayerService>(
       builder: (context, playerService, child) {
         final currentSong = playerService.currentSong;
@@ -438,22 +489,69 @@ class _NowPlayingContent extends StatelessWidget {
       },
       child: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _StaticAlbumArt(playerService: appState.audioPlayerService!, api: appState.api!),
-                  const SizedBox(height: 24),
-                  _StaticSongInfo(playerService: appState.audioPlayerService!),
-                ],
-              ),
-            ),
-            _StaticPlaylistInfo(playerService: appState.audioPlayerService!, api: appState.api!),
-          ],
-        ),
+        child: isLandscape ? _buildLandscapeLayout() : _buildPortraitLayout(),
       ),
+    );
+  }
+
+  Widget _buildPortraitLayout() {
+    return Column(
+      children: [
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _StaticAlbumArt(playerService: appState.audioPlayerService!, api: appState.api!),
+              const SizedBox(height: 24),
+              _StaticSongInfo(playerService: appState.audioPlayerService!),
+            ],
+          ),
+        ),
+        _StaticPlaylistInfo(playerService: appState.audioPlayerService!, api: appState.api!),
+      ],
+    );
+  }
+
+  Widget _buildLandscapeLayout() {
+    return Column(
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              // Left side: Album art
+              Expanded(
+                flex: 1,
+                child: Center(
+                  child: _StaticAlbumArt(
+                    playerService: appState.audioPlayerService!, 
+                    api: appState.api!,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 24),
+              // Right side: Song info and controls
+              Expanded(
+                flex: 1,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _StaticSongInfo(playerService: appState.audioPlayerService!),
+                    const SizedBox(height: 24),
+                    // Compact playlist in landscape
+                    Flexible(
+                      child: _StaticPlaylistInfo(
+                        playerService: appState.audioPlayerService!, 
+                        api: appState.api!,
+                        isCompact: true,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

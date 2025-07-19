@@ -24,6 +24,7 @@ A high-quality Flutter music player application that streams music from your per
 
 ### 🎨 **Interface & Experience**
 - **Dark Mode**: System-aware theme with manual override
+- **Landscape Support**: Responsive layouts optimized for both portrait and landscape orientations
 - **Fast Loading**: Advanced caching system for instant response
 - **Offline Capability**: Browse cached content without network
 - **Real-time Updates**: Background sync keeps your library fresh

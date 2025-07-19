@@ -52,15 +52,32 @@ class AlbumList extends StatelessWidget {
           );
         }
         
+        final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+        
         return RefreshIndicator(
           onRefresh: () => appState.loadAlbums(),
-          child: ListView.builder(
-            itemCount: appState.albums.length,
-            itemBuilder: (context, index) {
-              final album = appState.albums[index];
-              return AlbumTile(album: album);
-            },
-          ),
+          child: isLandscape
+              ? GridView.builder(
+                  padding: const EdgeInsets.all(8),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 8,
+                    childAspectRatio: 0.85,
+                  ),
+                  itemCount: appState.albums.length,
+                  itemBuilder: (context, index) {
+                    final album = appState.albums[index];
+                    return AlbumGridTile(album: album);
+                  },
+                )
+              : ListView.builder(
+                  itemCount: appState.albums.length,
+                  itemBuilder: (context, index) {
+                    final album = appState.albums[index];
+                    return AlbumTile(album: album);
+                  },
+                ),
         );
       },
     );
@@ -192,6 +209,118 @@ class _AlbumTileState extends State<AlbumTile> {
       return '${hours}h ${minutes}m';
     } else {
       return '${minutes}m';
+    }
+  }
+}
+
+class AlbumGridTile extends StatefulWidget {
+  final Album album;
+  
+  const AlbumGridTile({super.key, required this.album});
+
+  @override
+  State<AlbumGridTile> createState() => _AlbumGridTileState();
+}
+
+class _AlbumGridTileState extends State<AlbumGridTile> {
+  bool _isPlayingAlbum = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AppState>(
+      builder: (context, appState, child) {
+        return Card(
+          elevation: 2,
+          child: InkWell(
+            onTap: () async {
+              final audioPlayer = appState.audioPlayerService;
+              
+              if (audioPlayer != null) {
+                await _playAlbum(appState, audioPlayer);
+              }
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Album art
+                  Expanded(
+                    child: Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.grey[300],
+                      ),
+                      child: widget.album.coverArt != null
+                          ? ImageCacheManager.buildAlbumArt(
+                              imageUrl: appState.api!.getCoverArtUrl(widget.album.coverArt!),
+                              size: 120,
+                              cacheKey: widget.album.coverArt,
+                            )
+                          : const Icon(Icons.album, color: Colors.grey, size: 48),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Album title
+                  Text(
+                    widget.album.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 14,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  // Artist name
+                  Text(
+                    widget.album.artist,
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  // Loading indicator or play button
+                  if (_isPlayingAlbum)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _playAlbum(AppState appState, AudioPlayerService audioPlayer) async {
+    if (_isPlayingAlbum) return;
+    
+    setState(() => _isPlayingAlbum = true);
+    
+    try {
+      await audioPlayer.playAlbum(widget.album);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to play album: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isPlayingAlbum = false);
+      }
     }
   }
 }
