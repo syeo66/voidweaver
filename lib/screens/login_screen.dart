@@ -17,8 +17,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
-    
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Voidweaver Setup'),
@@ -30,13 +31,16 @@ class _LoginScreenState extends State<LoginScreen> {
               padding: const EdgeInsets.all(16.0),
               child: Consumer<AppState>(
                 builder: (context, appState, child) {
-                  final isLoading = appState.configurationLoadingState == LoadingState.loading;
-                  final hasError = appState.configurationLoadingState == LoadingState.error;
-                  
+                  final isLoading = appState.configurationLoadingState ==
+                      LoadingState.loading;
+                  final hasError =
+                      appState.configurationLoadingState == LoadingState.error;
+
                   if (isLandscape) {
                     // Landscape layout: side-by-side design
                     return ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                      constraints:
+                          BoxConstraints(minHeight: constraints.maxHeight),
                       child: Row(
                         children: [
                           // Left side: Icon and branding
@@ -53,10 +57,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                 const SizedBox(height: 16),
                                 Text(
                                   'Voidweaver',
-                                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                    color: Theme.of(context).primaryColor,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium
+                                      ?.copyWith(
+                                        color: Theme.of(context).primaryColor,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                 ),
                               ],
                             ),
@@ -65,7 +72,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           // Right side: Form
                           Expanded(
                             flex: 1,
-                            child: _buildLoginForm(isLoading, hasError, appState),
+                            child:
+                                _buildLoginForm(isLoading, hasError, appState),
                           ),
                         ],
                       ),
@@ -73,7 +81,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   } else {
                     // Portrait layout: traditional vertical design
                     return ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                      constraints:
+                          BoxConstraints(minHeight: constraints.maxHeight),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -206,10 +215,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       await context.read<AppState>().configure(
-        _serverUrlController.text.trim(),
-        _usernameController.text.trim(),
-        _passwordController.text.trim(),
-      );
+            _serverUrlController.text.trim(),
+            _usernameController.text.trim(),
+            _passwordController.text.trim(),
+          );
     } catch (e) {
       // Error is already handled by AppState loading states
       // Just ensure we still show a snackbar for immediate feedback

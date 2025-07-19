@@ -15,7 +15,7 @@ class AlbumList extends StatelessWidget {
         if (appState.isLoading) {
           return const Center(child: CircularProgressIndicator());
         }
-        
+
         if (appState.error != null) {
           return Center(
             child: Column(
@@ -33,7 +33,7 @@ class AlbumList extends StatelessWidget {
             ),
           );
         }
-        
+
         if (appState.albums.isEmpty) {
           return Center(
             child: Column(
@@ -51,9 +51,10 @@ class AlbumList extends StatelessWidget {
             ),
           );
         }
-        
-        final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
-        
+
+        final isLandscape =
+            MediaQuery.of(context).orientation == Orientation.landscape;
+
         return RefreshIndicator(
           onRefresh: () => appState.loadAlbums(),
           child: isLandscape
@@ -86,7 +87,7 @@ class AlbumList extends StatelessWidget {
 
 class AlbumTile extends StatefulWidget {
   final Album album;
-  
+
   const AlbumTile({super.key, required this.album});
 
   @override
@@ -113,7 +114,8 @@ class _AlbumTileState extends State<AlbumTile> {
                 ),
                 child: widget.album.coverArt != null
                     ? ImageCacheManager.buildAlbumArt(
-                        imageUrl: appState.api!.getCoverArtUrl(widget.album.coverArt!),
+                        imageUrl: appState.api!
+                            .getCoverArtUrl(widget.album.coverArt!),
                         size: 56,
                         cacheKey: widget.album.coverArt,
                       )
@@ -128,7 +130,8 @@ class _AlbumTileState extends State<AlbumTile> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(widget.album.artist),
-                if (widget.album.songCount != null && widget.album.duration != null)
+                if (widget.album.songCount != null &&
+                    widget.album.duration != null)
                   Text(
                     '${widget.album.songCount} songs • ${_formatDuration(widget.album.duration!)}',
                     style: TextStyle(fontSize: 12, color: Colors.grey[600]),
@@ -144,7 +147,7 @@ class _AlbumTileState extends State<AlbumTile> {
                 : PopupMenuButton(
                     onSelected: (value) async {
                       final audioPlayer = appState.audioPlayerService;
-                      
+
                       if (audioPlayer != null) {
                         if (value == 'play') {
                           await _playAlbum(appState, audioPlayer);
@@ -166,7 +169,7 @@ class _AlbumTileState extends State<AlbumTile> {
                   ),
             onTap: () async {
               final audioPlayer = appState.audioPlayerService;
-              
+
               if (audioPlayer != null) {
                 await _playAlbum(appState, audioPlayer);
               }
@@ -177,11 +180,12 @@ class _AlbumTileState extends State<AlbumTile> {
     );
   }
 
-  Future<void> _playAlbum(AppState appState, AudioPlayerService audioPlayer) async {
+  Future<void> _playAlbum(
+      AppState appState, AudioPlayerService audioPlayer) async {
     if (_isPlayingAlbum) return;
-    
+
     setState(() => _isPlayingAlbum = true);
-    
+
     try {
       await audioPlayer.playAlbum(widget.album);
     } catch (e) {
@@ -199,12 +203,12 @@ class _AlbumTileState extends State<AlbumTile> {
       }
     }
   }
-  
+
   String _formatDuration(int seconds) {
     final duration = Duration(seconds: seconds);
     final hours = duration.inHours;
     final minutes = duration.inMinutes % 60;
-    
+
     if (hours > 0) {
       return '${hours}h ${minutes}m';
     } else {
@@ -215,7 +219,7 @@ class _AlbumTileState extends State<AlbumTile> {
 
 class AlbumGridTile extends StatefulWidget {
   final Album album;
-  
+
   const AlbumGridTile({super.key, required this.album});
 
   @override
@@ -234,7 +238,7 @@ class _AlbumGridTileState extends State<AlbumGridTile> {
           child: InkWell(
             onTap: () async {
               final audioPlayer = appState.audioPlayerService;
-              
+
               if (audioPlayer != null) {
                 await _playAlbum(appState, audioPlayer);
               }
@@ -254,11 +258,13 @@ class _AlbumGridTileState extends State<AlbumGridTile> {
                       ),
                       child: widget.album.coverArt != null
                           ? ImageCacheManager.buildAlbumArt(
-                              imageUrl: appState.api!.getCoverArtUrl(widget.album.coverArt!),
+                              imageUrl: appState.api!
+                                  .getCoverArtUrl(widget.album.coverArt!),
                               size: 120,
                               cacheKey: widget.album.coverArt,
                             )
-                          : const Icon(Icons.album, color: Colors.grey, size: 48),
+                          : const Icon(Icons.album,
+                              color: Colors.grey, size: 48),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -301,11 +307,12 @@ class _AlbumGridTileState extends State<AlbumGridTile> {
     );
   }
 
-  Future<void> _playAlbum(AppState appState, AudioPlayerService audioPlayer) async {
+  Future<void> _playAlbum(
+      AppState appState, AudioPlayerService audioPlayer) async {
     if (_isPlayingAlbum) return;
-    
+
     setState(() => _isPlayingAlbum = true);
-    
+
     try {
       await audioPlayer.playAlbum(widget.album);
     } catch (e) {

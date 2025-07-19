@@ -7,15 +7,16 @@ class PlayerControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
-    
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+
     return Selector<AudioPlayerService, bool>(
       selector: (context, service) => service.currentSong != null,
       builder: (context, hasSong, child) {
         if (!hasSong) {
           return const SizedBox.shrink();
         }
-        
+
         return Container(
           decoration: BoxDecoration(
             color: Theme.of(context).cardColor,
@@ -103,7 +104,7 @@ class _ProgressSection extends StatelessWidget {
         final double value = progress.total.inMilliseconds > 0
             ? progress.current.inMilliseconds / progress.total.inMilliseconds
             : 0;
-        
+
         return SizedBox(
           height: 20,
           child: Builder(
@@ -122,7 +123,8 @@ class _ProgressSection extends StatelessWidget {
                 onChanged: (newValue) {
                   if (progress.total.inMilliseconds > 0) {
                     final newPosition = Duration(
-                      milliseconds: (newValue * progress.total.inMilliseconds).round(),
+                      milliseconds:
+                          (newValue * progress.total.inMilliseconds).round(),
                     );
                     context.read<AudioPlayerService>().seekTo(newPosition);
                   }
@@ -134,7 +136,6 @@ class _ProgressSection extends StatelessWidget {
       },
     );
   }
-  
 }
 
 class _TimeLabels extends StatelessWidget {
@@ -173,7 +174,6 @@ class _TimeLabels extends StatelessWidget {
       },
     );
   }
-  
 }
 
 class _SleepTimerIndicator extends StatelessWidget {
@@ -190,7 +190,7 @@ class _SleepTimerIndicator extends StatelessWidget {
         if (!timer.isActive) {
           return const SizedBox.shrink();
         }
-        
+
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
@@ -222,7 +222,6 @@ class _SleepTimerIndicator extends StatelessWidget {
       },
     );
   }
-  
 }
 
 class _SongInfo extends StatelessWidget {
@@ -241,7 +240,7 @@ class _SongInfo extends StatelessWidget {
         if (songInfo == null) {
           return const SizedBox.shrink();
         }
-        
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -267,7 +266,8 @@ class _ControlButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Selector<AudioPlayerService, ({PlaybackState state, bool hasPrevious, bool hasNext})>(
+    return Selector<AudioPlayerService,
+        ({PlaybackState state, bool hasPrevious, bool hasNext})>(
       selector: (context, service) => (
         state: service.playbackState,
         hasPrevious: service.hasPrevious,
@@ -331,4 +331,3 @@ String _formatDuration(Duration duration) {
   final seconds = duration.inSeconds % 60;
   return '${minutes.toString().padLeft(1, '0')}:${seconds.toString().padLeft(2, '0')}';
 }
-  

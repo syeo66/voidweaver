@@ -15,9 +15,10 @@ class VoidweaverAudioHandler extends BaseAudioHandler {
   void _init() {
     // Listen to playback state changes from AudioPlayerService
     _audioPlayerService.addListener(_updatePlaybackState);
-    
+
     // Listen directly to the audio player's position stream for real-time updates
-    _positionSubscription = _audioPlayerService.onPositionChanged.listen((position) {
+    _positionSubscription =
+        _audioPlayerService.onPositionChanged.listen((position) {
       _updatePosition();
     });
 
@@ -28,7 +29,7 @@ class VoidweaverAudioHandler extends BaseAudioHandler {
   void _updatePlaybackState() {
     final song = _audioPlayerService.currentSong;
     final state = _audioPlayerService.playbackState;
-    
+
     // Update media item
     if (song != null) {
       mediaItem.add(MediaItem(
@@ -37,14 +38,16 @@ class VoidweaverAudioHandler extends BaseAudioHandler {
         title: song.title,
         artist: song.artist,
         duration: _audioPlayerService.totalDuration,
-        artUri: song.coverArt != null ? Uri.parse(_api.getCoverArtUrl(song.coverArt!)) : null,
+        artUri: song.coverArt != null
+            ? Uri.parse(_api.getCoverArtUrl(song.coverArt!))
+            : null,
       ));
     }
 
     // Update playback state
     final playing = state == aps.PlaybackState.playing;
     final buffering = state == aps.PlaybackState.loading;
-    
+
     playbackState.add(playbackState.value.copyWith(
       controls: [
         if (_audioPlayerService.hasPrevious) MediaControl.skipToPrevious,
@@ -57,10 +60,10 @@ class VoidweaverAudioHandler extends BaseAudioHandler {
         MediaAction.seekBackward,
       },
       androidCompactActionIndices: const [0, 1, 2],
-      processingState: buffering 
-          ? AudioProcessingState.loading 
-          : playing 
-              ? AudioProcessingState.ready 
+      processingState: buffering
+          ? AudioProcessingState.loading
+          : playing
+              ? AudioProcessingState.ready
               : AudioProcessingState.idle,
       playing: playing,
       updatePosition: _audioPlayerService.currentPosition,
@@ -110,7 +113,8 @@ class VoidweaverAudioHandler extends BaseAudioHandler {
   @override
   Future<void> seekForward(bool begin) async {
     if (begin) {
-      final newPosition = _audioPlayerService.currentPosition + const Duration(seconds: 10);
+      final newPosition =
+          _audioPlayerService.currentPosition + const Duration(seconds: 10);
       await _audioPlayerService.seekTo(newPosition);
     }
   }
@@ -118,8 +122,10 @@ class VoidweaverAudioHandler extends BaseAudioHandler {
   @override
   Future<void> seekBackward(bool begin) async {
     if (begin) {
-      final newPosition = _audioPlayerService.currentPosition - const Duration(seconds: 10);
-      final clampedPosition = newPosition < Duration.zero ? Duration.zero : newPosition;
+      final newPosition =
+          _audioPlayerService.currentPosition - const Duration(seconds: 10);
+      final clampedPosition =
+          newPosition < Duration.zero ? Duration.zero : newPosition;
       await _audioPlayerService.seekTo(clampedPosition);
     }
   }

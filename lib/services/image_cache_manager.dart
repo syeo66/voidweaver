@@ -20,7 +20,8 @@ class ImageCacheManager {
       fit: fit ?? BoxFit.cover,
       cacheKey: cacheKey,
       placeholder: placeholder ?? (context, url) => _buildPlaceholder(),
-      errorWidget: errorWidget ?? (context, url, error) => _buildErrorWidget(context, url, error),
+      errorWidget: errorWidget ??
+          (context, url, error) => _buildErrorWidget(context, url, error),
       memCacheWidth: width?.toInt(),
       memCacheHeight: height?.toInt(),
       maxHeightDiskCache: 800, // Limit disk cache size
@@ -77,12 +78,12 @@ class ImageCacheManager {
           height: size,
           fit: BoxFit.cover,
           cacheKey: cacheKey,
-          errorWidget: (context, url, error) => _buildArtistFallback(artistName, size),
+          errorWidget: (context, url, error) =>
+              _buildArtistFallback(artistName, size),
         ),
       ),
     );
   }
-
 
   /// Default placeholder widget
   static Widget _buildPlaceholder() {
@@ -98,7 +99,8 @@ class ImageCacheManager {
   }
 
   /// Default error widget
-  static Widget _buildErrorWidget(BuildContext context, String url, dynamic error) {
+  static Widget _buildErrorWidget(
+      BuildContext context, String url, dynamic error) {
     return Container(
       color: Colors.grey[300],
       child: const Icon(
@@ -134,7 +136,7 @@ class ImageCacheManager {
   /// Get initials from artist name
   static String _getInitials(String name) {
     if (name.isEmpty) return '?';
-    
+
     final words = name.split(' ');
     if (words.length == 1) {
       return words[0][0].toUpperCase();

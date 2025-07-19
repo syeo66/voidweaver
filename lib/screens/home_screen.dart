@@ -46,33 +46,36 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.shuffle),
-            onPressed: _isPlayingRandomSongs ? null : () async {
-              setState(() => _isPlayingRandomSongs = true);
-              
-              final appState = context.read<AppState>();
-              final messenger = ScaffoldMessenger.of(context);
-              
-              try {
-                await appState.audioPlayerService?.playRandomSongs();
-              } catch (e) {
-                if (mounted) {
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text('Failed to play random songs: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              } finally {
-                if (mounted) {
-                  setState(() => _isPlayingRandomSongs = false);
-                }
-              }
-            },
+            onPressed: _isPlayingRandomSongs
+                ? null
+                : () async {
+                    setState(() => _isPlayingRandomSongs = true);
+
+                    final appState = context.read<AppState>();
+                    final messenger = ScaffoldMessenger.of(context);
+
+                    try {
+                      await appState.audioPlayerService?.playRandomSongs();
+                    } catch (e) {
+                      if (mounted) {
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to play random songs: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    } finally {
+                      if (mounted) {
+                        setState(() => _isPlayingRandomSongs = false);
+                      }
+                    }
+                  },
           ),
           Consumer<AppState>(
             builder: (context, appState, child) {
-              if (appState.audioPlayerService == null || !appState.isConfigured) {
+              if (appState.audioPlayerService == null ||
+                  !appState.isConfigured) {
                 return const SizedBox(width: 0, height: 0);
               }
               return ListenableBuilder(
@@ -82,7 +85,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: appState.audioPlayerService!.isSleepTimerActive
                         ? const Icon(Icons.bedtime, color: Colors.orange)
                         : const Icon(Icons.bedtime_outlined),
-                    onPressed: () => _showSleepTimerDialog(context, appState.audioPlayerService!),
+                    onPressed: () => _showSleepTimerDialog(
+                        context, appState.audioPlayerService!),
                   );
                 },
               );
@@ -95,7 +99,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 context.read<AppState>().clearConfiguration();
               } else if (value == 'settings') {
                 Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                  MaterialPageRoute(
+                      builder: (context) => const SettingsScreen()),
                 );
               }
             },
@@ -181,7 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (appState.audioPlayerService == null) {
           return const Center(child: Text('No audio player available'));
         }
-        
+
         return ChangeNotifierProvider.value(
           value: appState.audioPlayerService!,
           child: _NowPlayingContent(appState: appState),
@@ -190,7 +195,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showSleepTimerDialog(BuildContext context, AudioPlayerService playerService) {
+  void _showSleepTimerDialog(
+      BuildContext context, AudioPlayerService playerService) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -198,9 +204,6 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     );
   }
-
-
-
 }
 
 class _StaticPlaylistInfo extends StatefulWidget {
@@ -222,7 +225,7 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
   List<Song> _currentPlaylist = [];
   int _currentIndex = 0;
   final ScrollController _scrollController = ScrollController();
-  
+
   @override
   void initState() {
     super.initState();
@@ -230,27 +233,27 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
     _currentIndex = widget.playerService.currentIndex;
     widget.playerService.addListener(_onPlayerServiceChanged);
   }
-  
+
   @override
   void dispose() {
     _scrollController.dispose();
     widget.playerService.removeListener(_onPlayerServiceChanged);
     super.dispose();
   }
-  
+
   void _onPlayerServiceChanged() {
     // Only rebuild if the playlist or current index changed
     final newPlaylist = widget.playerService.playlist;
     final newCurrentIndex = widget.playerService.currentIndex;
-    
+
     if (newPlaylist != _currentPlaylist || newCurrentIndex != _currentIndex) {
       final shouldAutoScroll = newCurrentIndex != _currentIndex;
-      
+
       setState(() {
         _currentPlaylist = newPlaylist;
         _currentIndex = newCurrentIndex;
       });
-      
+
       // Auto-scroll to the current track after the widget rebuilds
       if (shouldAutoScroll && _currentPlaylist.isNotEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -259,23 +262,25 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
       }
     }
   }
-  
+
   void _scrollToCurrentTrack() {
     if (!_scrollController.hasClients || _currentPlaylist.isEmpty) return;
-    
+
     // Calculate the scroll position to center the current track
     // Item width depends on compact mode
-    final double itemWidth = widget.isCompact ? 60.0 + 8.0 : 80.0 + 8.0; // width + margin
+    final double itemWidth =
+        widget.isCompact ? 60.0 + 8.0 : 80.0 + 8.0; // width + margin
     final double targetPosition = _currentIndex * itemWidth;
-    
+
     // Get the viewport width to center the item
     final double viewportWidth = _scrollController.position.viewportDimension;
-    final double centeredPosition = targetPosition - (viewportWidth / 2) + (itemWidth / 2);
-    
+    final double centeredPosition =
+        targetPosition - (viewportWidth / 2) + (itemWidth / 2);
+
     // Ensure we don't scroll beyond the bounds
     final double maxScrollExtent = _scrollController.position.maxScrollExtent;
     final double clampedPosition = centeredPosition.clamp(0.0, maxScrollExtent);
-    
+
     _scrollController.animateTo(
       clampedPosition,
       duration: const Duration(milliseconds: 300),
@@ -286,7 +291,7 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
   @override
   Widget build(BuildContext context) {
     if (_currentPlaylist.isEmpty) return const SizedBox.shrink();
-    
+
     if (widget.isCompact) {
       // Compact mode for landscape - smaller height and items
       return Column(
@@ -305,7 +310,7 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
               itemBuilder: (context, index) {
                 final song = _currentPlaylist[index];
                 final isCurrentSong = index == _currentIndex;
-                
+
                 return _PlaylistItem(
                   key: ValueKey('playlist-item-${song.id}'),
                   song: song,
@@ -319,7 +324,7 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
         ],
       );
     }
-    
+
     // Full mode for portrait
     return Column(
       children: [
@@ -338,7 +343,7 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
             itemBuilder: (context, index) {
               final song = _currentPlaylist[index];
               final isCurrentSong = index == _currentIndex;
-              
+
               return _PlaylistItem(
                 key: ValueKey('playlist-item-${song.id}'),
                 song: song,
@@ -374,7 +379,7 @@ class _PlaylistItem extends StatelessWidget {
     final containerWidth = isCompact ? 60.0 : 80.0;
     final fontSize = isCompact ? 8.0 : 10.0;
     final iconSize = isCompact ? 16.0 : 24.0;
-    
+
     return Container(
       width: containerWidth,
       margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -385,15 +390,25 @@ class _PlaylistItem extends StatelessWidget {
             height: itemSize,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(isCompact ? 6 : 8),
-              color: isCurrentSong ? Theme.of(context).primaryColor.withValues(alpha: 0.1) : Colors.grey[300],
-              border: isCurrentSong ? Border.all(color: Theme.of(context).primaryColor, width: isCompact ? 2 : 3) : null,
-              boxShadow: isCurrentSong ? [
-                BoxShadow(
-                  color: Theme.of(context).primaryColor.withValues(alpha: 0.3),
-                  blurRadius: isCompact ? 4 : 8,
-                  spreadRadius: isCompact ? 0.5 : 1,
-                )
-              ] : null,
+              color: isCurrentSong
+                  ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
+                  : Colors.grey[300],
+              border: isCurrentSong
+                  ? Border.all(
+                      color: Theme.of(context).primaryColor,
+                      width: isCompact ? 2 : 3)
+                  : null,
+              boxShadow: isCurrentSong
+                  ? [
+                      BoxShadow(
+                        color: Theme.of(context)
+                            .primaryColor
+                            .withValues(alpha: 0.3),
+                        blurRadius: isCompact ? 4 : 8,
+                        spreadRadius: isCompact ? 0.5 : 1,
+                      )
+                    ]
+                  : null,
             ),
             child: Stack(
               children: [
@@ -465,12 +480,13 @@ class _NowPlayingContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
-    
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+
     return Consumer<AudioPlayerService>(
       builder: (context, playerService, child) {
         final currentSong = playerService.currentSong;
-        
+
         if (currentSong == null) {
           return const Center(
             child: Column(
@@ -478,12 +494,13 @@ class _NowPlayingContent extends StatelessWidget {
               children: [
                 Icon(Icons.music_off, size: 64, color: Colors.grey),
                 SizedBox(height: 16),
-                Text('No song playing', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                Text('No song playing',
+                    style: TextStyle(fontSize: 18, color: Colors.grey)),
               ],
             ),
           );
         }
-        
+
         // Return child that contains static widgets
         return child!;
       },
@@ -501,13 +518,16 @@ class _NowPlayingContent extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _StaticAlbumArt(playerService: appState.audioPlayerService!, api: appState.api!),
+              _StaticAlbumArt(
+                  playerService: appState.audioPlayerService!,
+                  api: appState.api!),
               const SizedBox(height: 24),
               _StaticSongInfo(playerService: appState.audioPlayerService!),
             ],
           ),
         ),
-        _StaticPlaylistInfo(playerService: appState.audioPlayerService!, api: appState.api!),
+        _StaticPlaylistInfo(
+            playerService: appState.audioPlayerService!, api: appState.api!),
       ],
     );
   }
@@ -523,7 +543,7 @@ class _NowPlayingContent extends StatelessWidget {
                 flex: 1,
                 child: Center(
                   child: _StaticAlbumArt(
-                    playerService: appState.audioPlayerService!, 
+                    playerService: appState.audioPlayerService!,
                     api: appState.api!,
                   ),
                 ),
@@ -535,12 +555,13 @@ class _NowPlayingContent extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _StaticSongInfo(playerService: appState.audioPlayerService!),
+                    _StaticSongInfo(
+                        playerService: appState.audioPlayerService!),
                     const SizedBox(height: 24),
                     // Compact playlist in landscape
                     Flexible(
                       child: _StaticPlaylistInfo(
-                        playerService: appState.audioPlayerService!, 
+                        playerService: appState.audioPlayerService!,
                         api: appState.api!,
                         isCompact: true,
                       ),
@@ -573,7 +594,7 @@ class _StaticAlbumArtState extends State<_StaticAlbumArt> {
   Song? _currentSong;
   String? _currentCoverArtUrl;
   Widget? _cachedImageWidget;
-  
+
   @override
   void initState() {
     super.initState();
@@ -581,30 +602,30 @@ class _StaticAlbumArtState extends State<_StaticAlbumArt> {
     _updateCoverArtUrl();
     widget.playerService.addListener(_onPlayerServiceChanged);
   }
-  
+
   @override
   void dispose() {
     widget.playerService.removeListener(_onPlayerServiceChanged);
     super.dispose();
   }
-  
+
   void _updateCoverArtUrl() {
-    final newUrl = _currentSong?.coverArt != null 
-        ? widget.api.getCoverArtUrl(_currentSong!.coverArt!) 
+    final newUrl = _currentSong?.coverArt != null
+        ? widget.api.getCoverArtUrl(_currentSong!.coverArt!)
         : null;
-    
+
     if (newUrl != _currentCoverArtUrl) {
       _currentCoverArtUrl = newUrl;
       _cachedImageWidget = null; // Clear cache when URL changes
     }
   }
-  
+
   void _onPlayerServiceChanged() {
     final newSong = widget.playerService.currentSong;
-    
+
     // Update the display when the song actually changes
     final songChanged = newSong?.id != _currentSong?.id;
-    
+
     if (songChanged) {
       setState(() {
         _currentSong = newSong;
@@ -659,7 +680,8 @@ class _StaticAlbumArtState extends State<_StaticAlbumArt> {
             ),
           ),
         ),
-        errorWidget: (context, url, error) => const Icon(Icons.music_note, size: 64, color: Colors.grey),
+        errorWidget: (context, url, error) =>
+            const Icon(Icons.music_note, size: 64, color: Colors.grey),
       ),
     );
 
@@ -777,7 +799,8 @@ class _SleepTimerDialogState extends State<_SleepTimerDialog> {
                   ),
                   Text(
                     widget.playerService.sleepTimerRemaining != null
-                        ? _formatDuration(widget.playerService.sleepTimerRemaining!)
+                        ? _formatDuration(
+                            widget.playerService.sleepTimerRemaining!)
                         : '00:00',
                     style: const TextStyle(
                       fontSize: 24,
@@ -796,7 +819,8 @@ class _SleepTimerDialogState extends State<_SleepTimerDialog> {
                   icon: const Icon(Icons.add),
                   label: const Text('+15m'),
                   onPressed: () {
-                    widget.playerService.extendSleepTimer(const Duration(minutes: 15));
+                    widget.playerService
+                        .extendSleepTimer(const Duration(minutes: 15));
                   },
                 ),
                 ElevatedButton.icon(
@@ -840,7 +864,7 @@ class _SleepTimerDialogState extends State<_SleepTimerDialog> {
   String _formatDuration(Duration duration) {
     final hours = duration.inHours;
     final minutes = duration.inMinutes % 60;
-    
+
     if (hours > 0) {
       return '${hours}h ${minutes}m';
     } else {

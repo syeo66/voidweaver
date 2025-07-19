@@ -11,16 +11,16 @@ class SyncStatusIndicator extends StatelessWidget {
       builder: (context, appState, child) {
         final syncStatus = appState.syncStatus;
         final lastSyncTime = appState.lastSyncTime;
-        
+
         Widget icon;
         Color color;
         String tooltip;
-        
+
         switch (syncStatus) {
           case SyncStatus.idle:
             icon = const Icon(Icons.sync, size: 16);
             color = Colors.grey;
-            tooltip = lastSyncTime != null 
+            tooltip = lastSyncTime != null
                 ? 'Last sync: ${_formatTime(lastSyncTime)}'
                 : 'Sync idle';
             break;
@@ -47,7 +47,7 @@ class SyncStatusIndicator extends StatelessWidget {
             tooltip = 'Sync failed';
             break;
         }
-        
+
         return Tooltip(
           message: tooltip,
           child: Container(
@@ -61,11 +61,11 @@ class SyncStatusIndicator extends StatelessWidget {
       },
     );
   }
-  
+
   String _formatTime(DateTime time) {
     final now = DateTime.now();
     final diff = now.difference(time);
-    
+
     if (diff.inMinutes < 1) {
       return 'Just now';
     } else if (diff.inMinutes < 60) {

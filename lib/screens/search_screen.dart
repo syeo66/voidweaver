@@ -12,7 +12,8 @@ class SearchScreen extends StatefulWidget {
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderStateMixin {
+class _SearchScreenState extends State<SearchScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   SearchResult? _searchResult;
   bool _isLoading = false;
@@ -56,9 +57,10 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
             _searchResult = result;
             _isLoading = false;
           });
-          
+
           // Debug logging
-          debugPrint('Search completed. Result: ${result.artists.length} artists, ${result.albums.length} albums, ${result.songs.length} songs');
+          debugPrint(
+              'Search completed. Result: ${result.artists.length} artists, ${result.albums.length} albums, ${result.songs.length} songs');
           debugPrint('Result isEmpty: ${result.isEmpty}');
         }
       }
@@ -84,41 +86,41 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search artists, albums, songs...',
-                prefixIcon: _isLoading 
-                    ? const Padding(
-                        padding: EdgeInsets.all(14.0),
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : const Icon(Icons.search),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
-                          _performSearch('');
-                        },
-                      )
-                    : null,
-                border: const OutlineInputBorder(),
-                filled: true,
-                fillColor: Theme.of(context).colorScheme.surface,
-              ),
-              onChanged: (value) {
-                // Debounce search to avoid too many requests
-                Future.delayed(const Duration(milliseconds: 500), () {
-                  if (_searchController.text == value) {
-                    _performSearch(value);
-                  }
-                });
-              },
-              onSubmitted: _performSearch,
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search artists, albums, songs...',
+                    prefixIcon: _isLoading
+                        ? const Padding(
+                            padding: EdgeInsets.all(14.0),
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : const Icon(Icons.search),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _searchController.clear();
+                              _performSearch('');
+                            },
+                          )
+                        : null,
+                    border: const OutlineInputBorder(),
+                    filled: true,
+                    fillColor: Theme.of(context).colorScheme.surface,
+                  ),
+                  onChanged: (value) {
+                    // Debounce search to avoid too many requests
+                    Future.delayed(const Duration(milliseconds: 500), () {
+                      if (_searchController.text == value) {
+                        _performSearch(value);
+                      }
+                    });
+                  },
+                  onSubmitted: _performSearch,
                 ),
               ),
               if (_searchResult != null && _searchResult!.isNotEmpty)
@@ -318,7 +320,8 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     return ListTile(
       leading: album.coverArt != null
           ? CachedNetworkImage(
-              imageUrl: context.read<AppState>().api!.getCoverArtUrl(album.coverArt!),
+              imageUrl:
+                  context.read<AppState>().api!.getCoverArtUrl(album.coverArt!),
               width: 50,
               height: 50,
               fit: BoxFit.cover,
@@ -353,19 +356,20 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     return ListTile(
       leading: song.coverArt != null
           ? CachedNetworkImage(
-              imageUrl: context.read<AppState>().api!.getCoverArtUrl(song.coverArt!),
+              imageUrl:
+                  context.read<AppState>().api!.getCoverArtUrl(song.coverArt!),
               width: 50,
               height: 50,
               fit: BoxFit.cover,
               placeholder: (context, url) => const Icon(Icons.music_note),
-              errorWidget: (context, url, error) => const Icon(Icons.music_note),
+              errorWidget: (context, url, error) =>
+                  const Icon(Icons.music_note),
             )
           : const Icon(Icons.music_note),
       title: Text(song.title),
       subtitle: Text('${song.artist} • ${song.album}'),
-      trailing: song.duration != null
-          ? Text(_formatDuration(song.duration!))
-          : null,
+      trailing:
+          song.duration != null ? Text(_formatDuration(song.duration!)) : null,
       onTap: () async {
         try {
           final appState = context.read<AppState>();

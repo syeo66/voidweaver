@@ -207,9 +207,12 @@ void main() {
       }
 
       // Cache multiple endpoints
-      await cache.getOrFetch<String>(endpoint1, params, fetchData, cacheDuration: const Duration(seconds: 10));
-      await cache.getOrFetch<String>(endpoint2, params, fetchData, cacheDuration: const Duration(seconds: 10));
-      await cache.getOrFetch<String>(endpoint3, params, fetchData, cacheDuration: const Duration(seconds: 10));
+      await cache.getOrFetch<String>(endpoint1, params, fetchData,
+          cacheDuration: const Duration(seconds: 10));
+      await cache.getOrFetch<String>(endpoint2, params, fetchData,
+          cacheDuration: const Duration(seconds: 10));
+      await cache.getOrFetch<String>(endpoint3, params, fetchData,
+          cacheDuration: const Duration(seconds: 10));
 
       expect(callCount, 3);
 
@@ -217,9 +220,12 @@ void main() {
       cache.invalidatePattern('getAlbum');
 
       // getAlbumList and getAlbum should be cleared, getArtist should remain
-      await cache.getOrFetch<String>(endpoint1, params, fetchData, cacheDuration: const Duration(seconds: 10));
-      await cache.getOrFetch<String>(endpoint2, params, fetchData, cacheDuration: const Duration(seconds: 10));
-      await cache.getOrFetch<String>(endpoint3, params, fetchData, cacheDuration: const Duration(seconds: 10));
+      await cache.getOrFetch<String>(endpoint1, params, fetchData,
+          cacheDuration: const Duration(seconds: 10));
+      await cache.getOrFetch<String>(endpoint2, params, fetchData,
+          cacheDuration: const Duration(seconds: 10));
+      await cache.getOrFetch<String>(endpoint3, params, fetchData,
+          cacheDuration: const Duration(seconds: 10));
 
       expect(callCount, 5); // 2 new fetches for album endpoints
     });

@@ -211,7 +211,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
   Widget _buildArtistAvatar(Artist artist) {
     final appState = context.read<AppState>();
     final api = appState.api;
-    
+
     if (artist.coverArt != null && api != null) {
       return CircleAvatar(
         backgroundColor: Colors.grey[300],

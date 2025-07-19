@@ -4,7 +4,6 @@ import 'services/app_state.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());

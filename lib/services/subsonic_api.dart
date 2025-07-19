@@ -38,7 +38,7 @@ class SubsonicApi {
   Map<String, String> _getAuthParams() {
     final salt = _generateSalt();
     final token = _generateToken(salt);
-    
+
     return {
       'u': username,
       't': token,
@@ -49,22 +49,24 @@ class SubsonicApi {
     };
   }
 
-  Future<XmlDocument> _makeRequest(String endpoint, [Map<String, String>? extraParams]) async {
+  Future<XmlDocument> _makeRequest(String endpoint,
+      [Map<String, String>? extraParams]) async {
     final params = _getAuthParams();
     if (extraParams != null) {
       params.addAll(extraParams);
     }
 
-    final uri = Uri.parse('$serverUrl/rest/$endpoint').replace(queryParameters: params);
-    
+    final uri =
+        Uri.parse('$serverUrl/rest/$endpoint').replace(queryParameters: params);
+
     try {
       final headers = {
         'Content-Type': 'application/xml',
         'User-Agent': 'voidweaver/1.0',
       };
-      
+
       final response = await http.get(uri, headers: headers);
-      
+
       if (response.statusCode == 200) {
         // Properly decode UTF-8 bytes with malformed character handling
         String responseBody;
@@ -92,14 +94,15 @@ class SubsonicApi {
       'getAlbumList2',
       {'type': 'recent', 'size': '500'},
       () async {
-        final doc = await _makeRequest('getAlbumList2', {'type': 'recent', 'size': '500'});
+        final doc = await _makeRequest(
+            'getAlbumList2', {'type': 'recent', 'size': '500'});
         final albums = <Album>[];
-        
+
         final albumElements = doc.findAllElements('album');
         for (final element in albumElements) {
           albums.add(Album.fromXml(element));
         }
-        
+
         return albums;
       },
       cacheDuration: const Duration(minutes: 3),
@@ -136,17 +139,19 @@ class SubsonicApi {
       'getRandomSongs',
       {'size': count.toString()},
       () async {
-        final doc = await _makeRequest('getRandomSongs', {'size': count.toString()});
+        final doc =
+            await _makeRequest('getRandomSongs', {'size': count.toString()});
         final songs = <Song>[];
-        
+
         final songElements = doc.findAllElements('song');
         for (final element in songElements) {
           songs.add(Song.fromXml(element));
         }
-        
+
         return songs;
       },
-      cacheDuration: const Duration(minutes: 1), // Random songs cache for shorter time
+      cacheDuration:
+          const Duration(minutes: 1), // Random songs cache for shorter time
       usePersistentCache: false, // Don't persist random songs
     );
   }
@@ -154,8 +159,9 @@ class SubsonicApi {
   String getStreamUrl(String id) {
     final params = _getAuthParams();
     params['id'] = id;
-    
-    final uri = Uri.parse('$serverUrl/rest/stream').replace(queryParameters: params);
+
+    final uri =
+        Uri.parse('$serverUrl/rest/stream').replace(queryParameters: params);
     return uri.toString();
   }
 
@@ -163,8 +169,9 @@ class SubsonicApi {
     final params = _getAuthParams();
     params['id'] = id;
     params['size'] = '300';
-    
-    final uri = Uri.parse('$serverUrl/rest/getCoverArt').replace(queryParameters: params);
+
+    final uri = Uri.parse('$serverUrl/rest/getCoverArt')
+        .replace(queryParameters: params);
     return uri.toString();
   }
 
@@ -176,7 +183,7 @@ class SubsonicApi {
         'id': songId,
         'submission': 'false',
       };
-      
+
       await _makeRequest('scrobble', params);
       debugPrint('Now playing notification sent for song: $songId');
     } catch (e) {
@@ -193,12 +200,12 @@ class SubsonicApi {
         'id': songId,
         'submission': 'true',
       };
-      
+
       // Add timestamp if provided (milliseconds since epoch)
       if (playedAt != null) {
         params['time'] = playedAt.millisecondsSinceEpoch.toString();
       }
-      
+
       await _makeRequest('scrobble', params);
       debugPrint('Scrobble submission sent for song: $songId');
     } catch (e) {
@@ -209,7 +216,8 @@ class SubsonicApi {
 
   /// Searches for artists, albums, and songs.
   /// Returns a SearchResult containing separate lists for each type.
-  Future<SearchResult> search(String query, {int artistCount = 20, int albumCount = 20, int songCount = 20}) async {
+  Future<SearchResult> search(String query,
+      {int artistCount = 20, int albumCount = 20, int songCount = 20}) async {
     return await _cache.getOrFetch<SearchResult>(
       'search3',
       {
@@ -226,14 +234,14 @@ class SubsonicApi {
             'albumCount': albumCount.toString(),
             'songCount': songCount.toString(),
           };
-          
+
           final doc = await _makeRequest('search3', params);
-          
+
           // Debug: Print the XML response to understand the structure
           if (kDebugMode) {
             debugPrint('Search response: ${doc.toXmlString()}');
           }
-          
+
           return SearchResult.fromXml(doc);
         } catch (e) {
           debugPrint('Search failed: $e');
@@ -255,15 +263,16 @@ class SubsonicApi {
         try {
           final doc = await _makeRequest('getArtists');
           final artists = <Artist>[];
-          
+
           final artistElements = doc.findAllElements('artist');
           for (final element in artistElements) {
             artists.add(Artist.fromXml(element));
           }
-          
+
           // Sort artists alphabetically by name
-          artists.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-          
+          artists.sort(
+              (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
           return artists;
         } catch (e) {
           debugPrint('Failed to get artists: $e');
@@ -285,12 +294,12 @@ class SubsonicApi {
         try {
           final doc = await _makeRequest('getArtist', {'id': artistId});
           final albums = <Album>[];
-          
+
           final albumElements = doc.findAllElements('album');
           for (final element in albumElements) {
             albums.add(Album.fromXml(element));
           }
-          
+
           return albums;
         } catch (e) {
           debugPrint('Failed to get albums for artist $artistId: $e');
@@ -459,8 +468,7 @@ class Song {
     final title = element.getAttribute('title') ?? '';
     final albumId = element.getAttribute('albumId');
     final coverArt = element.getAttribute('coverArt') ?? albumId;
-    
-    
+
     return Song(
       id: songId,
       title: title,
@@ -473,18 +481,22 @@ class Song {
       contentType: element.getAttribute('contentType'),
       suffix: element.getAttribute('suffix'),
       // Try multiple possible ReplayGain attribute names that Navidrome might use
-      replayGainTrackGain: double.tryParse(element.getAttribute('replayGainTrackGain') ?? '') ??
-                          double.tryParse(element.getAttribute('rgTrackGain') ?? '') ??
-                          double.tryParse(element.getAttribute('trackGain') ?? ''),
-      replayGainAlbumGain: double.tryParse(element.getAttribute('replayGainAlbumGain') ?? '') ??
-                          double.tryParse(element.getAttribute('rgAlbumGain') ?? '') ??
-                          double.tryParse(element.getAttribute('albumGain') ?? ''),
-      replayGainTrackPeak: double.tryParse(element.getAttribute('replayGainTrackPeak') ?? '') ??
-                          double.tryParse(element.getAttribute('rgTrackPeak') ?? '') ??
-                          double.tryParse(element.getAttribute('trackPeak') ?? ''),
-      replayGainAlbumPeak: double.tryParse(element.getAttribute('replayGainAlbumPeak') ?? '') ??
-                          double.tryParse(element.getAttribute('rgAlbumPeak') ?? '') ??
-                          double.tryParse(element.getAttribute('albumPeak') ?? ''),
+      replayGainTrackGain:
+          double.tryParse(element.getAttribute('replayGainTrackGain') ?? '') ??
+              double.tryParse(element.getAttribute('rgTrackGain') ?? '') ??
+              double.tryParse(element.getAttribute('trackGain') ?? ''),
+      replayGainAlbumGain:
+          double.tryParse(element.getAttribute('replayGainAlbumGain') ?? '') ??
+              double.tryParse(element.getAttribute('rgAlbumGain') ?? '') ??
+              double.tryParse(element.getAttribute('albumGain') ?? ''),
+      replayGainTrackPeak:
+          double.tryParse(element.getAttribute('replayGainTrackPeak') ?? '') ??
+              double.tryParse(element.getAttribute('rgTrackPeak') ?? '') ??
+              double.tryParse(element.getAttribute('trackPeak') ?? ''),
+      replayGainAlbumPeak:
+          double.tryParse(element.getAttribute('replayGainAlbumPeak') ?? '') ??
+              double.tryParse(element.getAttribute('rgAlbumPeak') ?? '') ??
+              double.tryParse(element.getAttribute('albumPeak') ?? ''),
     );
   }
 
@@ -581,14 +593,14 @@ class SearchResult {
   factory SearchResult.fromXml(XmlDocument doc) {
     // Try to find searchResult3 elements with and without namespace
     final searchResultElements = doc.findAllElements('searchResult3');
-    
+
     final artists = <Artist>[];
     final albums = <Album>[];
     final songs = <Song>[];
-    
+
     if (searchResultElements.isNotEmpty) {
       final searchResult = searchResultElements.first;
-      
+
       final artistElements = searchResult.findAllElements('artist');
       if (kDebugMode) {
         debugPrint('Found ${artistElements.length} artists');
@@ -596,7 +608,7 @@ class SearchResult {
       for (final element in artistElements) {
         artists.add(Artist.fromXml(element));
       }
-      
+
       final albumElements = searchResult.findAllElements('album');
       if (kDebugMode) {
         debugPrint('Found ${albumElements.length} albums');
@@ -604,7 +616,7 @@ class SearchResult {
       for (final element in albumElements) {
         albums.add(Album.fromXml(element));
       }
-      
+
       final songElements = searchResult.findAllElements('song');
       if (kDebugMode) {
         debugPrint('Found ${songElements.length} songs');
@@ -615,21 +627,23 @@ class SearchResult {
     } else {
       if (kDebugMode) {
         debugPrint('No searchResult3 elements found');
-        debugPrint('Available elements: ${doc.findAllElements('*').map((e) => e.name.local).toList()}');
+        debugPrint(
+            'Available elements: ${doc.findAllElements('*').map((e) => e.name.local).toList()}');
       }
     }
-    
+
     final result = SearchResult(
       artists: artists,
       albums: albums,
       songs: songs,
     );
-    
+
     if (kDebugMode) {
-      debugPrint('SearchResult created: ${artists.length} artists, ${albums.length} albums, ${songs.length} songs');
+      debugPrint(
+          'SearchResult created: ${artists.length} artists, ${albums.length} albums, ${songs.length} songs');
       debugPrint('SearchResult isEmpty: ${result.isEmpty}');
     }
-    
+
     return result;
   }
 

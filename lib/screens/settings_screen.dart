@@ -22,7 +22,7 @@ class SettingsScreen extends StatelessWidget {
           if (settingsService == null) {
             return const Center(child: CircularProgressIndicator());
           }
-          
+
           return ChangeNotifierProvider.value(
             value: settingsService,
             child: const _SettingsContent(),
@@ -52,7 +52,8 @@ class _SettingsContent extends StatelessWidget {
     );
   }
 
-  Widget _buildAppearanceSection(BuildContext context, SettingsService settingsService) {
+  Widget _buildAppearanceSection(
+      BuildContext context, SettingsService settingsService) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -64,7 +65,7 @@ class _SettingsContent extends StatelessWidget {
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 16),
-            
+
             // Theme Mode
             Text(
               'Theme',
@@ -92,7 +93,8 @@ class _SettingsContent extends StatelessWidget {
     );
   }
 
-  Widget _buildReplayGainSection(BuildContext context, SettingsService settingsService) {
+  Widget _buildReplayGainSection(
+      BuildContext context, SettingsService settingsService) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -107,8 +109,8 @@ class _SettingsContent extends StatelessWidget {
             Text(
               'Normalize volume levels for consistent playback',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey[600],
-              ),
+                    color: Colors.grey[600],
+                  ),
             ),
             const SizedBox(height: 8),
             Container(
@@ -120,7 +122,8 @@ class _SettingsContent extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.check_circle_outline, color: Colors.green, size: 20),
+                  const Icon(Icons.check_circle_outline,
+                      color: Colors.green, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -132,7 +135,7 @@ class _SettingsContent extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // ReplayGain Mode
             Text(
               'Mode',
@@ -155,12 +158,12 @@ class _SettingsContent extends StatelessWidget {
                 );
               }).toList(),
             ),
-            
+
             if (settingsService.replayGainMode != ReplayGainMode.off) ...[
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 16),
-              
+
               // Preamp
               Text(
                 'Preamp: ${settingsService.replayGainPreamp.toStringAsFixed(1)} dB',
@@ -172,7 +175,8 @@ class _SettingsContent extends StatelessWidget {
                 min: -15.0,
                 max: 15.0,
                 divisions: 300,
-                label: '${settingsService.replayGainPreamp.toStringAsFixed(1)} dB',
+                label:
+                    '${settingsService.replayGainPreamp.toStringAsFixed(1)} dB',
                 onChanged: (value) {
                   settingsService.setReplayGainPreamp(value);
                   _refreshAudioVolume(context);
@@ -181,25 +185,26 @@ class _SettingsContent extends StatelessWidget {
               Text(
                 'Adjust the overall volume level',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.grey[600],
-                ),
+                      color: Colors.grey[600],
+                    ),
               ),
-              
+
               const SizedBox(height: 16),
-              
+
               // Prevent Clipping
               SwitchListTile(
                 title: const Text('Prevent Clipping'),
-                subtitle: const Text('Reduce volume to prevent audio distortion'),
+                subtitle:
+                    const Text('Reduce volume to prevent audio distortion'),
                 value: settingsService.replayGainPreventClipping,
                 onChanged: (value) {
                   settingsService.setReplayGainPreventClipping(value);
                   _refreshAudioVolume(context);
                 },
               ),
-              
+
               const SizedBox(height: 16),
-              
+
               // Fallback Gain
               Text(
                 'Fallback Gain: ${settingsService.replayGainFallbackGain.toStringAsFixed(1)} dB',
@@ -211,7 +216,8 @@ class _SettingsContent extends StatelessWidget {
                 min: -15.0,
                 max: 15.0,
                 divisions: 300,
-                label: '${settingsService.replayGainFallbackGain.toStringAsFixed(1)} dB',
+                label:
+                    '${settingsService.replayGainFallbackGain.toStringAsFixed(1)} dB',
                 onChanged: (value) {
                   settingsService.setReplayGainFallbackGain(value);
                   _refreshAudioVolume(context);
@@ -220,8 +226,8 @@ class _SettingsContent extends StatelessWidget {
               Text(
                 'Gain applied to songs without ReplayGain data',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.grey[600],
-                ),
+                      color: Colors.grey[600],
+                    ),
               ),
             ],
           ],

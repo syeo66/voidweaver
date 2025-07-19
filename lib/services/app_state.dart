@@ -31,7 +31,7 @@ class AppState extends ChangeNotifier {
       accessibility: KeychainAccessibility.first_unlock_this_device,
     ),
   );
-  
+
   SubsonicApi? _api;
   AudioPlayerService? _audioPlayerService;
   SettingsService? _settingsService;
@@ -43,7 +43,7 @@ class AppState extends ChangeNotifier {
   SyncStatus _syncStatus = SyncStatus.idle;
   Timer? _syncTimer;
   DateTime? _lastSyncTime;
-  
+
   // Enhanced loading states
   LoadingState _configurationLoadingState = LoadingState.idle;
   LoadingState _albumLoadingState = LoadingState.idle;
@@ -59,7 +59,7 @@ class AppState extends ChangeNotifier {
   bool get isConfigured => _isConfigured;
   SyncStatus get syncStatus => _syncStatus;
   DateTime? get lastSyncTime => _lastSyncTime;
-  
+
   // Enhanced loading state getters
   LoadingState get configurationLoadingState => _configurationLoadingState;
   LoadingState get albumLoadingState => _albumLoadingState;
@@ -72,26 +72,27 @@ class AppState extends ChangeNotifier {
     await _loadServerConfig();
   }
 
-  Future<void> configure(String serverUrl, String username, String password) async {
+  Future<void> configure(
+      String serverUrl, String username, String password) async {
     _configurationLoadingState = LoadingState.loading;
     _configurationError = null;
     notifyListeners();
-    
+
     try {
       _api = SubsonicApi(
         serverUrl: serverUrl,
         username: username,
         password: password,
       );
-      
+
       _audioPlayerService = AudioPlayerService(_api!, _settingsService!);
-      
+
       // Initialize audio service for native controls
       await _initializeAudioService();
-      
+
       _isConfigured = true;
       _configurationLoadingState = LoadingState.success;
-      
+
       await _saveServerConfig(serverUrl, username, password);
       await loadAlbums();
       _startBackgroundSync();
@@ -109,7 +110,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> _initializeAudioService() async {
     if (_audioPlayerService == null) return;
-    
+
     try {
       await AudioService.init(
         builder: () => VoidweaverAudioHandler(_audioPlayerService!, _api!),
@@ -129,7 +130,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> loadAlbums() async {
     if (_api == null) return;
-    
+
     _isLoading = true;
     _albumLoadingState = LoadingState.loading;
     _error = null;
@@ -151,7 +152,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> _backgroundSync() async {
     if (_api == null || _syncStatus == SyncStatus.syncing) return;
-    
+
     _syncStatus = SyncStatus.syncing;
     notifyListeners();
 
@@ -165,9 +166,9 @@ class AppState extends ChangeNotifier {
       _syncStatus = SyncStatus.error;
       _error = e.toString();
     }
-    
+
     notifyListeners();
-    
+
     // Reset to idle after 3 seconds
     Timer(const Duration(seconds: 3), () {
       if (_syncStatus != SyncStatus.syncing) {
@@ -189,7 +190,8 @@ class AppState extends ChangeNotifier {
     _syncTimer = null;
   }
 
-  Future<void> _saveServerConfig(String serverUrl, String username, String password) async {
+  Future<void> _saveServerConfig(
+      String serverUrl, String username, String password) async {
     try {
       await _secureStorage.write(key: 'server_url', value: serverUrl);
       await _secureStorage.write(key: 'username', value: username);
@@ -219,14 +221,14 @@ class AppState extends ChangeNotifier {
   Future<void> clearConfiguration() async {
     try {
       await _secureStorage.deleteAll();
-      
+
       // Also clear old SharedPreferences for complete cleanup
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
     } catch (e) {
       debugPrint('Error clearing secure credentials: $e');
     }
-    
+
     _stopBackgroundSync();
     _api = null;
     _audioPlayerService?.dispose();
@@ -238,13 +240,13 @@ class AppState extends ChangeNotifier {
     _error = null;
     _syncStatus = SyncStatus.idle;
     _lastSyncTime = null;
-    
+
     // Reset loading states
     _configurationLoadingState = LoadingState.idle;
     _albumLoadingState = LoadingState.idle;
     _configurationError = null;
     _albumError = null;
-    
+
     notifyListeners();
   }
 
@@ -257,19 +259,20 @@ class AppState extends ChangeNotifier {
       final password = prefs.getString('password');
 
       if (serverUrl != null && username != null && password != null) {
-        debugPrint('Migrating credentials from SharedPreferences to secure storage');
-        
+        debugPrint(
+            'Migrating credentials from SharedPreferences to secure storage');
+
         // Save to secure storage
         await _saveServerConfig(serverUrl, username, password);
-        
+
         // Remove from SharedPreferences
         await prefs.remove('server_url');
         await prefs.remove('username');
         await prefs.remove('password');
-        
+
         // Configure with migrated credentials
         await configure(serverUrl, username, password);
-        
+
         debugPrint('Credential migration completed successfully');
       }
     } catch (e) {

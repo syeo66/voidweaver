@@ -19,12 +19,13 @@ class CacheEntry<T> {
   bool get isValid => !isExpired;
 
   Map<String, dynamic> toJson() => {
-    'data': data,
-    'expiresAt': expiresAt.toIso8601String(),
-    'key': key,
-  };
+        'data': data,
+        'expiresAt': expiresAt.toIso8601String(),
+        'key': key,
+      };
 
-  factory CacheEntry.fromJson(Map<String, dynamic> json, T Function(dynamic) fromJsonData) {
+  factory CacheEntry.fromJson(
+      Map<String, dynamic> json, T Function(dynamic) fromJsonData) {
     return CacheEntry<T>(
       data: fromJsonData(json['data']),
       expiresAt: DateTime.parse(json['expiresAt']),
@@ -56,7 +57,8 @@ class ApiCache {
   String _generateKey(String endpoint, Map<String, String>? params) {
     final sortedParams = params?.entries.toList();
     sortedParams?.sort((a, b) => a.key.compareTo(b.key));
-    final paramString = sortedParams?.map((e) => '${e.key}=${e.value}').join('&') ?? '';
+    final paramString =
+        sortedParams?.map((e) => '${e.key}=${e.value}').join('&') ?? '';
     return '$endpoint?$paramString';
   }
 
@@ -69,7 +71,7 @@ class ApiCache {
     bool usePersistentCache = false,
   }) async {
     final key = _generateKey(endpoint, params);
-    
+
     // Check memory cache first
     final memoryCached = _memoryCache[key];
     if (memoryCached != null && memoryCached.isValid) {
@@ -101,7 +103,7 @@ class ApiCache {
     try {
       debugPrint('Cache MISS: $key');
       final result = await fetcher();
-      
+
       // Store in memory cache
       final entry = CacheEntry<T>(
         data: result,
@@ -128,7 +130,7 @@ class ApiCache {
   /// Get data from persistent cache
   Future<CacheEntry<T>?> _getPersistentCache<T>(String key) async {
     if (_prefs == null) return null;
-    
+
     try {
       final jsonString = _prefs!.getString('cache_$key');
       if (jsonString == null) return null;
@@ -146,7 +148,7 @@ class ApiCache {
   /// Set data in persistent cache
   Future<void> _setPersistentCache<T>(String key, CacheEntry<T> entry) async {
     if (_prefs == null) return;
-    
+
     try {
       final jsonString = jsonEncode(entry.toJson());
       await _prefs!.setString('cache_$key', jsonString);
@@ -166,14 +168,14 @@ class ApiCache {
   /// Clear all cache entries
   Future<void> clearAll() async {
     _memoryCache.clear();
-    
+
     if (_prefs != null) {
       final keys = _prefs!.getKeys().where((key) => key.startsWith('cache_'));
       for (final key in keys) {
         await _prefs!.remove(key);
       }
     }
-    
+
     debugPrint('Cache CLEARED ALL');
   }
 
@@ -183,11 +185,11 @@ class ApiCache {
         .where((entry) => entry.value.isExpired)
         .map((entry) => entry.key)
         .toList();
-    
+
     for (final key in expiredKeys) {
       _memoryCache.remove(key);
     }
-    
+
     if (expiredKeys.isNotEmpty) {
       debugPrint('Cache CLEARED EXPIRED: ${expiredKeys.length} entries');
     }
@@ -196,9 +198,10 @@ class ApiCache {
   /// Get cache statistics
   Map<String, dynamic> getStats() {
     final total = _memoryCache.length;
-    final expired = _memoryCache.values.where((entry) => entry.isExpired).length;
+    final expired =
+        _memoryCache.values.where((entry) => entry.isExpired).length;
     final valid = total - expired;
-    
+
     return {
       'total': total,
       'valid': valid,
@@ -209,17 +212,17 @@ class ApiCache {
 
   /// Invalidate cache entries matching a pattern
   void invalidatePattern(String pattern) {
-    final keysToRemove = _memoryCache.keys
-        .where((key) => key.contains(pattern))
-        .toList();
-    
+    final keysToRemove =
+        _memoryCache.keys.where((key) => key.contains(pattern)).toList();
+
     for (final key in keysToRemove) {
       _memoryCache.remove(key);
       _prefs?.remove('cache_$key');
     }
-    
+
     if (keysToRemove.isNotEmpty) {
-      debugPrint('Cache INVALIDATED pattern "$pattern": ${keysToRemove.length} entries');
+      debugPrint(
+          'Cache INVALIDATED pattern "$pattern": ${keysToRemove.length} entries');
     }
   }
 }

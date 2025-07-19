@@ -11,12 +11,13 @@ enum ReplayGainMode {
 class SettingsService extends ChangeNotifier {
   static const String _replayGainModeKey = 'replayGainMode';
   static const String _replayGainPreampKey = 'replayGainPreamp';
-  static const String _replayGainPreventClippingKey = 'replayGainPreventClipping';
+  static const String _replayGainPreventClippingKey =
+      'replayGainPreventClipping';
   static const String _replayGainFallbackGainKey = 'replayGainFallbackGain';
   static const String _themeModeKey = 'themeMode';
 
   SharedPreferences? _prefs;
-  
+
   ReplayGainMode _replayGainMode = ReplayGainMode.off;
   double _replayGainPreamp = 0.0; // dB
   bool _replayGainPreventClipping = true;
@@ -39,14 +40,16 @@ class SettingsService extends ChangeNotifier {
 
     final modeIndex = _prefs!.getInt(_replayGainModeKey) ?? 0;
     _replayGainMode = ReplayGainMode.values[modeIndex];
-    
+
     _replayGainPreamp = _prefs!.getDouble(_replayGainPreampKey) ?? 0.0;
-    _replayGainPreventClipping = _prefs!.getBool(_replayGainPreventClippingKey) ?? true;
-    _replayGainFallbackGain = _prefs!.getDouble(_replayGainFallbackGainKey) ?? 0.0;
-    
+    _replayGainPreventClipping =
+        _prefs!.getBool(_replayGainPreventClippingKey) ?? true;
+    _replayGainFallbackGain =
+        _prefs!.getDouble(_replayGainFallbackGainKey) ?? 0.0;
+
     final themeModeIndex = _prefs!.getInt(_themeModeKey) ?? 0;
     _themeMode = ThemeMode.values[themeModeIndex];
-    
+
     notifyListeners();
   }
 
@@ -70,7 +73,8 @@ class SettingsService extends ChangeNotifier {
 
   Future<void> setReplayGainFallbackGain(double gain) async {
     _replayGainFallbackGain = gain.clamp(-15.0, 15.0);
-    await _prefs?.setDouble(_replayGainFallbackGainKey, _replayGainFallbackGain);
+    await _prefs?.setDouble(
+        _replayGainFallbackGainKey, _replayGainFallbackGain);
     notifyListeners();
   }
 

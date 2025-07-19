@@ -11,7 +11,8 @@ String formatDuration(Duration duration) {
 
 double? parseReplayGainValue(String value) {
   // Extract numeric value including decimal point, scientific notation, and sign
-  final match = RegExp(r'[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?').firstMatch(value);
+  final match =
+      RegExp(r'[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?').firstMatch(value);
   if (match == null) return null;
   return double.tryParse(match.group(0)!);
 }
@@ -19,9 +20,9 @@ double? parseReplayGainValue(String value) {
 bool isValidUrl(String url) {
   try {
     final uri = Uri.parse(url);
-    return uri.hasScheme && 
-           (uri.scheme == 'http' || uri.scheme == 'https') &&
-           uri.host.isNotEmpty;
+    return uri.hasScheme &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        uri.host.isNotEmpty;
   } catch (e) {
     return false;
   }
@@ -33,24 +34,31 @@ String sanitizeFilename(String filename) {
 
 int calculateProgressPercentage(Duration current, Duration total) {
   if (total.inMicroseconds == 0) return 0;
-  final percentage = (current.inMicroseconds / total.inMicroseconds * 100).round();
+  final percentage =
+      (current.inMicroseconds / total.inMicroseconds * 100).round();
   return percentage.clamp(0, 100);
 }
 
 void main() {
   group('Utility Functions Tests', () {
-    
     group('Time Formatting', () {
       test('should format duration in minutes and seconds', () {
-        expect(formatDuration(const Duration(minutes: 3, seconds: 45)), equals('3:45'));
-        expect(formatDuration(const Duration(minutes: 0, seconds: 30)), equals('0:30'));
-        expect(formatDuration(const Duration(minutes: 10, seconds: 5)), equals('10:05'));
+        expect(formatDuration(const Duration(minutes: 3, seconds: 45)),
+            equals('3:45'));
+        expect(formatDuration(const Duration(minutes: 0, seconds: 30)),
+            equals('0:30'));
+        expect(formatDuration(const Duration(minutes: 10, seconds: 5)),
+            equals('10:05'));
       });
 
       test('should format duration with hours', () {
-        expect(formatDuration(const Duration(hours: 1, minutes: 30, seconds: 45)), equals('1:30:45'));
-        expect(formatDuration(const Duration(hours: 2, minutes: 0, seconds: 0)), equals('2:00:00'));
-        expect(formatDuration(const Duration(hours: 1, minutes: 5, seconds: 8)), equals('1:05:08'));
+        expect(
+            formatDuration(const Duration(hours: 1, minutes: 30, seconds: 45)),
+            equals('1:30:45'));
+        expect(formatDuration(const Duration(hours: 2, minutes: 0, seconds: 0)),
+            equals('2:00:00'));
+        expect(formatDuration(const Duration(hours: 1, minutes: 5, seconds: 8)),
+            equals('1:05:08'));
       });
 
       test('should handle zero duration', () {
@@ -58,13 +66,19 @@ void main() {
       });
 
       test('should handle very long durations', () {
-        expect(formatDuration(const Duration(hours: 24, minutes: 59, seconds: 59)), equals('24:59:59'));
-        expect(formatDuration(const Duration(hours: 100, minutes: 0, seconds: 0)), equals('100:00:00'));
+        expect(
+            formatDuration(const Duration(hours: 24, minutes: 59, seconds: 59)),
+            equals('24:59:59'));
+        expect(
+            formatDuration(const Duration(hours: 100, minutes: 0, seconds: 0)),
+            equals('100:00:00'));
       });
 
       test('should pad single digits correctly', () {
-        expect(formatDuration(const Duration(minutes: 1, seconds: 5)), equals('1:05'));
-        expect(formatDuration(const Duration(hours: 1, minutes: 5, seconds: 5)), equals('1:05:05'));
+        expect(formatDuration(const Duration(minutes: 1, seconds: 5)),
+            equals('1:05'));
+        expect(formatDuration(const Duration(hours: 1, minutes: 5, seconds: 5)),
+            equals('1:05:05'));
       });
     });
 
@@ -134,13 +148,16 @@ void main() {
       });
 
       test('should handle multiple illegal characters', () {
-        expect(sanitizeFilename('Song<>:"/\\|?*Title'), equals('Song_________Title'));
-        expect(sanitizeFilename('Artist: "Album" / Track'), equals('Artist_ _Album_ _ Track'));
+        expect(sanitizeFilename('Song<>:"/\\|?*Title'),
+            equals('Song_________Title'));
+        expect(sanitizeFilename('Artist: "Album" / Track'),
+            equals('Artist_ _Album_ _ Track'));
       });
 
       test('should preserve legal characters', () {
         expect(sanitizeFilename('Song Title 123'), equals('Song Title 123'));
-        expect(sanitizeFilename('Artist - Album (2023)'), equals('Artist - Album (2023)'));
+        expect(sanitizeFilename('Artist - Album (2023)'),
+            equals('Artist - Album (2023)'));
         expect(sanitizeFilename('Track_01.mp3'), equals('Track_01.mp3'));
       });
 
@@ -154,50 +171,71 @@ void main() {
 
     group('Progress Calculation', () {
       test('should calculate progress percentage correctly', () {
-        expect(calculateProgressPercentage(
-          const Duration(minutes: 1, seconds: 30),
-          const Duration(minutes: 3, seconds: 0),
-        ), equals(50));
+        expect(
+            calculateProgressPercentage(
+              const Duration(minutes: 1, seconds: 30),
+              const Duration(minutes: 3, seconds: 0),
+            ),
+            equals(50));
 
-        expect(calculateProgressPercentage(
-          const Duration(minutes: 1, seconds: 0),
-          const Duration(minutes: 4, seconds: 0),
-        ), equals(25));
+        expect(
+            calculateProgressPercentage(
+              const Duration(minutes: 1, seconds: 0),
+              const Duration(minutes: 4, seconds: 0),
+            ),
+            equals(25));
 
-        expect(calculateProgressPercentage(
-          const Duration(minutes: 3, seconds: 0),
-          const Duration(minutes: 3, seconds: 0),
-        ), equals(100));
+        expect(
+            calculateProgressPercentage(
+              const Duration(minutes: 3, seconds: 0),
+              const Duration(minutes: 3, seconds: 0),
+            ),
+            equals(100));
       });
 
       test('should handle edge cases', () {
-        expect(calculateProgressPercentage(Duration.zero, Duration.zero), equals(0));
-        expect(calculateProgressPercentage(Duration.zero, const Duration(minutes: 3)), equals(0));
-        expect(calculateProgressPercentage(const Duration(minutes: 5), const Duration(minutes: 3)), equals(100));
+        expect(calculateProgressPercentage(Duration.zero, Duration.zero),
+            equals(0));
+        expect(
+            calculateProgressPercentage(
+                Duration.zero, const Duration(minutes: 3)),
+            equals(0));
+        expect(
+            calculateProgressPercentage(
+                const Duration(minutes: 5), const Duration(minutes: 3)),
+            equals(100));
       });
 
       test('should handle very long durations', () {
-        expect(calculateProgressPercentage(
-          const Duration(hours: 1, minutes: 30),
-          const Duration(hours: 3, minutes: 0),
-        ), equals(50));
+        expect(
+            calculateProgressPercentage(
+              const Duration(hours: 1, minutes: 30),
+              const Duration(hours: 3, minutes: 0),
+            ),
+            equals(50));
 
-        expect(calculateProgressPercentage(
-          const Duration(milliseconds: 1),
-          const Duration(milliseconds: 1000),
-        ), equals(0)); // Should round to 0
+        expect(
+            calculateProgressPercentage(
+              const Duration(milliseconds: 1),
+              const Duration(milliseconds: 1000),
+            ),
+            equals(0)); // Should round to 0
       });
 
       test('should clamp values to valid range', () {
-        expect(calculateProgressPercentage(
-          const Duration(minutes: 5),
-          const Duration(minutes: 3),
-        ), equals(100)); // Should clamp to 100
+        expect(
+            calculateProgressPercentage(
+              const Duration(minutes: 5),
+              const Duration(minutes: 3),
+            ),
+            equals(100)); // Should clamp to 100
 
-        expect(calculateProgressPercentage(
-          const Duration(minutes: -1),
-          const Duration(minutes: 3),
-        ), equals(0)); // Should clamp to 0
+        expect(
+            calculateProgressPercentage(
+              const Duration(minutes: -1),
+              const Duration(minutes: 3),
+            ),
+            equals(0)); // Should clamp to 0
       });
     });
 
@@ -237,10 +275,12 @@ void main() {
       });
 
       test('should handle precision in calculations', () {
-        expect(calculateProgressPercentage(
-          const Duration(microseconds: 1),
-          const Duration(microseconds: 3),
-        ), equals(33)); // Should handle microsecond precision
+        expect(
+            calculateProgressPercentage(
+              const Duration(microseconds: 1),
+              const Duration(microseconds: 3),
+            ),
+            equals(33)); // Should handle microsecond precision
       });
     });
   });
