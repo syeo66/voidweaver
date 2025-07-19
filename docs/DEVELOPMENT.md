@@ -123,6 +123,7 @@ flutter test --coverage  # Run tests with coverage report
 - Updated deprecated APIs for future compatibility
 - Improved error handling with proper async context management
 - Fixed cover art reloading issue when skipping tracks by implementing proper equality operators
+- Implemented skip button debouncing (500ms) at the AudioPlayerService level to prevent double-skips from UI and system controls
 - Optimized ReplayGain processing to prevent unnecessary UI rebuilds
 
 ## Performance Optimizations
@@ -132,6 +133,7 @@ flutter test --coverage  # Run tests with coverage report
 - HTTP range requests for metadata (minimal bandwidth)
 - Proper resource disposal in all services
 - Selective UI updates to prevent unnecessary rebuilds during playback state changes
+- Service-level debouncing architecture prevents conflicts between UI controls and system media controls
 - Stable ValueKey usage for consistent widget identity and caching
 - Advanced image caching with automatic disk storage for album art
 - Intelligent cache management with customizable expiration policies
@@ -165,6 +167,32 @@ flutter test --coverage  # Run tests with coverage report
 - MediaItem updates occur automatically when tracks change
 - Graceful fallback ensures app works without native controls if initialization fails
 - Import conflicts resolved using namespace aliases (audio_player_service.dart as aps)
+
+## Skip Button Debouncing Implementation
+
+### Problem
+The app was experiencing double-skip issues where rapid button presses or simultaneous activation from multiple sources (UI controls + system media controls) could cause the player to skip multiple tracks.
+
+### Solution Architecture
+Implemented service-level debouncing in AudioPlayerService with a 500ms protection window:
+
+**Key Components:**
+- `DateTime? _lastSkipTime` - Tracks the timestamp of the last skip operation
+- `static const _skipDebounceMs = 500` - 500ms debounce window
+- `bool _canSkip()` - Centralized debounce logic that protects all skip sources
+
+**Protection Sources:**
+- UI skip buttons in PlayerControls widget
+- System media controls (headphone buttons, lock screen, notification panel)
+- External device controls (car stereo, Bluetooth devices)
+
+**Implementation Details:**
+- Both `next()` and `previous()` methods check `_canSkip()` before executing
+- Debouncing occurs at the service level, protecting against all input sources
+- UI controls simplified to direct service calls without redundant widget-level debouncing
+- VoidweaverAudioHandler skip methods route through the same protected service methods
+
+This approach ensures consistent behavior across all skip sources while maintaining responsive user experience for normal usage patterns.
 
 ## Android Configuration
 

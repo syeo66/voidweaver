@@ -80,7 +80,7 @@ flutter build apk --release
 
 ### Player Controls
 - **Play/Pause**: Tap the play button or use media controls
-- **Skip**: Previous/next track buttons
+- **Skip**: Previous/next track buttons with 500ms debouncing to prevent accidental double-taps from both UI controls and system media controls
 - **Seek**: Tap or drag the progress bar to jump to any position
 - **Shuffle**: Random songs button for discovery
 - **Sleep Timer**: Bedtime icon in top bar for auto-pause

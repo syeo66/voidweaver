@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter/foundation.dart';
 import 'audio_player_service.dart' as aps;
 import 'subsonic_api.dart';
 

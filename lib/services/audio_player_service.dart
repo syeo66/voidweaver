@@ -33,6 +33,10 @@ class AudioPlayerService extends ChangeNotifier {
   Duration _currentPosition = Duration.zero;
   Duration _totalDuration = Duration.zero;
   Song? _currentSong;
+  
+  // Skip debouncing
+  DateTime? _lastSkipTime;
+  static const _skipDebounceMs = 500;
   DateTime? _currentSongStartTime;
   StreamSubscription? _positionSubscription;
   StreamSubscription? _durationSubscription;
@@ -297,7 +301,26 @@ class AudioPlayerService extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool _canSkip() {
+    final now = DateTime.now();
+    final timeSinceLastSkip = _lastSkipTime == null 
+        ? null 
+        : now.difference(_lastSkipTime!).inMilliseconds;
+    
+    if (_lastSkipTime == null ||
+        timeSinceLastSkip! > _skipDebounceMs) {
+      _lastSkipTime = now;
+      return true;
+    }
+    
+    return false;
+  }
+
   Future<void> next() async {
+    if (!_canSkip()) {
+      return;
+    }
+    
     if (hasNext) {
       // Scrobble current song if it has been played enough
       _scrobbleCurrentSongIfEligible();
@@ -306,6 +329,10 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   Future<void> previous() async {
+    if (!_canSkip()) {
+      return;
+    }
+    
     if (hasPrevious) {
       // Scrobble current song if it has been played enough
       _scrobbleCurrentSongIfEligible();
