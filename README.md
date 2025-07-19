@@ -33,6 +33,7 @@ A high-quality Flutter music player application that streams music from your per
 
 ### 🔒 **Security & Reliability**
 - **Secure Login**: Encrypted credential storage with automatic session management
+- **Input Validation**: Comprehensive validation and sanitization of all user inputs to prevent crashes and security issues
 - **Server Scrobbling**: Automatic play count tracking and listening statistics
 - **Robust Error Handling**: Graceful recovery from network issues
 - **Background Sync**: Automatic library updates every 5 minutes
@@ -118,9 +119,10 @@ Control your music from anywhere:
 ## Troubleshooting
 
 ### **Connection Issues**
-- Verify server URL is correct and accessible
-- Check username and password
+- Verify server URL is correct and accessible (must be http:// or https://)
+- Check username and password (no control characters allowed)
 - Ensure server supports Subsonic API
+- Make sure URL includes protocol and hostname
 
 ### **Audio Issues**
 - **Volume too quiet/loud**: Adjust ReplayGain preamp setting

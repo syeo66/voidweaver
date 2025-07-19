@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/settings_service.dart';
 import '../services/app_state.dart';
+import '../utils/validators.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -178,8 +179,13 @@ class _SettingsContent extends StatelessWidget {
                 label:
                     '${settingsService.replayGainPreamp.toStringAsFixed(1)} dB',
                 onChanged: (value) {
-                  settingsService.setReplayGainPreamp(value);
-                  _refreshAudioVolume(context);
+                  final validationError = Validators.validateReplayGainPreamp(value);
+                  if (validationError == null) {
+                    settingsService.setReplayGainPreamp(value);
+                    _refreshAudioVolume(context);
+                  } else {
+                    _showValidationError(context, validationError);
+                  }
                 },
               ),
               Text(
@@ -219,8 +225,13 @@ class _SettingsContent extends StatelessWidget {
                 label:
                     '${settingsService.replayGainFallbackGain.toStringAsFixed(1)} dB',
                 onChanged: (value) {
-                  settingsService.setReplayGainFallbackGain(value);
-                  _refreshAudioVolume(context);
+                  final validationError = Validators.validateReplayGainFallbackGain(value);
+                  if (validationError == null) {
+                    settingsService.setReplayGainFallbackGain(value);
+                    _refreshAudioVolume(context);
+                  } else {
+                    _showValidationError(context, validationError);
+                  }
                 },
               ),
               Text(
@@ -286,5 +297,15 @@ class _SettingsContent extends StatelessWidget {
     if (audioPlayer != null) {
       audioPlayer.refreshReplayGainVolume();
     }
+  }
+
+  void _showValidationError(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 }

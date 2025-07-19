@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/app_state.dart';
+import '../utils/validators.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -143,15 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
               hintText: 'https://your-subsonic-server.com',
               border: OutlineInputBorder(),
             ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please enter server URL';
-              }
-              if (!Uri.tryParse(value)!.isAbsolute) {
-                return 'Please enter a valid URL';
-              }
-              return null;
-            },
+            validator: Validators.validateServerUrl,
           ),
           const SizedBox(height: 16),
           TextFormField(
@@ -161,12 +154,7 @@ class _LoginScreenState extends State<LoginScreen> {
               labelText: 'Username',
               border: OutlineInputBorder(),
             ),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please enter username';
-              }
-              return null;
-            },
+            validator: Validators.validateUsername,
           ),
           const SizedBox(height: 16),
           TextFormField(
@@ -177,12 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
               border: OutlineInputBorder(),
             ),
             obscureText: true,
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please enter password';
-              }
-              return null;
-            },
+            validator: Validators.validatePassword,
           ),
           const SizedBox(height: 24),
           SizedBox(
@@ -215,8 +198,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       await context.read<AppState>().configure(
-            _serverUrlController.text.trim(),
-            _usernameController.text.trim(),
+            Validators.sanitizeInput(_serverUrlController.text),
+            Validators.sanitizeInput(_usernameController.text),
             _passwordController.text.trim(),
           );
     } catch (e) {

@@ -11,7 +11,8 @@
 
 ### Code Quality
 - `flutter analyze` - Static analysis (currently 0 issues)
-- `flutter test` - Run test suite (49/49 passing)
+- `flutter test` - Run test suite (86/86 passing)
+- `flutter test test/utils/validators_test.dart` - Run input validation tests specifically
 - `flutter doctor` - Check Flutter installation and dependencies
 
 ### Building
@@ -46,19 +47,28 @@ Voidweaver uses a clean, optimized architecture with:
 
 ```bash
 flutter analyze          # Static analysis (currently 0 issues)
-flutter test             # Run tests (49/49 passing)
+flutter test             # Run tests (86/86 passing)
 flutter test --coverage  # Run tests with coverage report
 ```
 
-**Test Coverage**: 49 comprehensive tests covering:
+**Test Coverage**: 86 comprehensive tests covering:
 - Data model validation (Song, Album, Artist, SearchResult)
 - Utility functions (time formatting, ReplayGain parsing, URL validation)
 - Sleep timer functionality with comprehensive edge case testing
 - API caching system with request deduplication and multi-level caching
+- Input validation and sanitization (37 comprehensive tests covering security scenarios, edge cases, and user input handling)
 - Widget instantiation and basic UI components
 - Mock infrastructure for AudioPlayer plugin testing
 
 ### Recent Technical Improvements
+
+- **Comprehensive input validation**: Implemented robust input validation and sanitization system
+  - Added comprehensive validation for login form fields (server URL, username, password)
+  - Enhanced settings validation for ReplayGain parameters with range checking
+  - Input sanitization removes control characters and handles malformed data
+  - 37 comprehensive test cases covering all validation scenarios, edge cases, and security concerns
+  - Protection against crashes from invalid user inputs
+  - Clear, actionable error messages for better user experience
 
 - **Advanced caching system**: Implemented comprehensive multi-level caching with request deduplication
   - API response caching for albums, artists, search results with configurable TTL
@@ -66,12 +76,12 @@ flutter test --coverage  # Run tests with coverage report
   - Request deduplication prevents duplicate network calls
   - Intelligent cache invalidation with pattern matching
   - Optimized image caching with size limits and fade animations
-  - Added 7 comprehensive tests for caching functionality (49/49 total tests passing)
+  - Added 7 comprehensive tests for caching functionality (86/86 total tests passing)
 - **Testable architecture and comprehensive test coverage**: Fixed all failing tests and implemented robust testing infrastructure
   - Refactored AudioPlayerService to accept optional dependency injection for testing
   - Created comprehensive MockAudioPlayer with stream simulation for reliable testing
   - Fixed all plugin-related test failures that prevented CI/CD workflows
-  - Achieved 100% test pass rate (49/49 tests) with comprehensive coverage
+  - Achieved 100% test pass rate (86/86 tests) with comprehensive coverage
   - Added robust mock infrastructure for future audio functionality testing
   - Maintained backward compatibility while enabling reliable automated testing
 - **Comprehensive loading states**: Implemented extensive loading state management across the entire application
@@ -123,6 +133,8 @@ flutter test --coverage  # Run tests with coverage report
 - Debug output with proper debugPrint() usage
 - Graceful fallbacks for missing data
 - UTF-8 encoding handled with proper byte decoding and malformed character support
+- Input validation prevents crashes from malformed user data
+- Sanitization of all user inputs to remove control characters and prevent security issues
 
 ## Development Patterns
 
