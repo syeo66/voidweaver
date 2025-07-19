@@ -186,14 +186,18 @@ class ReplayGainReader {
       if (frameId == 'TXXX') {
         final frameData = bytes.sublist(offset, offset + frameSize);
         final replayGainData = _parseReplayGainTXXXFrame(frameData);
-        if (replayGainData.trackGain != null)
+        if (replayGainData.trackGain != null) {
           trackGain = replayGainData.trackGain;
-        if (replayGainData.albumGain != null)
+        }
+        if (replayGainData.albumGain != null) {
           albumGain = replayGainData.albumGain;
-        if (replayGainData.trackPeak != null)
+        }
+        if (replayGainData.trackPeak != null) {
           trackPeak = replayGainData.trackPeak;
-        if (replayGainData.albumPeak != null)
+        }
+        if (replayGainData.albumPeak != null) {
           albumPeak = replayGainData.albumPeak;
+        }
       }
 
       offset += frameSize;
