@@ -11,8 +11,10 @@
 
 ### Code Quality
 - `flutter analyze` - Static analysis (currently 0 issues)
-- `flutter test` - Run test suite (86/86 passing)
+- `flutter test` - Run test suite (105/105 passing)
 - `flutter test test/utils/validators_test.dart` - Run input validation tests specifically
+- `flutter test test/widgets/error_boundary_test.dart` - Run error boundary tests specifically
+- `flutter test test/services/error_handler_test.dart` - Run error handler tests specifically
 - `flutter doctor` - Check Flutter installation and dependencies
 
 ### Building
@@ -38,6 +40,7 @@ Voidweaver uses a clean, optimized architecture with:
 - **Comprehensive loading state management** with granular states for all operations and proper error handling
 - **Advanced caching system** with multi-level caching, request deduplication, and intelligent invalidation
 - **Production-ready logging** with proper error handling and debugging capabilities
+- **Error boundary system** with global error handling, widget-level error boundaries, and user-friendly error recovery
 
 ## Testing
 
@@ -47,16 +50,17 @@ Voidweaver uses a clean, optimized architecture with:
 
 ```bash
 flutter analyze          # Static analysis (currently 0 issues)
-flutter test             # Run tests (86/86 passing)
+flutter test             # Run tests (105/105 passing)
 flutter test --coverage  # Run tests with coverage report
 ```
 
-**Test Coverage**: 86 comprehensive tests covering:
+**Test Coverage**: 105 comprehensive tests covering:
 - Data model validation (Song, Album, Artist, SearchResult)
 - Utility functions (time formatting, ReplayGain parsing, URL validation)
 - Sleep timer functionality with comprehensive edge case testing
 - API caching system with request deduplication and multi-level caching
 - Input validation and sanitization (37 comprehensive tests covering security scenarios, edge cases, and user input handling)
+- Error boundary system (15 tests covering widget error handling, global error management, and user recovery flows)
 - Widget instantiation and basic UI components
 - Mock infrastructure for AudioPlayer plugin testing
 
@@ -70,18 +74,27 @@ flutter test --coverage  # Run tests with coverage report
   - Protection against crashes from invalid user inputs
   - Clear, actionable error messages for better user experience
 
+- **Error boundary system**: Implemented comprehensive error handling to prevent app crashes
+  - Global error handler catches uncaught exceptions and async errors
+  - Widget-level error boundaries protect individual UI components
+  - User-friendly error displays with retry mechanisms and helpful messages
+  - Error reporting infrastructure with console logging and memory storage for debugging
+  - Extension methods for easy error boundary wrapping (.withErrorBoundary())
+  - 15 comprehensive tests covering all error handling scenarios and user recovery flows
+  - Graceful degradation ensures the app continues functioning even when components fail
+
 - **Advanced caching system**: Implemented comprehensive multi-level caching with request deduplication
   - API response caching for albums, artists, search results with configurable TTL
   - Memory cache for instant access, persistent cache for offline capability
   - Request deduplication prevents duplicate network calls
   - Intelligent cache invalidation with pattern matching
   - Optimized image caching with size limits and fade animations
-  - Added 7 comprehensive tests for caching functionality (86/86 total tests passing)
+  - Added 7 comprehensive tests for caching functionality (105/105 total tests passing)
 - **Testable architecture and comprehensive test coverage**: Fixed all failing tests and implemented robust testing infrastructure
   - Refactored AudioPlayerService to accept optional dependency injection for testing
   - Created comprehensive MockAudioPlayer with stream simulation for reliable testing
   - Fixed all plugin-related test failures that prevented CI/CD workflows
-  - Achieved 100% test pass rate (86/86 tests) with comprehensive coverage
+  - Achieved 100% test pass rate (105/105 tests) with comprehensive coverage
   - Added robust mock infrastructure for future audio functionality testing
   - Maintained backward compatibility while enabling reliable automated testing
 - **Comprehensive loading states**: Implemented extensive loading state management across the entire application

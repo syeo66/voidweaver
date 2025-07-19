@@ -9,7 +9,11 @@ This directory contains comprehensive tests for the Voidweaver Flutter music pla
 - **`simple_test.dart`** - Data model tests for Song, Album, Artist, and SearchResult classes
 - **`widget_test.dart`** - Basic widget instantiation tests
 - **`utils/time_formatter_test.dart`** - Utility function tests including time formatting, ReplayGain parsing, URL validation, and more
+- **`utils/validators_test.dart`** - Input validation and sanitization tests with comprehensive security coverage
 - **`services/sleep_timer_test.dart`** - Comprehensive sleep timer functionality tests
+- **`services/api_cache_test.dart`** - API caching system tests with request deduplication
+- **`widgets/error_boundary_test.dart`** - Error boundary and error handling widget tests
+- **`services/error_handler_test.dart`** - Global error handler and error reporting tests
 
 ### Test Infrastructure
 
@@ -34,7 +38,7 @@ flutter test --verbose
 
 ## Test Coverage
 
-### Current Status: 42/42 Tests Passing ✅
+### Current Status: 105/105 Tests Passing ✅
 
 #### Data Models (6 tests)
 - Song class construction and equality
@@ -42,13 +46,28 @@ flutter test --verbose
 - Artist class construction and equality
 - SearchResult class construction and equality
 
-#### Utility Functions (30 tests)
+#### Utility Functions (34 tests)
 - Time formatting (minutes:seconds, hours:minutes:seconds)
 - ReplayGain value parsing (dB values, malformed inputs)
 - URL validation (various formats, edge cases)
 - Filename sanitization (illegal characters, Unicode)
 - Progress calculation (percentage, edge cases)
 - Edge cases and error handling
+
+#### Input Validation (37 tests)
+- Server URL validation (protocols, hostnames, lengths)
+- Username validation (characters, lengths, sanitization)
+- Password validation (security, character limits)
+- ReplayGain parameter validation (ranges, numeric formats)
+- Input sanitization (control characters, malformed data)
+- Security edge cases and attack prevention
+
+#### API Caching (7 tests)  
+- Cache storage and retrieval
+- Request deduplication
+- Cache expiration and invalidation
+- Persistent vs memory caching
+- Cache statistics and management
 
 #### Sleep Timer (6 tests)
 - Timer start functionality
@@ -57,6 +76,14 @@ flutter test --verbose
 - Timer completion handling
 - Timer replacement
 - Invalid operations
+
+#### Error Handling (15 tests)
+- Error boundary widget functionality
+- Error display components
+- Global error handler behavior
+- Error reporting infrastructure
+- Extension methods for error wrapping
+- User recovery and retry mechanisms
 
 ## Mock Infrastructure
 
@@ -206,7 +233,7 @@ The test suite is designed for automated testing:
 
 Priority areas for additional testing:
 1. **Integration tests** - Complete user workflows
-2. **Widget tests** - UI component behavior
-3. **Error handling tests** - Network failures, server errors
-4. **Performance tests** - Memory usage, rendering performance
-5. **Audio playback tests** - Real audio functionality beyond mocking
+2. **Widget tests** - UI component behavior  
+3. **Performance tests** - Memory usage, rendering performance
+4. **Audio playback tests** - Real audio functionality beyond mocking
+5. **Network failure simulation** - More complex error scenarios

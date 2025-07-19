@@ -8,6 +8,7 @@ import '../services/subsonic_api.dart';
 import '../widgets/album_list.dart';
 import '../widgets/player_controls.dart';
 import '../widgets/sync_status_indicator.dart';
+import '../widgets/error_boundary.dart';
 import 'settings_screen.dart';
 import 'search_screen.dart';
 import 'artist_screen.dart';
@@ -135,9 +136,17 @@ class _HomeScreenState extends State<HomeScreen> {
             child: IndexedStack(
               index: _currentIndex,
               children: [
-                const AlbumList(),
-                const ArtistScreen(),
-                _buildNowPlayingScreen(),
+                const AlbumList().withErrorBoundary(
+                  errorMessage: 'Failed to load albums. Please try refreshing.',
+                ),
+                const ArtistScreen().withErrorBoundary(
+                  errorMessage:
+                      'Failed to load artists. Please try refreshing.',
+                ),
+                ErrorBoundary(
+                  errorMessage: 'Failed to load now playing screen.',
+                  child: _buildNowPlayingScreen(),
+                ),
               ],
             ),
           ),
@@ -148,7 +157,9 @@ class _HomeScreenState extends State<HomeScreen> {
               }
               return ChangeNotifierProvider.value(
                 value: appState.audioPlayerService!,
-                child: const PlayerControls(),
+                child: const PlayerControls().withErrorBoundary(
+                  errorMessage: 'Player controls encountered an error.',
+                ),
               );
             },
           ),

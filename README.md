@@ -34,8 +34,9 @@ A high-quality Flutter music player application that streams music from your per
 ### 🔒 **Security & Reliability**
 - **Secure Login**: Encrypted credential storage with automatic session management
 - **Input Validation**: Comprehensive validation and sanitization of all user inputs to prevent crashes and security issues
+- **Error Boundaries**: Global error handling system that prevents app crashes and provides user-friendly error recovery
 - **Server Scrobbling**: Automatic play count tracking and listening statistics
-- **Robust Error Handling**: Graceful recovery from network issues
+- **Robust Error Handling**: Graceful recovery from network issues and widget failures
 - **Background Sync**: Automatic library updates every 5 minutes
 
 ## Getting Started
