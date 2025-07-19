@@ -5,7 +5,7 @@ class Validators {
     }
 
     final trimmed = value.trim();
-    
+
     if (trimmed.length > 2048) {
       return 'Server URL is too long';
     }
@@ -23,7 +23,6 @@ class Validators {
       return 'URL must include a hostname';
     }
 
-
     return null;
   }
 
@@ -33,7 +32,7 @@ class Validators {
     }
 
     final trimmed = value.trim();
-    
+
     if (trimmed.isEmpty) {
       return 'Username cannot be empty';
     }
@@ -42,7 +41,9 @@ class Validators {
       return 'Username is too long (max 100 characters)';
     }
 
-    if (trimmed.contains('\n') || trimmed.contains('\r') || trimmed.contains('\t')) {
+    if (trimmed.contains('\n') ||
+        trimmed.contains('\r') ||
+        trimmed.contains('\t')) {
       return 'Username contains invalid characters';
     }
 
@@ -107,17 +108,17 @@ class Validators {
 
   static bool isValidUrl(String? url) {
     if (url == null || url.trim().isEmpty) return false;
-    
+
     final uri = Uri.tryParse(url.trim());
-    return uri != null && 
-           uri.isAbsolute && 
-           ['http', 'https'].contains(uri.scheme.toLowerCase()) &&
-           uri.host.isNotEmpty;
+    return uri != null &&
+        uri.isAbsolute &&
+        ['http', 'https'].contains(uri.scheme.toLowerCase()) &&
+        uri.host.isNotEmpty;
   }
 
   static String sanitizeInput(String? input) {
     if (input == null) return '';
-    
+
     return input
         .replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]'), '')
         .replaceAll(RegExp(r'[\n\r\t]'), ' ')
@@ -131,14 +132,16 @@ class Validators {
     return null;
   }
 
-  static String? validateLength(String? value, int maxLength, String fieldName) {
+  static String? validateLength(
+      String? value, int maxLength, String fieldName) {
     if (value != null && value.length > maxLength) {
       return '$fieldName is too long (max $maxLength characters)';
     }
     return null;
   }
 
-  static String? validateRange(double? value, double min, double max, String fieldName) {
+  static String? validateRange(
+      double? value, double min, double max, String fieldName) {
     if (value == null) {
       return '$fieldName is required';
     }

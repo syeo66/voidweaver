@@ -179,7 +179,8 @@ class _SettingsContent extends StatelessWidget {
                 label:
                     '${settingsService.replayGainPreamp.toStringAsFixed(1)} dB',
                 onChanged: (value) {
-                  final validationError = Validators.validateReplayGainPreamp(value);
+                  final validationError =
+                      Validators.validateReplayGainPreamp(value);
                   if (validationError == null) {
                     settingsService.setReplayGainPreamp(value);
                     _refreshAudioVolume(context);
@@ -225,7 +226,8 @@ class _SettingsContent extends StatelessWidget {
                 label:
                     '${settingsService.replayGainFallbackGain.toStringAsFixed(1)} dB',
                 onChanged: (value) {
-                  final validationError = Validators.validateReplayGainFallbackGain(value);
+                  final validationError =
+                      Validators.validateReplayGainFallbackGain(value);
                   if (validationError == null) {
                     settingsService.setReplayGainFallbackGain(value);
                     _refreshAudioVolume(context);

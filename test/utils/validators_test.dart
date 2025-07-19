@@ -13,7 +13,8 @@ void main() {
     test('should accept valid HTTPS URLs', () {
       expect(Validators.validateServerUrl('https://example.com'), isNull);
       expect(Validators.validateServerUrl('https://music.example.com'), isNull);
-      expect(Validators.validateServerUrl('https://subsonic.mydomain.org'), isNull);
+      expect(Validators.validateServerUrl('https://subsonic.mydomain.org'),
+          isNull);
       expect(Validators.validateServerUrl('https://server.com:8443'), isNull);
     });
 
@@ -24,32 +25,46 @@ void main() {
     });
 
     test('should reject invalid URLs', () {
-      expect(Validators.validateServerUrl('not-a-url'), contains('Please enter a valid URL'));
-      expect(Validators.validateServerUrl('example.com'), contains('Please enter a valid URL'));
-      expect(Validators.validateServerUrl('://missing-scheme'), contains('Please enter a valid URL'));
+      expect(Validators.validateServerUrl('not-a-url'),
+          contains('Please enter a valid URL'));
+      expect(Validators.validateServerUrl('example.com'),
+          contains('Please enter a valid URL'));
+      expect(Validators.validateServerUrl('://missing-scheme'),
+          contains('Please enter a valid URL'));
     });
 
     test('should reject unsupported protocols', () {
-      expect(Validators.validateServerUrl('ftp://example.com'), contains('URL must use http or https protocol'));
-      expect(Validators.validateServerUrl('ws://example.com'), contains('URL must use http or https protocol'));
-      expect(Validators.validateServerUrl('file:///path'), contains('URL must use http or https protocol'));
+      expect(Validators.validateServerUrl('ftp://example.com'),
+          contains('URL must use http or https protocol'));
+      expect(Validators.validateServerUrl('ws://example.com'),
+          contains('URL must use http or https protocol'));
+      expect(Validators.validateServerUrl('file:///path'),
+          contains('URL must use http or https protocol'));
     });
 
     test('should reject URLs without hostname', () {
-      expect(Validators.validateServerUrl('http://'), contains('URL must include a hostname'));
-      expect(Validators.validateServerUrl('https://'), contains('URL must include a hostname'));
+      expect(Validators.validateServerUrl('http://'),
+          contains('URL must include a hostname'));
+      expect(Validators.validateServerUrl('https://'),
+          contains('URL must include a hostname'));
     });
-
 
     test('should reject extremely long URLs', () {
       final longUrl = 'https://${'a' * 2050}.com';
-      expect(Validators.validateServerUrl(longUrl), contains('Server URL is too long'));
+      expect(Validators.validateServerUrl(longUrl),
+          contains('Server URL is too long'));
     });
 
     test('should handle URLs with paths and parameters', () {
-      expect(Validators.validateServerUrl('https://example.com/subsonic'), isNull);
-      expect(Validators.validateServerUrl('https://example.com/path?param=value'), isNull);
-      expect(Validators.validateServerUrl('https://example.com:8080/subsonic/rest'), isNull);
+      expect(
+          Validators.validateServerUrl('https://example.com/subsonic'), isNull);
+      expect(
+          Validators.validateServerUrl('https://example.com/path?param=value'),
+          isNull);
+      expect(
+          Validators.validateServerUrl(
+              'https://example.com:8080/subsonic/rest'),
+          isNull);
     });
   });
 
@@ -69,14 +84,18 @@ void main() {
     });
 
     test('should reject usernames with invalid characters', () {
-      expect(Validators.validateUsername('user\nname'), contains('Username contains invalid characters'));
-      expect(Validators.validateUsername('user\rname'), contains('Username contains invalid characters'));
-      expect(Validators.validateUsername('user\tname'), contains('Username contains invalid characters'));
+      expect(Validators.validateUsername('user\nname'),
+          contains('Username contains invalid characters'));
+      expect(Validators.validateUsername('user\rname'),
+          contains('Username contains invalid characters'));
+      expect(Validators.validateUsername('user\tname'),
+          contains('Username contains invalid characters'));
     });
 
     test('should reject excessively long usernames', () {
       final longUsername = 'a' * 101;
-      expect(Validators.validateUsername(longUsername), contains('Username is too long'));
+      expect(Validators.validateUsername(longUsername),
+          contains('Username is too long'));
     });
 
     test('should trim whitespace', () {
@@ -89,7 +108,10 @@ void main() {
       expect(Validators.validatePassword('password'), isNull);
       expect(Validators.validatePassword('P@ssw0rd!'), isNull);
       expect(Validators.validatePassword('123456'), isNull);
-      expect(Validators.validatePassword('very-long-password-with-special-chars!@#'), isNull);
+      expect(
+          Validators.validatePassword(
+              'very-long-password-with-special-chars!@#'),
+          isNull);
     });
 
     test('should reject empty or null passwords', () {
@@ -98,14 +120,18 @@ void main() {
     });
 
     test('should reject passwords with invalid characters', () {
-      expect(Validators.validatePassword('pass\nword'), contains('Password contains invalid characters'));
-      expect(Validators.validatePassword('pass\rword'), contains('Password contains invalid characters'));
-      expect(Validators.validatePassword('pass\tword'), contains('Password contains invalid characters'));
+      expect(Validators.validatePassword('pass\nword'),
+          contains('Password contains invalid characters'));
+      expect(Validators.validatePassword('pass\rword'),
+          contains('Password contains invalid characters'));
+      expect(Validators.validatePassword('pass\tword'),
+          contains('Password contains invalid characters'));
     });
 
     test('should reject excessively long passwords', () {
       final longPassword = 'a' * 257;
-      expect(Validators.validatePassword(longPassword), contains('Password is too long'));
+      expect(Validators.validatePassword(longPassword),
+          contains('Password is too long'));
     });
 
     test('should allow passwords up to 256 characters', () {
@@ -124,20 +150,28 @@ void main() {
     });
 
     test('should reject null values', () {
-      expect(Validators.validateReplayGainPreamp(null), 'Preamp value is required');
+      expect(Validators.validateReplayGainPreamp(null),
+          'Preamp value is required');
     });
 
     test('should reject values outside valid range', () {
-      expect(Validators.validateReplayGainPreamp(-15.1), contains('Preamp cannot be less than -15.0 dB'));
-      expect(Validators.validateReplayGainPreamp(15.1), contains('Preamp cannot be greater than 15.0 dB'));
-      expect(Validators.validateReplayGainPreamp(-100.0), contains('Preamp cannot be less than -15.0 dB'));
-      expect(Validators.validateReplayGainPreamp(100.0), contains('Preamp cannot be greater than 15.0 dB'));
+      expect(Validators.validateReplayGainPreamp(-15.1),
+          contains('Preamp cannot be less than -15.0 dB'));
+      expect(Validators.validateReplayGainPreamp(15.1),
+          contains('Preamp cannot be greater than 15.0 dB'));
+      expect(Validators.validateReplayGainPreamp(-100.0),
+          contains('Preamp cannot be less than -15.0 dB'));
+      expect(Validators.validateReplayGainPreamp(100.0),
+          contains('Preamp cannot be greater than 15.0 dB'));
     });
 
     test('should reject invalid numeric values', () {
-      expect(Validators.validateReplayGainPreamp(double.nan), 'Invalid preamp value');
-      expect(Validators.validateReplayGainPreamp(double.infinity), 'Invalid preamp value');
-      expect(Validators.validateReplayGainPreamp(double.negativeInfinity), 'Invalid preamp value');
+      expect(Validators.validateReplayGainPreamp(double.nan),
+          'Invalid preamp value');
+      expect(Validators.validateReplayGainPreamp(double.infinity),
+          'Invalid preamp value');
+      expect(Validators.validateReplayGainPreamp(double.negativeInfinity),
+          'Invalid preamp value');
     });
   });
 
@@ -151,18 +185,24 @@ void main() {
     });
 
     test('should reject null values', () {
-      expect(Validators.validateReplayGainFallbackGain(null), 'Fallback gain value is required');
+      expect(Validators.validateReplayGainFallbackGain(null),
+          'Fallback gain value is required');
     });
 
     test('should reject values outside valid range', () {
-      expect(Validators.validateReplayGainFallbackGain(-15.1), contains('Fallback gain cannot be less than -15.0 dB'));
-      expect(Validators.validateReplayGainFallbackGain(15.1), contains('Fallback gain cannot be greater than 15.0 dB'));
+      expect(Validators.validateReplayGainFallbackGain(-15.1),
+          contains('Fallback gain cannot be less than -15.0 dB'));
+      expect(Validators.validateReplayGainFallbackGain(15.1),
+          contains('Fallback gain cannot be greater than 15.0 dB'));
     });
 
     test('should reject invalid numeric values', () {
-      expect(Validators.validateReplayGainFallbackGain(double.nan), 'Invalid fallback gain value');
-      expect(Validators.validateReplayGainFallbackGain(double.infinity), 'Invalid fallback gain value');
-      expect(Validators.validateReplayGainFallbackGain(double.negativeInfinity), 'Invalid fallback gain value');
+      expect(Validators.validateReplayGainFallbackGain(double.nan),
+          'Invalid fallback gain value');
+      expect(Validators.validateReplayGainFallbackGain(double.infinity),
+          'Invalid fallback gain value');
+      expect(Validators.validateReplayGainFallbackGain(double.negativeInfinity),
+          'Invalid fallback gain value');
     });
   });
 
@@ -211,7 +251,8 @@ void main() {
     });
 
     test('should preserve valid characters', () {
-      expect(Validators.sanitizeInput('Valid String 123 !@#'), 'Valid String 123 !@#');
+      expect(Validators.sanitizeInput('Valid String 123 !@#'),
+          'Valid String 123 !@#');
       expect(Validators.sanitizeInput('user@example.com'), 'user@example.com');
     });
   });
@@ -226,7 +267,8 @@ void main() {
 
     test('validateLength should work correctly', () {
       expect(Validators.validateLength('short', 10, 'Field'), isNull);
-      expect(Validators.validateLength('toolongstring', 5, 'Field'), 'Field is too long (max 5 characters)');
+      expect(Validators.validateLength('toolongstring', 5, 'Field'),
+          'Field is too long (max 5 characters)');
       expect(Validators.validateLength(null, 10, 'Field'), isNull);
     });
 
@@ -234,10 +276,14 @@ void main() {
       expect(Validators.validateRange(5.0, 0.0, 10.0, 'Value'), isNull);
       expect(Validators.validateRange(0.0, 0.0, 10.0, 'Value'), isNull);
       expect(Validators.validateRange(10.0, 0.0, 10.0, 'Value'), isNull);
-      expect(Validators.validateRange(-1.0, 0.0, 10.0, 'Value'), 'Value cannot be less than 0.0');
-      expect(Validators.validateRange(11.0, 0.0, 10.0, 'Value'), 'Value cannot be greater than 10.0');
-      expect(Validators.validateRange(null, 0.0, 10.0, 'Value'), 'Value is required');
-      expect(Validators.validateRange(double.nan, 0.0, 10.0, 'Value'), 'Invalid Value value');
+      expect(Validators.validateRange(-1.0, 0.0, 10.0, 'Value'),
+          'Value cannot be less than 0.0');
+      expect(Validators.validateRange(11.0, 0.0, 10.0, 'Value'),
+          'Value cannot be greater than 10.0');
+      expect(Validators.validateRange(null, 0.0, 10.0, 'Value'),
+          'Value is required');
+      expect(Validators.validateRange(double.nan, 0.0, 10.0, 'Value'),
+          'Invalid Value value');
     });
   });
 }
