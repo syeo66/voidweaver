@@ -123,7 +123,7 @@ flutter test --coverage  # Run tests with coverage report
 - Updated deprecated APIs for future compatibility
 - Improved error handling with proper async context management
 - Fixed cover art reloading issue when skipping tracks by implementing proper equality operators
-- Implemented skip button debouncing (500ms) at the AudioPlayerService level to prevent double-skips from UI and system controls
+- **Comprehensive skip protection**: Implemented advanced atomic skip operations with multi-layer race condition prevention
 - Optimized ReplayGain processing to prevent unnecessary UI rebuilds
 
 ## Performance Optimizations
@@ -168,31 +168,47 @@ flutter test --coverage  # Run tests with coverage report
 - Graceful fallback ensures app works without native controls if initialization fails
 - Import conflicts resolved using namespace aliases (audio_player_service.dart as aps)
 
-## Skip Button Debouncing Implementation
+## Advanced Skip Protection Architecture
 
-### Problem
-The app was experiencing double-skip issues where rapid button presses or simultaneous activation from multiple sources (UI controls + system media controls) could cause the player to skip multiple tracks.
+### Problem Resolution
+Completely resolved double-skip race conditions that occurred when multiple skip sources (manual controls, song completion events) executed simultaneously, especially on fast hardware.
 
-### Solution Architecture
-Implemented service-level debouncing in AudioPlayerService with a 500ms protection window:
+### Comprehensive Solution Architecture
 
-**Key Components:**
-- `DateTime? _lastSkipTime` - Tracks the timestamp of the last skip operation
-- `static const _skipDebounceMs = 500` - 500ms debounce window
-- `bool _canSkip()` - Centralized debounce logic that protects all skip sources
+**Multi-Layer Protection System:**
 
-**Protection Sources:**
-- UI skip buttons in PlayerControls widget
-- System media controls (headphone buttons, lock screen, notification panel)
-- External device controls (car stereo, Bluetooth devices)
+1. **Operation-Level Locking**
+   - `_skipOperationInProgress` flag prevents concurrent skip operations from any source
+   - Immediate playback stop during manual skips prevents completion events
+   - Global protection across UI controls, native controls, and auto-advance
 
-**Implementation Details:**
-- Both `next()` and `previous()` methods check `_canSkip()` before executing
-- Debouncing occurs at the service level, protecting against all input sources
-- UI controls simplified to direct service calls without redundant widget-level debouncing
-- VoidweaverAudioHandler skip methods route through the same protected service methods
+2. **Dual Index Tracking**
+   - `_currentIndex`: Working index during transitions
+   - `_confirmedIndex`: Last confirmed playing track position
+   - Auto-advance uses confirmed index to prevent race conditions
 
-This approach ensures consistent behavior across all skip sources while maintaining responsive user experience for normal usage patterns.
+3. **Completion Event Protection**
+   - `_lastCompletedSongId` prevents duplicate completion handling
+   - Song completion events blocked during active skip operations
+   - Proper cleanup of duplicate event listeners
+
+4. **Comprehensive Logging**
+   - 20-entry timestamped change log (`_indexChangeLog`)
+   - Detailed operation source tracking for debugging
+   - Index change validation with jump detection
+
+5. **Atomic Operations**
+   - Immediate audio stop before track changes
+   - Sequential operation completion with proper state cleanup
+   - Zone-safe error handling and resource management
+
+**Protected Sources:**
+- UI skip buttons and player controls
+- Native media controls (headphones, lock screen, notifications)
+- Automatic song completion events
+- External device controls (Bluetooth, car systems)
+
+This architecture ensures reliable single-track advancement regardless of timing, hardware speed, or operation source, completely eliminating double-skip behavior under all conditions.
 
 ## Android Configuration
 

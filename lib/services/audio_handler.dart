@@ -98,11 +98,13 @@ class VoidweaverAudioHandler extends BaseAudioHandler {
 
   @override
   Future<void> skipToNext() async {
+    debugPrint('[native_controls] Skip next requested from native controls');
     await _audioPlayerService.next();
   }
 
   @override
   Future<void> skipToPrevious() async {
+    debugPrint('[native_controls] Skip previous requested from native controls');
     await _audioPlayerService.previous();
   }
 

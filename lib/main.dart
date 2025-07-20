@@ -9,20 +9,22 @@ import 'screens/home_screen.dart';
 import 'widgets/error_boundary.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize global error handling
-  ErrorHandler.instance.initialize();
-
-  // Add error reporters
-  ErrorHandler.instance.addReporter(ConsoleErrorReporter());
-  if (kDebugMode) {
-    ErrorHandler.instance.addReporter(MemoryErrorReporter());
-  }
-
   // Run the app in a zone to catch async errors
   runZonedGuarded(
-    () => runApp(const MyApp()),
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
+
+      // Initialize global error handling
+      ErrorHandler.instance.initialize();
+
+      // Add error reporters
+      ErrorHandler.instance.addReporter(ConsoleErrorReporter());
+      if (kDebugMode) {
+        ErrorHandler.instance.addReporter(MemoryErrorReporter());
+      }
+
+      runApp(const MyApp());
+    },
     (error, stackTrace) {
       ErrorHandler.instance.reportError(
         error,

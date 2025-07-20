@@ -40,6 +40,7 @@ class AppState extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   bool _isConfigured = false;
+  bool _audioServiceInitialized = false;
   SyncStatus _syncStatus = SyncStatus.idle;
   Timer? _syncTimer;
   DateTime? _lastSyncTime;
@@ -109,11 +110,12 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _initializeAudioService() async {
-    if (_audioPlayerService == null) return;
+    if (_audioPlayerService == null || _audioServiceInitialized) return;
 
     try {
+      _audioHandler = VoidweaverAudioHandler(_audioPlayerService!, _api!);
       await AudioService.init(
-        builder: () => VoidweaverAudioHandler(_audioPlayerService!, _api!),
+        builder: () => _audioHandler!,
         config: const AudioServiceConfig(
           androidNotificationChannelId: 'com.voidweaver.audio',
           androidNotificationChannelName: 'Voidweaver Audio',
@@ -121,6 +123,7 @@ class AppState extends ChangeNotifier {
           androidStopForegroundOnPause: true,
         ),
       );
+      _audioServiceInitialized = true;
       debugPrint('Audio service initialized successfully');
     } catch (e) {
       debugPrint('Error initializing audio service: $e');
@@ -235,6 +238,7 @@ class AppState extends ChangeNotifier {
     _audioPlayerService = null;
     _audioHandler?.dispose();
     _audioHandler = null;
+    _audioServiceInitialized = false;
     _albums.clear();
     _isConfigured = false;
     _error = null;
