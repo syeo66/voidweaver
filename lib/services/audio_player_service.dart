@@ -33,18 +33,19 @@ class AudioPlayerService extends ChangeNotifier {
   Duration _currentPosition = Duration.zero;
   Duration _totalDuration = Duration.zero;
   Song? _currentSong;
-  
+
   // Skip debouncing and operation control
   DateTime? _lastSkipTime;
   static const _skipDebounceMs = 500;
   bool _skipOperationInProgress = false;
   String? _lastSkipSource;
-  
+
   // Index tracking for debugging double-skips
   int _confirmedIndex = 0; // Index of song that actually started playing
-  int _targetIndex = 0;    // Index we're trying to reach
+  int _targetIndex = 0; // Index we're trying to reach
   List<String> _indexChangeLog = [];
-  String? _lastCompletedSongId; // Track which song last completed to prevent duplicate completions
+  String?
+      _lastCompletedSongId; // Track which song last completed to prevent duplicate completions
   DateTime? _currentSongStartTime;
   StreamSubscription? _positionSubscription;
   StreamSubscription? _durationSubscription;
@@ -105,9 +106,11 @@ class AudioPlayerService extends ChangeNotifier {
   Stream<Duration> get onPositionChanged => _audioPlayer.onPositionChanged;
 
   // Index change tracking
-  void _logIndexChange(String operation, int fromIndex, int toIndex, String reason) {
+  void _logIndexChange(
+      String operation, int fromIndex, int toIndex, String reason) {
     final timestamp = DateTime.now().toIso8601String();
-    final logEntry = '[$timestamp] $operation: $fromIndex -> $toIndex ($reason)';
+    final logEntry =
+        '[$timestamp] $operation: $fromIndex -> $toIndex ($reason)';
     _indexChangeLog.add(logEntry);
     if (_indexChangeLog.length > 20) {
       _indexChangeLog.removeAt(0); // Keep only last 20 entries
@@ -138,7 +141,8 @@ class AudioPlayerService extends ChangeNotifier {
       _onSongComplete();
     });
 
-    _playerStateSubscription = _audioPlayer.onPlayerStateChanged.listen((state) {
+    _playerStateSubscription =
+        _audioPlayer.onPlayerStateChanged.listen((state) {
       debugPrint('[audio_player] State changed to: $state');
       switch (state) {
         case PlayerState.playing:
@@ -152,7 +156,8 @@ class AudioPlayerService extends ChangeNotifier {
           break;
         case PlayerState.completed:
           // Don't handle completion here - let onPlayerComplete handle it
-          debugPrint('[audio_player] Completed state ignored - handled by onPlayerComplete');
+          debugPrint(
+              '[audio_player] Completed state ignored - handled by onPlayerComplete');
           break;
         case PlayerState.disposed:
           _playbackState = PlaybackState.stopped;
@@ -272,14 +277,17 @@ class AudioPlayerService extends ChangeNotifier {
 
   Future<void> _playSongAtIndex(int index) async {
     if (index < 0 || index >= _playlist.length) {
-      debugPrint('[play_song] Invalid index $index (playlist length: ${_playlist.length})');
+      debugPrint(
+          '[play_song] Invalid index $index (playlist length: ${_playlist.length})');
       return;
     }
 
     final previousIndex = _currentIndex;
-    debugPrint('[play_song] Starting playback for index $index: ${_playlist[index].title}');
-    _logIndexChange('_playSongAtIndex', previousIndex, index, 'song loading started');
-    
+    debugPrint(
+        '[play_song] Starting playback for index $index: ${_playlist[index].title}');
+    _logIndexChange(
+        '_playSongAtIndex', previousIndex, index, 'song loading started');
+
     _currentIndex = index;
     _currentSong = _playlist[index];
     _playbackState = PlaybackState.loading;
@@ -320,18 +328,20 @@ class AudioPlayerService extends ChangeNotifier {
 
       // Preload next song if available
       _preloadNextSong();
-      
+
       // Mark this index as confirmed now that the song actually started
       _confirmedIndex = _currentIndex;
-      _logIndexChange('_playSongAtIndex', _currentIndex, _currentIndex, 'song playback confirmed');
-      
-      debugPrint('[play_song] Successfully started: ${_currentSong!.title} (confirmed index: $_confirmedIndex)');
+      _logIndexChange('_playSongAtIndex', _currentIndex, _currentIndex,
+          'song playback confirmed');
+
+      debugPrint(
+          '[play_song] Successfully started: ${_currentSong!.title} (confirmed index: $_confirmedIndex)');
     } catch (e) {
       debugPrint('[play_song] Error playing song at index $index: $e');
       _playbackState = PlaybackState.stopped;
       _audioLoadingState = AudioLoadingState.error;
       _audioLoadingError = 'Failed to play song: $e';
-      
+
       notifyListeners();
       throw Exception('Failed to play song: $e');
     }
@@ -359,16 +369,15 @@ class AudioPlayerService extends ChangeNotifier {
 
   bool _canSkip() {
     final now = DateTime.now();
-    final timeSinceLastSkip = _lastSkipTime == null 
-        ? null 
+    final timeSinceLastSkip = _lastSkipTime == null
+        ? null
         : now.difference(_lastSkipTime!).inMilliseconds;
-    
-    if (_lastSkipTime == null ||
-        timeSinceLastSkip! > _skipDebounceMs) {
+
+    if (_lastSkipTime == null || timeSinceLastSkip! > _skipDebounceMs) {
       _lastSkipTime = now;
       return true;
     }
-    
+
     return false;
   }
 
@@ -376,30 +385,34 @@ class AudioPlayerService extends ChangeNotifier {
     const source = 'manual_next';
     final currentIdx = _currentIndex;
     final targetIdx = currentIdx + 1;
-    
-    debugPrint('[$source] Skip next requested - current: ${_currentSong?.title}, index: $currentIdx -> $targetIdx');
+
+    debugPrint(
+        '[$source] Skip next requested - current: ${_currentSong?.title}, index: $currentIdx -> $targetIdx');
     _logIndexChange(source, currentIdx, targetIdx, 'skip next requested');
-    
+
     if (!_canSkip()) {
       debugPrint('[$source] Skip blocked by debounce');
       return;
     }
-    
+
     if (_skipOperationInProgress) {
-      debugPrint('[$source] Skip blocked - operation already in progress (source: $_lastSkipSource)');
+      debugPrint(
+          '[$source] Skip blocked - operation already in progress (source: $_lastSkipSource)');
       _printIndexChangeLog();
       return;
     }
-    
+
     if (targetIdx >= _playlist.length) {
-      debugPrint('[$source] No next track available (target: $targetIdx, playlist: ${_playlist.length})');
+      debugPrint(
+          '[$source] No next track available (target: $targetIdx, playlist: ${_playlist.length})');
       return;
     }
 
     // Check for unexpected index jumps
     final indexDiff = targetIdx - _confirmedIndex;
     if (indexDiff > 2) {
-      debugPrint('[$source] WARNING: Large index jump detected! confirmed: $_confirmedIndex, target: $targetIdx');
+      debugPrint(
+          '[$source] WARNING: Large index jump detected! confirmed: $_confirmedIndex, target: $targetIdx');
       _printIndexChangeLog();
     }
 
@@ -413,10 +426,10 @@ class AudioPlayerService extends ChangeNotifier {
       // Stop current playback immediately to prevent completion events
       await _audioPlayer.stop();
       debugPrint('[$source] Stopped current playback');
-      
+
       // Scrobble current song if it has been played enough
       _scrobbleCurrentSongIfEligible();
-      
+
       // Move to target track
       await _playSongAtIndex(targetIdx);
       debugPrint('[$source] Successfully advanced to track $targetIdx');
@@ -432,18 +445,20 @@ class AudioPlayerService extends ChangeNotifier {
 
   Future<void> previous() async {
     const source = 'manual_previous';
-    debugPrint('[$source] Skip previous requested - current: ${_currentSong?.title}, index: $_currentIndex');
-    
+    debugPrint(
+        '[$source] Skip previous requested - current: ${_currentSong?.title}, index: $_currentIndex');
+
     if (!_canSkip()) {
       debugPrint('[$source] Skip blocked by debounce');
       return;
     }
-    
+
     if (_skipOperationInProgress) {
-      debugPrint('[$source] Skip blocked - operation already in progress (source: $_lastSkipSource)');
+      debugPrint(
+          '[$source] Skip blocked - operation already in progress (source: $_lastSkipSource)');
       return;
     }
-    
+
     if (!hasPrevious) {
       debugPrint('[$source] No previous track available');
       return;
@@ -458,10 +473,10 @@ class AudioPlayerService extends ChangeNotifier {
       // Stop current playback immediately to prevent completion events
       await _audioPlayer.stop();
       debugPrint('[$source] Stopped current playback');
-      
+
       // Scrobble current song if it has been played enough
       _scrobbleCurrentSongIfEligible();
-      
+
       // Move to previous track
       await _playSongAtIndex(_currentIndex - 1);
       debugPrint('[$source] Successfully moved to track ${_currentIndex - 1}');
@@ -481,43 +496,49 @@ class AudioPlayerService extends ChangeNotifier {
   void _onSongComplete() {
     const source = 'auto_complete';
     final currentSongId = _currentSong?.id;
-    final currentIdx = _confirmedIndex; // Use confirmed index, not _currentIndex
+    final currentIdx =
+        _confirmedIndex; // Use confirmed index, not _currentIndex
     final targetIdx = currentIdx + 1;
-    
-    debugPrint('[$source] Song completed: ${_currentSong?.title}, confirmed: $currentIdx, current: $_currentIndex, songId: $currentSongId');
-    
+
+    debugPrint(
+        '[$source] Song completed: ${_currentSong?.title}, confirmed: $currentIdx, current: $_currentIndex, songId: $currentSongId');
+
     // Prevent duplicate completion handling for the same song
     if (_lastCompletedSongId == currentSongId && currentSongId != null) {
-      debugPrint('[$source] Ignoring duplicate completion event for song: $currentSongId');
+      debugPrint(
+          '[$source] Ignoring duplicate completion event for song: $currentSongId');
       return;
     }
-    
+
     _lastCompletedSongId = currentSongId;
     _logIndexChange(source, currentIdx, targetIdx, 'song completion detected');
-    
+
     // Send scrobble submission for the completed song
     _scrobbleCurrentSong();
 
     // Prevent auto-advance if a skip operation is already in progress
     if (_skipOperationInProgress) {
-      debugPrint('[$source] Auto-advance blocked - skip operation in progress (source: $_lastSkipSource)');
+      debugPrint(
+          '[$source] Auto-advance blocked - skip operation in progress (source: $_lastSkipSource)');
       _printIndexChangeLog();
       return;
     }
 
     // Check if we have a next track using confirmed index
     if (targetIdx >= _playlist.length) {
-      debugPrint('[$source] End of playlist reached (target: $targetIdx, playlist: ${_playlist.length})');
+      debugPrint(
+          '[$source] End of playlist reached (target: $targetIdx, playlist: ${_playlist.length})');
       _playbackState = PlaybackState.stopped;
       notifyListeners();
       return;
     }
 
-    debugPrint('[$source] Auto-advancing from confirmed index $currentIdx to $targetIdx');
+    debugPrint(
+        '[$source] Auto-advancing from confirmed index $currentIdx to $targetIdx');
     _skipOperationInProgress = true;
     _lastSkipSource = source;
     _targetIndex = targetIdx;
-    
+
     _playSongAtIndex(targetIdx).then((_) {
       _skipOperationInProgress = false;
       _lastSkipSource = null;
