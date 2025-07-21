@@ -42,8 +42,7 @@ class AudioPlayerService extends ChangeNotifier {
 
   // Index tracking for debugging double-skips
   int _confirmedIndex = 0; // Index of song that actually started playing
-  int _targetIndex = 0; // Index we're trying to reach
-  List<String> _indexChangeLog = [];
+  final List<String> _indexChangeLog = [];
   String?
       _lastCompletedSongId; // Track which song last completed to prevent duplicate completions
   DateTime? _currentSongStartTime;
@@ -207,7 +206,6 @@ class AudioPlayerService extends ChangeNotifier {
       debugPrint('Playing album: ${album.name} with ${_playlist.length} songs');
       _currentIndex = 0;
       _confirmedIndex = 0;
-      _targetIndex = 0;
       _lastCompletedSongId = null;
       _indexChangeLog.clear();
       await _playSongAtIndex(0);
@@ -244,7 +242,6 @@ class AudioPlayerService extends ChangeNotifier {
       debugPrint('Playing random songs: ${_playlist.length} songs loaded');
       _currentIndex = 0;
       _confirmedIndex = 0;
-      _targetIndex = 0;
       _lastCompletedSongId = null;
       _indexChangeLog.clear();
       await _playSongAtIndex(0);
@@ -269,7 +266,6 @@ class AudioPlayerService extends ChangeNotifier {
     _playlist = [song];
     _currentIndex = 0;
     _confirmedIndex = 0;
-    _targetIndex = 0;
     _lastCompletedSongId = null;
     _indexChangeLog.clear();
     await _playSongAtIndex(0);
@@ -419,7 +415,6 @@ class AudioPlayerService extends ChangeNotifier {
     // Mark operation in progress immediately
     _skipOperationInProgress = true;
     _lastSkipSource = source;
-    _targetIndex = targetIdx;
     debugPrint('[$source] Starting skip operation to index $targetIdx');
 
     try {
@@ -537,7 +532,6 @@ class AudioPlayerService extends ChangeNotifier {
         '[$source] Auto-advancing from confirmed index $currentIdx to $targetIdx');
     _skipOperationInProgress = true;
     _lastSkipSource = source;
-    _targetIndex = targetIdx;
 
     _playSongAtIndex(targetIdx).then((_) {
       _skipOperationInProgress = false;
