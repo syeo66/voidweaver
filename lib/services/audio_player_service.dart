@@ -155,7 +155,8 @@ class AudioPlayerService extends ChangeNotifier {
           if (!_skipOperationInProgress) {
             _playbackState = PlaybackState.stopped;
           } else {
-            debugPrint('[audio_player] Stopped state ignored during skip operation');
+            debugPrint(
+                '[audio_player] Stopped state ignored during skip operation');
             return; // Don't notify listeners if we're not changing state
           }
           break;
