@@ -56,6 +56,12 @@ A high-quality Flutter music player application that streams music from your per
 ```bash
 git clone <repository-url>
 cd voidweaver
+make setup                    # Install dependencies
+make build-release            # Full validation + release build
+```
+
+Or using Flutter directly:
+```bash
 flutter pub get
 flutter build apk --release
 ```

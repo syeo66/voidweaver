@@ -2,7 +2,21 @@
 
 ## Development Commands
 
-### Core Development
+### Makefile Targets (Preferred)
+The project includes a Makefile for streamlined development workflows:
+- `make run` - Run app on connected device/emulator (includes setup)
+- `make run-web` - Run in web browser
+- `make test` - Run all tests with setup validation
+- `make analyze` - Static analysis (currently 0 issues)
+- `make format` - Format Dart code in lib/ and test/
+- `make build-release` - Full validation pipeline (format, analyze, test) + release APK
+- `make clean` - Clean build artifacts
+- `make doctor` - Check Flutter installation
+- `make devices` - List available devices
+- `make setup` - Ensure Flutter is installed and get dependencies
+- `make help` - Show all available targets
+
+### Direct Flutter Commands
 - `flutter run` - Run the app on connected device/emulator
 - `flutter run -d chrome` - Run the app in web browser
 - `flutter run -d <device_id>` - Run on specific device
