@@ -3,6 +3,7 @@
 ## 🚨 Critical Issues (Fix First)
 
 ## 🔧 Core Functionality Gaps
+- [ ] **Enable bluetooth controls** - https://pub.dev/packages/audio_service
 
 ## 🎨 UI/UX Improvements
 
