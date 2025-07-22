@@ -151,7 +151,13 @@ class AudioPlayerService extends ChangeNotifier {
           _playbackState = PlaybackState.paused;
           break;
         case PlayerState.stopped:
-          _playbackState = PlaybackState.stopped;
+          // Don't set stopped state during skip operations to prevent native controls from disappearing
+          if (!_skipOperationInProgress) {
+            _playbackState = PlaybackState.stopped;
+          } else {
+            debugPrint('[audio_player] Stopped state ignored during skip operation');
+            return; // Don't notify listeners if we're not changing state
+          }
           break;
         case PlayerState.completed:
           // Don't handle completion here - let onPlayerComplete handle it
@@ -418,6 +424,11 @@ class AudioPlayerService extends ChangeNotifier {
     debugPrint('[$source] Starting skip operation to index $targetIdx');
 
     try {
+      // Set loading state to prevent native controls from disappearing
+      _playbackState = PlaybackState.loading;
+      notifyListeners();
+      debugPrint('[$source] Set loading state to preserve native controls');
+
       // Stop current playback immediately to prevent completion events
       await _audioPlayer.stop();
       debugPrint('[$source] Stopped current playback');
@@ -465,6 +476,11 @@ class AudioPlayerService extends ChangeNotifier {
     debugPrint('[$source] Starting skip operation');
 
     try {
+      // Set loading state to prevent native controls from disappearing
+      _playbackState = PlaybackState.loading;
+      notifyListeners();
+      debugPrint('[$source] Set loading state to preserve native controls');
+
       // Stop current playback immediately to prevent completion events
       await _audioPlayer.stop();
       debugPrint('[$source] Stopped current playback');
