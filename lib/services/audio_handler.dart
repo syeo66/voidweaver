@@ -9,7 +9,8 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
   final aps.AudioPlayerService _audioPlayerService;
   final SubsonicApi _api;
   late StreamSubscription _positionSubscription;
-  static const MethodChannel _audioFocusChannel = MethodChannel('voidweaver/audio_focus');
+  static const MethodChannel _audioFocusChannel =
+      MethodChannel('voidweaver/audio_focus');
 
   VoidweaverAudioHandler(this._audioPlayerService, this._api) {
     _init();
@@ -27,7 +28,7 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
 
     // Set initial state and activate media session
     _updatePlaybackState();
-    
+
     // Initialize with inactive media session that will be activated on play
     playbackState.add(playbackState.value.copyWith(
       processingState: AudioProcessingState.idle,
@@ -54,12 +55,13 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
           'isActive': true,
         },
       );
-      
+
       // Only update media item if it's actually different
-      if (mediaItem.value?.id != newMediaItem.id || 
+      if (mediaItem.value?.id != newMediaItem.id ||
           mediaItem.value?.title != newMediaItem.title) {
         mediaItem.add(newMediaItem);
-        debugPrint('[native_controls] Media item updated: ${song.title} by ${song.artist}');
+        debugPrint(
+            '[native_controls] Media item updated: ${song.title} by ${song.artist}');
       }
     } else {
       // Clear media item when no song is playing
@@ -69,7 +71,7 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
     // Update playback state
     final playing = state == aps.PlaybackState.playing;
     final buffering = state == aps.PlaybackState.loading;
-    
+
     // Note: Removed aggressive audio focus requests that interfered with playback
 
     playbackState.add(playbackState.value.copyWith(
@@ -119,10 +121,10 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> play() async {
     debugPrint('[native_controls] Play requested from native controls');
-    
+
     // Only request audio focus on manual play, not during state updates
     _requestAudioFocus();
-    
+
     await _audioPlayerService.play();
   }
 

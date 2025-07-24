@@ -121,7 +121,8 @@ class AppState extends ChangeNotifier {
           androidNotificationChannelName: 'Voidweaver Audio',
           androidNotificationOngoing: true,
           androidStopForegroundOnPause: true,
-          androidNotificationChannelDescription: 'Voidweaver music playback controls',
+          androidNotificationChannelDescription:
+              'Voidweaver music playback controls',
           androidShowNotificationBadge: true,
           androidNotificationClickStartsActivity: true,
           androidNotificationIcon: 'mipmap/launcher_icon',
