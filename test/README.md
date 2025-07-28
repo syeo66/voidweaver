@@ -14,6 +14,7 @@ This directory contains comprehensive tests for the Voidweaver Flutter music pla
 - **`services/api_cache_test.dart`** - API caching system tests with request deduplication
 - **`widgets/error_boundary_test.dart`** - Error boundary and error handling widget tests
 - **`services/error_handler_test.dart`** - Global error handler and error reporting tests
+- **`services/memory_leak_test.dart`** - Memory leak prevention tests with comprehensive disposal verification
 
 ### Test Infrastructure
 
@@ -38,7 +39,7 @@ flutter test --verbose
 
 ## Test Coverage
 
-### Current Status: 105/105 Tests Passing ✅
+### Current Status: 113+/113+ Tests Passing ✅
 
 #### Data Models (6 tests)
 - Song class construction and equality
@@ -85,6 +86,16 @@ flutter test --verbose
 - Extension methods for error wrapping
 - User recovery and retry mechanisms
 
+#### Memory Leak Prevention (8 tests)
+- AudioPlayerService resource disposal verification
+- AppState timer and service cleanup testing
+- SubsonicApi HTTP client disposal testing
+- VoidweaverAudioHandler cleanup verification
+- Sleep timer cancellation testing
+- Stream subscription cleanup verification
+- Service disposal safety testing
+- Null resource handling testing
+
 ## Mock Infrastructure
 
 ### MockAudioPlayer
@@ -120,6 +131,7 @@ Mock classes are generated using the `mockito` package:
 **Available Mocks:**
 - `MockSubsonicApi` - API communication mocking
 - `MockSettingsService` - Settings management mocking
+- Custom mock classes in `memory_leak_test.dart` for testing disposal patterns without SharedPreferences dependencies
 
 ## Architecture Changes for Testing
 
