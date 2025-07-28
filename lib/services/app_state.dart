@@ -240,6 +240,7 @@ class AppState extends ChangeNotifier {
     }
 
     _stopBackgroundSync();
+    _api?.dispose();
     _api = null;
     _audioPlayerService?.dispose();
     _audioPlayerService = null;
@@ -294,6 +295,7 @@ class AppState extends ChangeNotifier {
   @override
   void dispose() {
     _stopBackgroundSync();
+    _api?.dispose();
     super.dispose();
   }
 }

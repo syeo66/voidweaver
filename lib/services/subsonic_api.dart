@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:http_plus/http_plus.dart' as http;
 import 'package:xml/xml.dart';
 import 'api_cache.dart';
 
@@ -13,6 +13,7 @@ class SubsonicApi {
   final String clientName = 'voidweaver';
   final String version = '1.16.1';
   final ApiCache _cache = ApiCache();
+  late final http.HttpPlusClient _httpClient;
 
   SubsonicApi({
     required this.serverUrl,
@@ -20,6 +21,15 @@ class SubsonicApi {
     required this.password,
   }) {
     _cache.initialize();
+    _initializeHttpClient();
+  }
+
+  void _initializeHttpClient() {
+    _httpClient = http.HttpPlusClient(
+      enableHttp2: true,
+      maxOpenConnections: 8,
+      connectionTimeout: const Duration(seconds: 15),
+    );
   }
 
   String _generateSalt() {
@@ -65,7 +75,7 @@ class SubsonicApi {
         'User-Agent': 'voidweaver/1.0',
       };
 
-      final response = await http.get(uri, headers: headers);
+      final response = await _httpClient.get(uri, headers: headers);
 
       if (response.statusCode == 200) {
         // Properly decode UTF-8 bytes with malformed character handling
@@ -345,6 +355,11 @@ class SubsonicApi {
   /// Invalidate search cache entries
   void invalidateSearchCache() {
     _cache.invalidatePattern('search');
+  }
+
+  /// Dispose the HTTP client and clean up resources
+  void dispose() {
+    _httpClient.close();
   }
 }
 

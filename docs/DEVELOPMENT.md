@@ -26,6 +26,7 @@ The project includes a Makefile for streamlined development workflows:
 ### Code Quality
 - `flutter analyze` - Static analysis (currently 0 issues)
 - `flutter test` - Run test suite (105/105 passing)
+- `flutter pub deps` - Check dependency graph including HTTP/2 support
 - `flutter test test/utils/validators_test.dart` - Run input validation tests specifically
 - `flutter test test/widgets/error_boundary_test.dart` - Run error boundary tests specifically
 - `flutter test test/services/error_handler_test.dart` - Run error handler tests specifically
@@ -42,12 +43,13 @@ The project includes a Makefile for streamlined development workflows:
 Voidweaver uses a clean, optimized architecture with:
 
 - **Provider** pattern for efficient state management with comprehensive loading states
-- **Service layer** for API communication, audio playback, ReplayGain processing, and server scrobbling
+- **Service layer** for HTTP/2-enabled API communication, audio playback, ReplayGain processing, and server scrobbling
 - **Native audio service integration** for system-level media controls and background playback
 - **Client-side metadata extraction** for ReplayGain data from audio files
 - **Automatic server notifications** for played songs and listening statistics
 - **Responsive UI** with Material Design, comprehensive landscape support, settings management, and extensive loading state feedback
 - **Background synchronization** for keeping data fresh with proper status indicators
+- **HTTP/2 protocol support** with connection reuse, header compression, and automatic HTTP/1.1 fallback
 - **Efficient HTTP range requests** for metadata extraction with minimal bandwidth usage
 - **Performance-optimized widgets** with const constructors and minimal rebuilds
 - **Advanced image caching system** with disk-based storage and intelligent placeholder handling
@@ -142,10 +144,12 @@ flutter test --coverage  # Run tests with coverage report
 
 ## Performance Optimizations
 
+- **HTTP/2 networking** with connection pooling (max 8 connections), persistent connections, and header compression
+- **Automatic protocol negotiation** with fallback to HTTP/1.1 for compatibility
 - Const constructors minimize widget rebuilds
 - Efficient Provider usage with specific notifiers
 - HTTP range requests for metadata (minimal bandwidth)
-- Proper resource disposal in all services
+- Proper resource disposal in all services including HTTP client cleanup
 - Selective UI updates to prevent unnecessary rebuilds during playback state changes
 - Service-level debouncing architecture prevents conflicts between UI controls and system media controls
 - Stable ValueKey usage for consistent widget identity and caching
@@ -279,7 +283,7 @@ class MainActivity : AudioServiceActivity()
 ### Data Flow
 1. App initializes through AppState.initialize()
 2. Server credentials loaded from secure storage with automatic SharedPreferences migration
-3. SubsonicApi configured for authenticated requests
+3. SubsonicApi configured with HTTP/2 client for authenticated requests
 4. AudioPlayerService created with ReplayGain integration
 5. Native audio service initialized with VoidweaverAudioHandler for system media controls
 6. Background sync timer started for album updates
@@ -291,3 +295,4 @@ class MainActivity : AudioServiceActivity()
 - **Audio Playback**: Uses device audio capabilities with volume control for ReplayGain
 - **Secure Storage**: Uses device-level encryption for login credentials and local storage for ReplayGain settings
 - **HTTP Range Requests**: Server must support partial content requests for metadata extraction
+- **HTTP/2 Support**: Automatically negotiated with fallback to HTTP/1.1 for older servers
