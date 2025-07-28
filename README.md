@@ -32,12 +32,13 @@ A high-quality Flutter music player application that streams music from your per
 - **Pull-to-Refresh**: Manual refresh on album and artist lists
 
 ### 🔒 **Security & Reliability**
-- **Secure Login**: Encrypted credential storage with automatic session management
+- **Secure Login**: Encrypted credential storage with automatic session management (flutter_secure_storage v9.2.4)
 - **Input Validation**: Comprehensive validation and sanitization of all user inputs to prevent crashes and security issues
 - **Error Boundaries**: Global error handling system that prevents app crashes and provides user-friendly error recovery
 - **Server Scrobbling**: Automatic play count tracking and listening statistics
 - **Robust Error Handling**: Graceful recovery from network issues and widget failures
 - **Background Sync**: Automatic library updates every 5 minutes
+- **Modern Dependencies**: Regularly updated dependencies with comprehensive testing (113+ test suite)
 
 ## Getting Started
 
@@ -143,7 +144,7 @@ Control your music from anywhere:
 
 ## Requirements
 
-- **Android 6.0+** (API level 23) or **iOS 12.0+**
+- **Android 5.0+** (API level 21) or **iOS 12.0+**
 - **Network connection** for streaming and library sync
 - **Subsonic-compatible server** with API access enabled
 
