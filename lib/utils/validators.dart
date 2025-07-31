@@ -15,8 +15,8 @@ class Validators {
       return 'Please enter a valid URL (e.g., https://music.example.com)';
     }
 
-    if (!['http', 'https'].contains(uri.scheme.toLowerCase())) {
-      return 'URL must use http or https protocol';
+    if (uri.scheme.toLowerCase() != 'https') {
+      return 'URL must use HTTPS protocol for security';
     }
 
     if (uri.host.isEmpty) {
@@ -112,7 +112,7 @@ class Validators {
     final uri = Uri.tryParse(url.trim());
     return uri != null &&
         uri.isAbsolute &&
-        ['http', 'https'].contains(uri.scheme.toLowerCase()) &&
+        uri.scheme.toLowerCase() == 'https' &&
         uri.host.isNotEmpty;
   }
 

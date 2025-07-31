@@ -198,6 +198,26 @@ The error boundary system includes comprehensive tests:
 - Keep messages user-friendly and non-technical
 - Include retry options when possible
 
+### HTTPS Security Validation Errors
+
+The app enforces HTTPS connections for security and provides clear error messages for HTTP attempts:
+
+#### URL Validation Errors
+- **HTTP URLs rejected**: "URL must use HTTPS protocol for security"
+- **Invalid URLs**: "Please enter a valid URL (e.g., https://music.example.com)"
+- **Missing hostname**: "URL must include a hostname"
+
+#### API Constructor Errors
+- **SubsonicApi HTTPS check**: `ArgumentError('Server URL must use HTTPS protocol for security')`
+- **Malformed URLs**: Rejected during URI parsing with clear error messages
+
+#### User Interface Feedback
+- **Login form indicators**: Clear HTTPS requirement with lock icon and helper text
+- **Connection troubleshooting**: Updated guidance emphasizing HTTPS requirement
+- **Real-time validation**: Immediate feedback during URL entry
+
+These security-focused error messages help users understand the HTTPS requirement while protecting credentials and music data in transit.
+
 ## Debugging
 
 ### Error Log Viewer

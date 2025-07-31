@@ -3,11 +3,15 @@ import 'package:voidweaver/utils/validators.dart';
 
 void main() {
   group('Server URL Validation', () {
-    test('should accept valid HTTP URLs', () {
-      expect(Validators.validateServerUrl('http://example.com'), isNull);
-      expect(Validators.validateServerUrl('http://music.example.com'), isNull);
-      expect(Validators.validateServerUrl('http://192.168.1.100:8080'), isNull);
-      expect(Validators.validateServerUrl('http://localhost:4040'), isNull);
+    test('should reject HTTP URLs (HTTPS required)', () {
+      expect(Validators.validateServerUrl('http://example.com'),
+          contains('URL must use HTTPS protocol for security'));
+      expect(Validators.validateServerUrl('http://music.example.com'),
+          contains('URL must use HTTPS protocol for security'));
+      expect(Validators.validateServerUrl('http://192.168.1.100:8080'),
+          contains('URL must use HTTPS protocol for security'));
+      expect(Validators.validateServerUrl('http://localhost:4040'),
+          contains('URL must use HTTPS protocol for security'));
     });
 
     test('should accept valid HTTPS URLs', () {
@@ -35,16 +39,14 @@ void main() {
 
     test('should reject unsupported protocols', () {
       expect(Validators.validateServerUrl('ftp://example.com'),
-          contains('URL must use http or https protocol'));
+          contains('URL must use HTTPS protocol for security'));
       expect(Validators.validateServerUrl('ws://example.com'),
-          contains('URL must use http or https protocol'));
+          contains('URL must use HTTPS protocol for security'));
       expect(Validators.validateServerUrl('file:///path'),
-          contains('URL must use http or https protocol'));
+          contains('URL must use HTTPS protocol for security'));
     });
 
     test('should reject URLs without hostname', () {
-      expect(Validators.validateServerUrl('http://'),
-          contains('URL must include a hostname'));
       expect(Validators.validateServerUrl('https://'),
           contains('URL must include a hostname'));
     });
@@ -209,7 +211,7 @@ void main() {
   group('URL Validation Helper', () {
     test('should correctly identify valid URLs', () {
       expect(Validators.isValidUrl('https://example.com'), isTrue);
-      expect(Validators.isValidUrl('http://localhost:8080'), isTrue);
+      expect(Validators.isValidUrl('https://localhost:8080'), isTrue);
       expect(Validators.isValidUrl('https://music.mydomain.org'), isTrue);
     });
 
@@ -219,6 +221,10 @@ void main() {
       expect(Validators.isValidUrl('not-a-url'), isFalse);
       expect(Validators.isValidUrl('ftp://example.com'), isFalse);
       expect(Validators.isValidUrl('example.com'), isFalse);
+      expect(Validators.isValidUrl('http://example.com'),
+          isFalse); // HTTP should be rejected
+      expect(Validators.isValidUrl('http://localhost:8080'),
+          isFalse); // HTTP should be rejected
     });
   });
 

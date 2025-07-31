@@ -140,9 +140,11 @@ class _LoginScreenState extends State<LoginScreen> {
             controller: _serverUrlController,
             enabled: !isLoading,
             decoration: const InputDecoration(
-              labelText: 'Server URL',
+              labelText: 'Server URL (HTTPS required)',
               hintText: 'https://your-subsonic-server.com',
               border: OutlineInputBorder(),
+              helperText: 'Must use HTTPS for secure connection',
+              prefixIcon: Icon(Icons.lock),
             ),
             validator: Validators.validateServerUrl,
           ),

@@ -20,9 +20,7 @@ double? parseReplayGainValue(String value) {
 bool isValidUrl(String url) {
   try {
     final uri = Uri.parse(url);
-    return uri.hasScheme &&
-        (uri.scheme == 'http' || uri.scheme == 'https') &&
-        uri.host.isNotEmpty;
+    return uri.hasScheme && uri.scheme == 'https' && uri.host.isNotEmpty;
   } catch (e) {
     return false;
   }
@@ -113,9 +111,9 @@ void main() {
     group('URL Validation', () {
       test('should validate correct URLs', () {
         expect(isValidUrl('https://demo.navidrome.org'), isTrue);
-        expect(isValidUrl('http://localhost:4533'), isTrue);
+        expect(isValidUrl('https://localhost:4533'), isTrue);
         expect(isValidUrl('https://music.example.com:8080'), isTrue);
-        expect(isValidUrl('http://192.168.1.100:4533'), isTrue);
+        expect(isValidUrl('https://192.168.1.100:4533'), isTrue);
       });
 
       test('should reject invalid URLs', () {
@@ -123,11 +121,16 @@ void main() {
         expect(isValidUrl('ftp://example.com'), isFalse);
         expect(isValidUrl(''), isFalse);
         expect(isValidUrl('not-a-url'), isFalse);
+        expect(isValidUrl('http://example.com'),
+            isFalse); // HTTP should be rejected
+        expect(isValidUrl('http://localhost:4533'),
+            isFalse); // HTTP should be rejected
       });
 
       test('should handle edge cases', () {
         expect(isValidUrl('https://'), isFalse);
-        expect(isValidUrl('http://'), isFalse);
+        expect(isValidUrl('http://'),
+            isFalse); // HTTP should still be rejected even without hostname
         expect(isValidUrl('https://localhost'), isTrue);
         expect(isValidUrl('https://example.com/path?query=value'), isTrue);
       });

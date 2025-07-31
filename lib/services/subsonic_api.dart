@@ -20,6 +20,12 @@ class SubsonicApi {
     required this.username,
     required this.password,
   }) {
+    // Enforce HTTPS for security
+    final uri = Uri.tryParse(serverUrl);
+    if (uri == null || uri.scheme.toLowerCase() != 'https') {
+      throw ArgumentError('Server URL must use HTTPS protocol for security');
+    }
+
     _cache.initialize();
     _initializeHttpClient();
   }

@@ -32,13 +32,14 @@ A high-quality Flutter music player application that streams music from your per
 - **Pull-to-Refresh**: Manual refresh on album and artist lists
 
 ### 🔒 **Security & Reliability**
+- **HTTPS Enforcement**: Mandatory encrypted connections to your music server for secure streaming and credential protection
 - **Secure Login**: Encrypted credential storage with automatic session management (flutter_secure_storage v9.2.4)
 - **Input Validation**: Comprehensive validation and sanitization of all user inputs to prevent crashes and security issues
 - **Error Boundaries**: Global error handling system that prevents app crashes and provides user-friendly error recovery
 - **Server Scrobbling**: Automatic play count tracking and listening statistics
 - **Robust Error Handling**: Graceful recovery from network issues and widget failures
 - **Background Sync**: Automatic library updates every 5 minutes
-- **Modern Dependencies**: Regularly updated dependencies with comprehensive testing (113+ test suite)
+- **Modern Dependencies**: Regularly updated dependencies with comprehensive testing (118+ test suite)
 
 ## Getting Started
 
@@ -71,7 +72,7 @@ flutter build apk --release
 
 1. **Launch the app**
 2. **Enter your server details**:
-   - **Server URL**: Your Subsonic server URL (e.g., `https://music.example.com`)
+   - **Server URL**: Your Subsonic server URL with HTTPS (e.g., `https://music.example.com`) - HTTP connections are not allowed for security
    - **Username**: Your Subsonic username
    - **Password**: Your Subsonic password
 3. **Tap "Login"** to connect
@@ -127,10 +128,11 @@ Control your music from anywhere:
 ## Troubleshooting
 
 ### **Connection Issues**
-- Verify server URL is correct and accessible (must be http:// or https://)
+- Verify server URL is correct and accessible (must use https:// - HTTP is not allowed for security)
 - Check username and password (no control characters allowed)
 - Ensure server supports Subsonic API
 - Make sure URL includes protocol and hostname
+- **HTTPS Required**: The app only accepts HTTPS connections to protect your credentials and music data
 
 ### **Audio Issues**
 - **Volume too quiet/loud**: Adjust ReplayGain preamp setting

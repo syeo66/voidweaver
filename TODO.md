@@ -35,7 +35,7 @@
 ## 🔒 Security & Reliability
 
 ### Security Improvements
-- [ ] **HTTPS enforcement** - Require HTTPS for server connections
+- [x] **HTTPS enforcement** - ✅ Implemented mandatory HTTPS for all server connections with comprehensive validation in validators, SubsonicApi, and UI feedback
 - [ ] **Certificate validation** - Proper handling of self-signed certificates
 - [ ] **Credential validation** - Better login validation and feedback
 

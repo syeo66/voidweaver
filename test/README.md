@@ -15,6 +15,7 @@ This directory contains comprehensive tests for the Voidweaver Flutter music pla
 - **`widgets/error_boundary_test.dart`** - Error boundary and error handling widget tests
 - **`services/error_handler_test.dart`** - Global error handler and error reporting tests
 - **`services/memory_leak_test.dart`** - Memory leak prevention tests with comprehensive disposal verification
+- **`services/subsonic_api_test.dart`** - HTTPS enforcement and security validation tests
 
 ### Test Infrastructure
 
@@ -39,7 +40,7 @@ flutter test --verbose
 
 ## Test Coverage
 
-### Current Status: 113+/113+ Tests Passing ✅
+### Current Status: 118+/118+ Tests Passing ✅
 
 #### Data Models (6 tests)
 - Song class construction and equality
@@ -95,6 +96,13 @@ flutter test --verbose
 - Stream subscription cleanup verification
 - Service disposal safety testing
 - Null resource handling testing
+
+#### HTTPS Security Enforcement (5 tests)
+- Server URL HTTPS validation and HTTP rejection
+- SubsonicApi constructor security checks
+- Invalid URL format handling
+- Unsupported protocol rejection (FTP, etc.)
+- Proper resource disposal after HTTPS validation
 
 ## Mock Infrastructure
 
@@ -219,10 +227,12 @@ Tests for audio normalization value parsing:
 ### URL Validation Tests
 
 Tests for server URL validation:
-- HTTP/HTTPS protocols
-- Port numbers
-- IP addresses
-- Invalid formats
+- **HTTPS enforcement** - HTTP URLs rejected for security
+- **API security validation** - SubsonicApi constructor HTTPS checks
+- Port numbers and hostnames
+- IP addresses and paths
+- Invalid formats and malformed URLs
+- Security error messages and user feedback
 
 ## Best Practices
 

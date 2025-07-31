@@ -4,6 +4,8 @@
 
 Voidweaver implements HTTP/2 support for improved performance when streaming from Subsonic-compatible servers. The implementation uses the `http_plus` package which provides a drop-in replacement for the standard HTTP package with native HTTP/2 capabilities.
 
+**Security Note**: HTTP/2 works seamlessly with the app's mandatory HTTPS enforcement, providing both security and performance benefits. All connections use encrypted TLS with HTTP/2 protocol negotiation.
+
 ## Technical Implementation
 
 ### Package Selection

@@ -25,7 +25,7 @@ The project includes a Makefile for streamlined development workflows:
 
 ### Code Quality
 - `flutter analyze` - Static analysis (currently 0 issues)
-- `flutter test` - Run test suite (105/105 passing)
+- `flutter test` - Run test suite (118/118 passing)
 - `flutter pub deps` - Check dependency graph including HTTP/2 support
 - `flutter test test/utils/validators_test.dart` - Run input validation tests specifically
 - `flutter test test/widgets/error_boundary_test.dart` - Run error boundary tests specifically
@@ -43,7 +43,7 @@ The project includes a Makefile for streamlined development workflows:
 Voidweaver uses a clean, optimized architecture with:
 
 - **Provider** pattern for efficient state management with comprehensive loading states
-- **Service layer** for HTTP/2-enabled API communication, audio playback, ReplayGain processing, and server scrobbling
+- **Service layer** for HTTP/2-enabled API communication with mandatory HTTPS enforcement, audio playback, ReplayGain processing, and server scrobbling
 - **Native audio service integration** for system-level media controls and background playback
 - **Client-side metadata extraction** for ReplayGain data from audio files
 - **Automatic server notifications** for played songs and listening statistics
@@ -70,7 +70,7 @@ flutter test             # Run tests (105/105 passing)
 flutter test --coverage  # Run tests with coverage report
 ```
 
-**Test Coverage**: 105 comprehensive tests covering:
+**Test Coverage**: 118 comprehensive tests covering:
 - Data model validation (Song, Album, Artist, SearchResult)
 - Utility functions (time formatting, ReplayGain parsing, URL validation)
 - Sleep timer functionality with comprehensive edge case testing
@@ -79,8 +79,17 @@ flutter test --coverage  # Run tests with coverage report
 - Error boundary system (15 tests covering widget error handling, global error management, and user recovery flows)
 - Widget instantiation and basic UI components
 - Mock infrastructure for AudioPlayer plugin testing
+- HTTPS security enforcement (5 comprehensive tests covering URL validation, API rejection of HTTP connections, and proper error handling)
 
 ### Recent Technical Improvements
+
+- **HTTPS enforcement**: Implemented mandatory encrypted connections for enhanced security
+  - Multi-layer validation: validators, SubsonicApi constructor, and UI feedback
+  - All HTTP connections rejected with clear error messages
+  - Updated login screen with HTTPS requirement indicators and lock icon
+  - Comprehensive test coverage with 5 new tests covering URL validation and API rejection
+  - Defense-in-depth approach protects credentials and music data in transit
+  - Clear user guidance about HTTPS requirement in login form
 
 - **Comprehensive input validation**: Implemented robust input validation and sanitization system
   - Added comprehensive validation for login form fields (server URL, username, password)
@@ -275,10 +284,12 @@ class MainActivity : AudioServiceActivity()
 ## Important Implementation Details
 
 ### Authentication
+- **HTTPS Enforcement**: Mandatory encrypted connections to protect credentials and music data in transit
 - Uses Subsonic API token-based authentication with salt/token generation
 - Credentials stored securely using flutter_secure_storage with device encryption
 - Automatic migration from legacy SharedPreferences storage
 - Automatic re-authentication on app startup with comprehensive error handling
+- Multi-layer HTTPS validation (validators, API constructor, UI feedback)
 
 ### Data Flow
 1. App initializes through AppState.initialize()
