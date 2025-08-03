@@ -13,10 +13,10 @@ Voidweaver implements robust memory leak prevention through:
 
 ## Service-Level Disposal
 
-### AudioPlayerService
+### AudioPlayerService  
 **Location:** `lib/services/audio_player_service.dart:815-823`
 
-Disposes all critical resources:
+Disposes all critical just_audio resources:
 ```dart
 @override
 void dispose() {
@@ -169,8 +169,8 @@ void dispose() {
 Comprehensive test suite with 8 tests covering:
 
 1. **AudioPlayerService Resource Disposal**
-   - Verifies all stream subscriptions are cancelled
-   - Tests proper audio player disposal
+   - Verifies all just_audio stream subscriptions are cancelled
+   - Tests proper just_audio player disposal
    - Ensures service rejects listeners after disposal
 
 2. **AppState Timer and Service Cleanup**

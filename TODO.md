@@ -3,7 +3,18 @@
 ## 🚨 Critical Issues (Fix First)
 
 ## 🔧 Core Functionality Gaps
-- [ ] **Enable bluetooth controls** - https://pub.dev/packages/audio_service
+- [ ] **Fix bluetooth controls** - ⚠️ Migrated to just_audio but still has issues:
+  - [ ] **Skip commands pause instead of advancing** - Bluetooth skip commands pause playback on first press, only advance to next track on second press
+  - [ ] **Play command unreliable after pause** - After pausing via Bluetooth, play command requires multiple attempts to resume playback
+  - [ ] **State synchronization issues** - just_audio PlayerState changes not properly synchronized with audio_service MediaAction handling
+  - [ ] **Skip operation race conditions** - `_skipOperationInProgress` flag may be interfering with proper state transitions during track changes
+  
+### Technical Investigation Needed:
+  - [ ] **Debug audio_service MediaAction handling** - Check if skipToNext/skipToPrevious actions are being properly processed
+  - [ ] **Review just_audio state machine** - Investigate PlayerState.playing vs ProcessingState.ready interactions during media commands
+  - [ ] **Simplify skip operations** - Consider removing _skipOperationInProgress protection that may be blocking legitimate state changes
+  - [ ] **Alternative approach: just_audio_background** - Consider migrating to just_audio_background for simpler native control integration
+  - [ ] **Audio focus management** - Review if aggressive audio focus requests are interfering with Bluetooth command processing
 
 ## 🎨 UI/UX Improvements
 

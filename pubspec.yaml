@@ -9,7 +9,7 @@ dependencies:
   flutter:
     sdk: flutter
   http_plus: ^0.2.3
-  audioplayers: ^6.5.0
+  just_audio: ^0.10.4
   crypto: ^3.0.3
   xml: ^6.3.0
   shared_preferences: ^2.2.2

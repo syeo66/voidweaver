@@ -25,7 +25,7 @@ The project includes a Makefile for streamlined development workflows:
 
 ### Code Quality
 - `flutter analyze` - Static analysis (currently 0 issues)
-- `flutter test` - Run test suite (118/118 passing)
+- `flutter test` - Run test suite (118/118 passing with just_audio mocks)
 - `flutter pub deps` - Check dependency graph including HTTP/2 support
 - `flutter test test/utils/validators_test.dart` - Run input validation tests specifically
 - `flutter test test/widgets/error_boundary_test.dart` - Run error boundary tests specifically
@@ -43,7 +43,7 @@ The project includes a Makefile for streamlined development workflows:
 Voidweaver uses a clean, optimized architecture with:
 
 - **Provider** pattern for efficient state management with comprehensive loading states
-- **Service layer** for HTTP/2-enabled API communication with mandatory HTTPS enforcement, audio playback, ReplayGain processing, and server scrobbling
+- **Service layer** for HTTP/2-enabled API communication with mandatory HTTPS enforcement, just_audio-based playback, ReplayGain processing, and server scrobbling
 - **Native audio service integration** for system-level media controls and background playback
 - **Client-side metadata extraction** for ReplayGain data from audio files
 - **Automatic server notifications** for played songs and listening statistics
@@ -117,7 +117,7 @@ flutter test --coverage  # Run tests with coverage report
   - Added 7 comprehensive tests for caching functionality (105/105 total tests passing)
 - **Testable architecture and comprehensive test coverage**: Fixed all failing tests and implemented robust testing infrastructure
   - Refactored AudioPlayerService to accept optional dependency injection for testing
-  - Created comprehensive MockAudioPlayer with stream simulation for reliable testing
+  - Created comprehensive MockAudioPlayer using just_audio API with broadcast streams for reliable testing
   - Fixed all plugin-related test failures that prevented CI/CD workflows
   - Achieved 100% test pass rate (105/105 tests) with comprehensive coverage
   - Added robust mock infrastructure for future audio functionality testing
@@ -189,11 +189,14 @@ flutter test --coverage  # Run tests with coverage report
 
 ## Audio Service Integration
 
+- **just_audio backend**: Migrated from audioplayers to just_audio for improved ExoPlayer integration and better Bluetooth support
 - Audio service initializes automatically when server is configured in AppState
-- VoidweaverAudioHandler manages communication between AudioPlayerService and system controls
+- VoidweaverAudioHandler manages communication between AudioPlayerService and system controls using audio_service
 - MediaItem updates occur automatically when tracks change
+- PlayerState monitoring: Uses just_audio's playerStateStream for more reliable state tracking
 - Graceful fallback ensures app works without native controls if initialization fails
 - Import conflicts resolved using namespace aliases (audio_player_service.dart as aps)
+- **Known Bluetooth Issues**: See TODO.md for current Bluetooth control limitations and planned fixes
 
 ## Advanced Skip Protection Architecture
 
