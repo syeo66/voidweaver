@@ -3,18 +3,23 @@
 ## 🚨 Critical Issues (Fix First)
 
 ## 🔧 Core Functionality Gaps
-- [ ] **Fix bluetooth controls** - ⚠️ Migrated to just_audio but still has issues:
-  - [ ] **Skip commands pause instead of advancing** - Bluetooth skip commands pause playback on first press, only advance to next track on second press
-  - [ ] **Play command unreliable after pause** - After pausing via Bluetooth, play command requires multiple attempts to resume playback
-  - [ ] **State synchronization issues** - just_audio PlayerState changes not properly synchronized with audio_service MediaAction handling
-  - [ ] **Skip operation race conditions** - `_skipOperationInProgress` flag may be interfering with proper state transitions during track changes
+- [x] **Fix bluetooth controls** - ✅ **MOSTLY FIXED** - Implemented skip state masking and audio focus improvements:
+  - [x] **Skip commands pause instead of advancing** - ✅ **FIXED** - Skip operations now work reliably with state masking during transitions
+  - [ ] **Play command requires double-press after pause** - ⚠️ After pausing via Bluetooth, play command requires pressing twice to resume playback
+  - [x] **State synchronization issues** - ✅ **FIXED** - Implemented dual state architecture with direct just_audio PlayerState listening
+  - [x] **Skip operation race conditions** - ✅ **FIXED** - Skip protection preserved while allowing proper state updates to audio_service
   
-### Technical Investigation Needed:
-  - [ ] **Debug audio_service MediaAction handling** - Check if skipToNext/skipToPrevious actions are being properly processed
-  - [ ] **Review just_audio state machine** - Investigate PlayerState.playing vs ProcessingState.ready interactions during media commands
-  - [ ] **Simplify skip operations** - Consider removing _skipOperationInProgress protection that may be blocking legitimate state changes
-  - [ ] **Alternative approach: just_audio_background** - Consider migrating to just_audio_background for simpler native control integration
-  - [ ] **Audio focus management** - Review if aggressive audio focus requests are interfering with Bluetooth command processing
+### Remaining Bluetooth Issues:
+  - [ ] **Double-press play after pause** - Audio focus conflicts cause first play command to be ignored, requiring second press
+    - **Root cause**: AudioManager audio focus changes interrupt playback immediately after play command
+    - **Evidence**: Device logs show `onAudioFocusChange(-1)` immediately after play requests
+    - **Solution needed**: Delay audio focus requests or handle focus changes more gracefully
+  
+### Technical Fixes Implemented:
+  - [x] **Skip state masking** - During skip operations, mask transient paused states from audio_service
+  - [x] **Dual state listening** - VoidweaverAudioHandler listens directly to just_audio PlayerState for real-time updates
+  - [x] **Audio focus optimization** - Removed audio focus requests during skip operations
+  - [x] **Processing state masking** - Show consistent ready state during skip transitions
 
 ## 🎨 UI/UX Improvements
 

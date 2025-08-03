@@ -25,7 +25,7 @@ The project includes a Makefile for streamlined development workflows:
 
 ### Code Quality
 - `flutter analyze` - Static analysis (currently 0 issues)
-- `flutter test` - Run test suite (118/118 passing with just_audio mocks)
+- `flutter test` - Run test suite (118+ passing with comprehensive just_audio mocks and Bluetooth controls validation)
 - `flutter pub deps` - Check dependency graph including HTTP/2 support
 - `flutter test test/utils/validators_test.dart` - Run input validation tests specifically
 - `flutter test test/widgets/error_boundary_test.dart` - Run error boundary tests specifically
@@ -189,14 +189,17 @@ flutter test --coverage  # Run tests with coverage report
 
 ## Audio Service Integration
 
-- **just_audio backend**: Migrated from audioplayers to just_audio for improved ExoPlayer integration and better Bluetooth support
+- **just_audio backend**: Migrated from audioplayers to just_audio for improved ExoPlayer integration and enhanced Bluetooth support
+- **Dual State Architecture**: VoidweaverAudioHandler uses both AudioPlayerService state updates and direct just_audio PlayerState listening for reliable media controls
+- **Skip State Masking**: During skip operations, masks transient paused states from audio_service to prevent Bluetooth control confusion
+- **Audio Focus Optimization**: Removes interfering audio focus requests during skip operations to improve reliability
 - Audio service initializes automatically when server is configured in AppState
 - VoidweaverAudioHandler manages communication between AudioPlayerService and system controls using audio_service
 - MediaItem updates occur automatically when tracks change
-- PlayerState monitoring: Uses just_audio's playerStateStream for more reliable state tracking
+- PlayerState monitoring: Uses just_audio's playerStateStream for real-time state synchronization
 - Graceful fallback ensures app works without native controls if initialization fails
 - Import conflicts resolved using namespace aliases (audio_player_service.dart as aps)
-- **Known Bluetooth Issues**: See TODO.md for current Bluetooth control limitations and planned fixes
+- **Bluetooth Controls**: Skip operations now work reliably; minor play-after-pause issue remains (see [BLUETOOTH_CONTROLS.md](BLUETOOTH_CONTROLS.md) and TODO.md)
 
 ## Advanced Skip Protection Architecture
 

@@ -72,6 +72,12 @@ class AudioPlayerService extends ChangeNotifier {
     _initializePlayer();
   }
 
+  // Expose AudioPlayer for direct state access by VoidweaverAudioHandler
+  AudioPlayer get audioPlayer => _audioPlayer;
+  
+  // Expose skip operation state to VoidweaverAudioHandler for state masking
+  bool get isSkipOperationInProgress => _skipOperationInProgress;
+
   PlaybackState get playbackState => _playbackState;
   List<Song> get playlist => _playlist;
   int get currentIndex => _currentIndex;
