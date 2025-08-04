@@ -74,7 +74,7 @@ class AudioPlayerService extends ChangeNotifier {
 
   // Expose AudioPlayer for direct state access by VoidweaverAudioHandler
   AudioPlayer get audioPlayer => _audioPlayer;
-  
+
   // Expose skip operation state to VoidweaverAudioHandler for state masking
   bool get isSkipOperationInProgress => _skipOperationInProgress;
 
@@ -141,17 +141,18 @@ class AudioPlayerService extends ChangeNotifier {
       notifyListeners();
     });
 
-    _playerCompleteSubscription = _audioPlayer.playerStateStream.listen((state) {
+    _playerCompleteSubscription =
+        _audioPlayer.playerStateStream.listen((state) {
       if (state.processingState == ProcessingState.completed) {
         debugPrint('[audio_player] onPlayerComplete event fired');
         _onSongComplete();
       }
     });
 
-    _playerStateSubscription =
-        _audioPlayer.playerStateStream.listen((state) {
-      debugPrint('[audio_player] State changed to: $state (skipInProgress: $_skipOperationInProgress)');
-      
+    _playerStateSubscription = _audioPlayer.playerStateStream.listen((state) {
+      debugPrint(
+          '[audio_player] State changed to: $state (skipInProgress: $_skipOperationInProgress)');
+
       // Handle playing state
       if (state.playing && state.processingState != ProcessingState.completed) {
         _playbackState = PlaybackState.playing;
@@ -165,7 +166,8 @@ class AudioPlayerService extends ChangeNotifier {
               _playbackState = PlaybackState.stopped;
               debugPrint('[audio_player] Set state to STOPPED');
             } else {
-              debugPrint('[audio_player] Idle state ignored during skip operation');
+              debugPrint(
+                  '[audio_player] Idle state ignored during skip operation');
               // Don't return here - still notify listeners but don't change state
             }
             break;
@@ -181,7 +183,8 @@ class AudioPlayerService extends ChangeNotifier {
             break;
           case ProcessingState.completed:
             // Don't handle completion here - handled in separate subscription
-            debugPrint('[audio_player] Completed state ignored - handled by completion listener');
+            debugPrint(
+                '[audio_player] Completed state ignored - handled by completion listener');
             return;
         }
       }
@@ -368,21 +371,26 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   Future<void> play() async {
-    debugPrint('[audio_player] Play requested - currentSong: ${_currentSong?.title}, state: $_playbackState');
-    
+    debugPrint(
+        '[audio_player] Play requested - currentSong: ${_currentSong?.title}, state: $_playbackState');
+
     if (_currentSong == null && _playlist.isNotEmpty) {
-      debugPrint('[audio_player] No current song, starting playlist at index $_currentIndex');
+      debugPrint(
+          '[audio_player] No current song, starting playlist at index $_currentIndex');
       await _playSongAtIndex(_currentIndex);
     } else if (_currentSong != null) {
-      debugPrint('[audio_player] Resuming current song: ${_currentSong!.title}');
+      debugPrint(
+          '[audio_player] Resuming current song: ${_currentSong!.title}');
       await _audioPlayer.play();
     } else {
-      debugPrint('[audio_player] Cannot play - no current song and empty playlist');
+      debugPrint(
+          '[audio_player] Cannot play - no current song and empty playlist');
     }
   }
 
   Future<void> pause() async {
-    debugPrint('[audio_player] Pause requested - currentSong: ${_currentSong?.title}, state: $_playbackState');
+    debugPrint(
+        '[audio_player] Pause requested - currentSong: ${_currentSong?.title}, state: $_playbackState');
     await _audioPlayer.pause();
   }
 

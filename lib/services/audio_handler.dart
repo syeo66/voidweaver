@@ -13,10 +13,10 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
   late StreamSubscription _directPlayerStateSubscription;
   static const MethodChannel _audioFocusChannel =
       MethodChannel('voidweaver/audio_focus');
-  
+
   // State masking for skip operations
   bool _lastKnownPlayingState = false;
-  
+
   // Audio focus management
   bool _hasAudioFocus = false;
   Timer? _focusRequestTimer;
@@ -30,7 +30,8 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
     _audioPlayerService.addListener(_updateMediaItem);
 
     // Listen directly to just_audio PlayerState for real-time system state updates
-    _directPlayerStateSubscription = _audioPlayerService.audioPlayer.playerStateStream.listen((playerState) {
+    _directPlayerStateSubscription =
+        _audioPlayerService.audioPlayer.playerStateStream.listen((playerState) {
       _updateSystemPlaybackState(playerState);
     });
 
@@ -42,7 +43,7 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
 
     // Set initial state based on current AudioPlayerService state
     _updateMediaItem();
-    
+
     // Initialize with inactive media session that will be activated on play
     playbackState.add(playbackState.value.copyWith(
       processingState: AudioProcessingState.idle,
@@ -87,16 +88,17 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
 
   void _updateSystemPlaybackState(PlayerState playerState) {
     debugPrint('[native_controls] Direct PlayerState update: $playerState');
-    
+
     final isSkipping = _audioPlayerService.isSkipOperationInProgress;
     final actualPlaying = playerState.playing;
-    
+
     // Skip state masking: during skip operations, ignore transient paused states
     bool effectivePlaying;
     if (isSkipping && !actualPlaying) {
       // During skip, ignore just_audio's temporary paused state
       effectivePlaying = _lastKnownPlayingState;
-      debugPrint('[native_controls] Skip state masking: ignoring paused state during skip, using last known: $_lastKnownPlayingState');
+      debugPrint(
+          '[native_controls] Skip state masking: ignoring paused state during skip, using last known: $_lastKnownPlayingState');
     } else {
       // Not skipping or skip completed with playing=true, use actual state
       effectivePlaying = actualPlaying;
@@ -105,7 +107,7 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
         _lastKnownPlayingState = actualPlaying;
       }
     }
-    
+
     AudioProcessingState processingState;
     switch (playerState.processingState) {
       case ProcessingState.idle:
@@ -114,7 +116,9 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
       case ProcessingState.loading:
       case ProcessingState.buffering:
         // During skip operations, show as ready instead of loading to avoid confusion
-        processingState = isSkipping ? AudioProcessingState.ready : AudioProcessingState.loading;
+        processingState = isSkipping
+            ? AudioProcessingState.ready
+            : AudioProcessingState.loading;
         break;
       case ProcessingState.ready:
         processingState = AudioProcessingState.ready;
@@ -124,7 +128,8 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
         break;
     }
 
-    debugPrint('[native_controls] State mapping - actual: $actualPlaying, effective: $effectivePlaying, skipping: $isSkipping');
+    debugPrint(
+        '[native_controls] State mapping - actual: $actualPlaying, effective: $effectivePlaying, skipping: $isSkipping');
 
     // Update playback state with masked information
     playbackState.add(playbackState.value.copyWith(
@@ -142,7 +147,10 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
       controls: [
         if (_audioPlayerService.hasPrevious) MediaControl.skipToPrevious,
         MediaControl.rewind,
-        if (playbackState.value.playing) MediaControl.pause else MediaControl.play,
+        if (playbackState.value.playing)
+          MediaControl.pause
+        else
+          MediaControl.play,
         MediaControl.fastForward,
         if (_audioPlayerService.hasNext) MediaControl.skipToNext,
         MediaControl.stop,
@@ -257,13 +265,15 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
   /// Request audio focus to ensure this app receives media button events
   void _requestAudioFocus() async {
     if (_hasAudioFocus) {
-      debugPrint('[native_controls] Already have audio focus, skipping request');
+      debugPrint(
+          '[native_controls] Already have audio focus, skipping request');
       return;
     }
-    
+
     // Check if we already have audio focus from the system's perspective
     try {
-      final hasSystemFocus = await _audioFocusChannel.invokeMethod('hasAudioFocus');
+      final hasSystemFocus =
+          await _audioFocusChannel.invokeMethod('hasAudioFocus');
       if (hasSystemFocus == true) {
         _hasAudioFocus = true;
         debugPrint('[native_controls] Already have system audio focus');
@@ -272,7 +282,7 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
     } catch (e) {
       debugPrint('[native_controls] Could not check audio focus state: $e');
     }
-    
+
     // Make this non-blocking to prevent interference with playback
     _audioFocusChannel.invokeMethod('requestAudioFocus').then((result) {
       if (result == true) {
@@ -285,7 +295,7 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
       debugPrint('[native_controls] Failed to request audio focus: $e');
     });
   }
-  
+
   /// Request audio focus with a delay to prevent immediate conflicts
   void _requestAudioFocusDelayed() {
     _focusRequestTimer?.cancel();

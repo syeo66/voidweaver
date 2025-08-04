@@ -33,7 +33,11 @@ class MockAudioPlayer extends Mock implements AudioPlayer {
   Duration get position => _position;
 
   @override
-  Future<Duration?> setUrl(String url, {Map<String, String>? headers, Duration? initialPosition, bool preload = true, dynamic tag}) async {
+  Future<Duration?> setUrl(String url,
+      {Map<String, String>? headers,
+      Duration? initialPosition,
+      bool preload = true,
+      dynamic tag}) async {
     // Simulate setting URL and getting duration
     _duration = const Duration(minutes: 3);
     _durationController.add(_duration);
@@ -100,7 +104,10 @@ class MockAudioPlayer extends Mock implements AudioPlayer {
 
   // Additional just_audio specific methods that might be needed
   @override
-  Future<Duration?> setAudioSource(AudioSource source, {bool preload = true, int? initialIndex, Duration? initialPosition}) async {
+  Future<Duration?> setAudioSource(AudioSource source,
+      {bool preload = true,
+      int? initialIndex,
+      Duration? initialPosition}) async {
     // Mock implementation
     return _duration;
   }
