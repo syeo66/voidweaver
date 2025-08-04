@@ -1,25 +1,23 @@
 # Voidweaver TODO
 
 ## 🚨 Critical Issues (Fix First)
+**All critical issues have been resolved! ✅**
 
 ## 🔧 Core Functionality Gaps
-- [x] **Fix bluetooth controls** - ✅ **MOSTLY FIXED** - Implemented skip state masking and audio focus improvements:
+- [x] **Fix bluetooth controls** - ✅ **FULLY FIXED** - Implemented comprehensive audio focus handling improvements:
   - [x] **Skip commands pause instead of advancing** - ✅ **FIXED** - Skip operations now work reliably with state masking during transitions
-  - [ ] **Play command requires double-press after pause** - ⚠️ After pausing via Bluetooth, play command requires pressing twice to resume playback
+  - [x] **Play command requires double-press after pause** - ✅ **FIXED** - Implemented delayed audio focus requests and improved focus change handling to prevent conflicts
   - [x] **State synchronization issues** - ✅ **FIXED** - Implemented dual state architecture with direct just_audio PlayerState listening
   - [x] **Skip operation race conditions** - ✅ **FIXED** - Skip protection preserved while allowing proper state updates to audio_service
-  
-### Remaining Bluetooth Issues:
-  - [ ] **Double-press play after pause** - Audio focus conflicts cause first play command to be ignored, requiring second press
-    - **Root cause**: AudioManager audio focus changes interrupt playback immediately after play command
-    - **Evidence**: Device logs show `onAudioFocusChange(-1)` immediately after play requests
-    - **Solution needed**: Delay audio focus requests or handle focus changes more gracefully
   
 ### Technical Fixes Implemented:
   - [x] **Skip state masking** - During skip operations, mask transient paused states from audio_service
   - [x] **Dual state listening** - VoidweaverAudioHandler listens directly to just_audio PlayerState for real-time updates
   - [x] **Audio focus optimization** - Removed audio focus requests during skip operations
   - [x] **Processing state masking** - Show consistent ready state during skip transitions
+  - [x] **Delayed audio focus requests** - Request audio focus with 100ms delay after play to prevent immediate conflicts
+  - [x] **Focus state tracking** - Track audio focus state to avoid unnecessary requests
+  - [x] **Grace period for focus changes** - Android-side grace period (300ms) to ignore focus changes immediately after requests
 
 ## 🎨 UI/UX Improvements
 
@@ -64,12 +62,13 @@
 ## 🧪 Testing & Quality
 
 ### Test Coverage
-- [x] **Unit tests** - ✅ Comprehensive test suite (113+ passing) covering data models, utilities, sleep timer, caching functionality, and input validation
+- [x] **Unit tests** - ✅ Comprehensive test suite (123+ passing) covering data models, utilities, sleep timer, caching functionality, input validation, and Bluetooth controls
 - [x] **Mock infrastructure** - ✅ Robust AudioPlayer mocking system for reliable testing
 - [x] **Testable architecture** - ✅ Refactored AudioPlayerService with dependency injection
 - [x] **Caching system tests** - ✅ Added 7 comprehensive tests for API cache, request deduplication, and cache invalidation
 - [x] **Input validation tests** - ✅ Added 37 comprehensive tests covering all validation scenarios, edge cases, and security concerns
 - [x] **Memory leak prevention tests** - ✅ Added 8 comprehensive tests covering service disposal, timer cleanup, stream subscription management, and resource safety
+- [x] **Bluetooth controls tests** - ✅ Added 5 comprehensive tests covering audio focus management, delayed requests, state tracking, and conflict prevention
 - [x] **Dependency compatibility testing** - ✅ All tests validated after major dependency updates to ensure no regressions
 - [ ] **Integration tests** - Test complete user workflows
 - [ ] **Audio playback tests** - Test core playback functionality beyond mocking

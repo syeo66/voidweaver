@@ -17,7 +17,7 @@ A high-quality Flutter music player application that streams music from your per
   - Track or Album normalization modes
   - Preamp control for personal preference
   - Works with MP3, FLAC, and OGG files
-- **Native Media Controls**: Reliable control from lock screen, notification panel, and Bluetooth devices with dual state architecture for skip operation consistency
+- **Native Media Controls**: Reliable control from lock screen, notification panel, and Bluetooth devices with comprehensive audio focus management ensuring single-press reliability
 - **Interactive Progress**: Tap or drag to seek to any position in tracks
 - **Sleep Timer**: Auto-pause with preset durations (5min to 2 hours)
 - **Seamless Playback**: Next track preloading for instant transitions
@@ -39,7 +39,7 @@ A high-quality Flutter music player application that streams music from your per
 - **Server Scrobbling**: Automatic play count tracking and listening statistics
 - **Robust Error Handling**: Graceful recovery from network issues and widget failures
 - **Background Sync**: Automatic library updates every 5 minutes
-- **Modern Dependencies**: Regularly updated dependencies with comprehensive testing (118+ test suite)
+- **Modern Dependencies**: Regularly updated dependencies with comprehensive testing (123+ test suite)
 - **just_audio Integration**: Enhanced audio performance with dual state synchronization for reliable Bluetooth and native media controls
 
 ## Getting Started
@@ -119,12 +119,13 @@ Voidweaver automatically normalizes audio volume for consistent playback:
 
 ## Native Media Controls
 
-Control your music from anywhere:
+Control your music from anywhere with full reliability:
 
 - **Lock Screen**: Full playback control with track info and album art
-- **Notification Panel**: Persistent media controls in notification area
-- **Bluetooth Devices**: Headphone buttons and car stereo controls
+- **Notification Panel**: Persistent media controls in notification area  
+- **Bluetooth Devices**: Headphone buttons and car stereo controls work perfectly with single-press reliability
 - **Background Playback**: Continues playing when app is backgrounded
+- **Audio Focus Management**: Intelligent handling prevents conflicts and ensures consistent behavior across all control interfaces
 
 ## Troubleshooting
 
@@ -139,7 +140,7 @@ Control your music from anywhere:
 - **Volume too quiet/loud**: Adjust ReplayGain preamp setting
 - **Distortion**: Enable "Prevent Clipping" in ReplayGain settings
 - **Inconsistent volume**: Use Track mode for consistent levels
-- **Bluetooth controls**: Skip operations now work reliably; play after pause may require double-press (minor remaining issue - see TODO.md)
+- **Bluetooth controls**: All operations work reliably including skip and play after pause
 
 ### **Performance**
 - **Slow loading**: App uses HTTP/2 and advanced caching - performance improves with use

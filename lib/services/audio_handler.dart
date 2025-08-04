@@ -16,6 +16,10 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
   
   // State masking for skip operations
   bool _lastKnownPlayingState = false;
+  
+  // Audio focus management
+  bool _hasAudioFocus = false;
+  Timer? _focusRequestTimer;
 
   VoidweaverAudioHandler(this._audioPlayerService, this._api) {
     _init();
@@ -173,10 +177,11 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> play() async {
     debugPrint('[native_controls] Play requested from native controls');
 
-    // Only request audio focus on manual play, not during state updates
-    _requestAudioFocus();
-
+    // Start playback immediately to avoid delays
     await _audioPlayerService.play();
+
+    // Request audio focus with a slight delay to avoid immediate conflicts
+    _requestAudioFocusDelayed();
   }
 
   @override
@@ -250,19 +255,51 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   /// Request audio focus to ensure this app receives media button events
-  void _requestAudioFocus() {
+  void _requestAudioFocus() async {
+    if (_hasAudioFocus) {
+      debugPrint('[native_controls] Already have audio focus, skipping request');
+      return;
+    }
+    
+    // Check if we already have audio focus from the system's perspective
+    try {
+      final hasSystemFocus = await _audioFocusChannel.invokeMethod('hasAudioFocus');
+      if (hasSystemFocus == true) {
+        _hasAudioFocus = true;
+        debugPrint('[native_controls] Already have system audio focus');
+        return;
+      }
+    } catch (e) {
+      debugPrint('[native_controls] Could not check audio focus state: $e');
+    }
+    
     // Make this non-blocking to prevent interference with playback
-    _audioFocusChannel.invokeMethod('requestAudioFocus').then((_) {
-      debugPrint('[native_controls] Audio focus requested');
+    _audioFocusChannel.invokeMethod('requestAudioFocus').then((result) {
+      if (result == true) {
+        _hasAudioFocus = true;
+        debugPrint('[native_controls] Audio focus granted');
+      } else {
+        debugPrint('[native_controls] Audio focus denied');
+      }
     }).catchError((e) {
       debugPrint('[native_controls] Failed to request audio focus: $e');
+    });
+  }
+  
+  /// Request audio focus with a delay to prevent immediate conflicts
+  void _requestAudioFocusDelayed() {
+    _focusRequestTimer?.cancel();
+    _focusRequestTimer = Timer(const Duration(milliseconds: 100), () {
+      _requestAudioFocus();
     });
   }
 
   /// Abandon audio focus when stopping playback
   Future<void> _abandonAudioFocus() async {
+    _focusRequestTimer?.cancel();
     try {
       await _audioFocusChannel.invokeMethod('abandonAudioFocus');
+      _hasAudioFocus = false;
       debugPrint('[native_controls] Audio focus abandoned');
     } catch (e) {
       debugPrint('[native_controls] Failed to abandon audio focus: $e');
@@ -270,6 +307,7 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   void dispose() {
+    _focusRequestTimer?.cancel();
     _abandonAudioFocus();
     _audioPlayerService.removeListener(_updateMediaItem);
     _positionSubscription.cancel();
