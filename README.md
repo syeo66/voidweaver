@@ -26,9 +26,10 @@ A high-quality Flutter music player application that streams music from your per
 - **Dark Mode**: System-aware theme with manual override
 - **Landscape Support**: Responsive layouts optimized for both portrait and landscape orientations
 - **Fast Loading**: HTTP/2 support with connection reuse and advanced caching for instant response
+- **Network Optimization**: Intelligent timeout handling with configurable retry logic and connection presets (Fast/Default/Slow) for different network conditions
 - **Offline Capability**: Browse cached content without network
 - **Real-time Updates**: Background sync keeps your library fresh
-- **Comprehensive Feedback**: Clear loading states and error messages
+- **Comprehensive Feedback**: Clear loading states and user-friendly error messages with troubleshooting suggestions
 - **Pull-to-Refresh**: Manual refresh on album and artist lists
 
 ### 🔒 **Security & Reliability**
@@ -100,6 +101,12 @@ Access via menu (⋮) → Settings:
 #### **Appearance**
 - **Theme**: Light, Dark, or System (follows device setting)
 
+#### **Network & Timeouts**
+- **Connection Presets**: Fast, Default, or Slow presets optimized for different network conditions
+- **Advanced Settings**: Fine-tune connection, request, metadata, and streaming timeouts
+- **Retry Configuration**: Configurable retry attempts with exponential backoff
+- **Error Recovery**: Intelligent error handling with user-friendly messages and troubleshooting suggestions
+
 #### **ReplayGain Audio Normalization**
 - **Mode**: Off, Track (consistent volume), or Album (preserves dynamics)
 - **Preamp**: Global volume adjustment (-15dB to +15dB)
@@ -135,6 +142,13 @@ Control your music from anywhere with full reliability:
 - Ensure server supports Subsonic API
 - Make sure URL includes protocol and hostname
 - **HTTPS Required**: The app only accepts HTTPS connections to protect your credentials and music data
+
+### **Network Timeout Issues**
+- **Slow connections**: Try the "Slow Connection" preset in Network & Timeouts settings
+- **Frequent timeouts**: Increase timeout values in Advanced Network Settings
+- **Connection failures**: Check server accessibility and consider using Fast preset for reliable connections
+- **Error messages**: Follow the specific suggestions provided with each error for optimal resolution
+- **Network switching**: Try different networks (WiFi vs mobile data) if issues persist
 
 ### **Audio Issues**
 - **Volume too quiet/loud**: Adjust ReplayGain preamp setting

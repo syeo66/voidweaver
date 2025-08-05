@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../services/settings_service.dart';
 import '../services/app_state.dart';
 import '../utils/validators.dart';
+import 'advanced_network_dialog.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -45,6 +46,8 @@ class _SettingsContent extends StatelessWidget {
           padding: const EdgeInsets.all(16.0),
           children: [
             _buildAppearanceSection(context, settingsService),
+            const SizedBox(height: 16),
+            _buildNetworkSection(context, settingsService),
             const SizedBox(height: 16),
             _buildReplayGainSection(context, settingsService),
           ],
@@ -117,9 +120,9 @@ class _SettingsContent extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.green.withValues(alpha: 0.1),
+                color: Colors.green.withAlpha(25),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                border: Border.all(color: Colors.green.withAlpha(76)),
               ),
               child: Row(
                 children: [
@@ -299,6 +302,157 @@ class _SettingsContent extends StatelessWidget {
     if (audioPlayer != null) {
       audioPlayer.refreshReplayGainVolume();
     }
+  }
+
+  Widget _buildNetworkSection(
+      BuildContext context, SettingsService settingsService) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Network & Timeouts',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 16),
+
+            // Preset configurations
+            Text(
+              'Connection Preset',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      await settingsService.setNetworkConfigToFast();
+                      if (context.mounted) {
+                        _showNetworkConfigSuccess(
+                            context, 'Fast connection preset applied');
+                      }
+                    },
+                    child: const Text('Fast'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      await settingsService.resetNetworkConfigToDefault();
+                      if (context.mounted) {
+                        _showNetworkConfigSuccess(
+                            context, 'Default connection preset applied');
+                      }
+                    },
+                    child: const Text('Default'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      await settingsService.setNetworkConfigToSlow();
+                      if (context.mounted) {
+                        _showNetworkConfigSuccess(
+                            context, 'Slow connection preset applied');
+                      }
+                    },
+                    child: const Text('Slow'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Current configuration display
+            Text(
+              'Current Configuration',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12.0),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outline.withAlpha(76),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildConfigRow('Connection Timeout',
+                      '${settingsService.networkConfig.connectionTimeout.inSeconds}s'),
+                  _buildConfigRow('Request Timeout',
+                      '${settingsService.networkConfig.requestTimeout.inSeconds}s'),
+                  _buildConfigRow('Max Retries',
+                      '${settingsService.networkConfig.maxRetryAttempts}'),
+                  _buildConfigRow(
+                      'Retry on Timeout',
+                      settingsService.networkConfig.enableRetryOnTimeout
+                          ? 'Yes'
+                          : 'No'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Advanced settings button
+            Center(
+              child: TextButton.icon(
+                onPressed: () {
+                  _showAdvancedNetworkSettings(context, settingsService);
+                },
+                icon: const Icon(Icons.settings),
+                label: const Text('Advanced Settings'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConfigRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label),
+          Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAdvancedNetworkSettings(
+      BuildContext context, SettingsService settingsService) {
+    showDialog(
+      context: context,
+      builder: (context) => AdvancedNetworkSettingsDialog(
+        settingsService: settingsService,
+      ),
+    );
+  }
+
+  void _showNetworkConfigSuccess(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   void _showValidationError(BuildContext context, String message) {

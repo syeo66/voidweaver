@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'network_config.dart';
 
 enum ReplayGainMode {
   off,
@@ -15,6 +17,7 @@ class SettingsService extends ChangeNotifier {
       'replayGainPreventClipping';
   static const String _replayGainFallbackGainKey = 'replayGainFallbackGain';
   static const String _themeModeKey = 'themeMode';
+  static const String _networkConfigKey = 'networkConfig';
 
   SharedPreferences? _prefs;
 
@@ -23,12 +26,14 @@ class SettingsService extends ChangeNotifier {
   bool _replayGainPreventClipping = true;
   double _replayGainFallbackGain = 0.0; // dB for files without ReplayGain data
   ThemeMode _themeMode = ThemeMode.system;
+  NetworkConfig _networkConfig = NetworkConfig.defaultConfig;
 
   ReplayGainMode get replayGainMode => _replayGainMode;
   double get replayGainPreamp => _replayGainPreamp;
   bool get replayGainPreventClipping => _replayGainPreventClipping;
   double get replayGainFallbackGain => _replayGainFallbackGain;
   ThemeMode get themeMode => _themeMode;
+  NetworkConfig get networkConfig => _networkConfig;
 
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
@@ -49,6 +54,20 @@ class SettingsService extends ChangeNotifier {
 
     final themeModeIndex = _prefs!.getInt(_themeModeKey) ?? 0;
     _themeMode = ThemeMode.values[themeModeIndex];
+
+    // Load network configuration
+    final networkConfigJson = _prefs!.getString(_networkConfigKey);
+    if (networkConfigJson != null) {
+      try {
+        final configMap = jsonDecode(networkConfigJson) as Map<String, dynamic>;
+        _networkConfig = NetworkConfig.fromJson(configMap);
+      } catch (e) {
+        // If loading fails, use default config
+        _networkConfig = NetworkConfig.defaultConfig;
+      }
+    } else {
+      _networkConfig = NetworkConfig.defaultConfig;
+    }
 
     notifyListeners();
   }
@@ -125,5 +144,64 @@ class SettingsService extends ChangeNotifier {
     _themeMode = mode;
     await _prefs?.setInt(_themeModeKey, mode.index);
     notifyListeners();
+  }
+
+  /// Set network configuration
+  Future<void> setNetworkConfig(NetworkConfig config) async {
+    _networkConfig = config;
+    final configJson = jsonEncode(config.toJson());
+    await _prefs?.setString(_networkConfigKey, configJson);
+    notifyListeners();
+  }
+
+  /// Set network configuration to default
+  Future<void> resetNetworkConfigToDefault() async {
+    await setNetworkConfig(NetworkConfig.defaultConfig);
+  }
+
+  /// Set network configuration to fast preset
+  Future<void> setNetworkConfigToFast() async {
+    await setNetworkConfig(NetworkConfig.fastConfig);
+  }
+
+  /// Set network configuration to slow preset
+  Future<void> setNetworkConfigToSlow() async {
+    await setNetworkConfig(NetworkConfig.slowConfig);
+  }
+
+  /// Update specific timeout values while keeping other settings
+  Future<void> updateTimeouts({
+    Duration? connectionTimeout,
+    Duration? requestTimeout,
+    Duration? metadataTimeout,
+    Duration? streamingTimeout,
+  }) async {
+    final updatedConfig = _networkConfig.copyWith(
+      connectionTimeout: connectionTimeout,
+      requestTimeout: requestTimeout,
+      metadataTimeout: metadataTimeout,
+      streamingTimeout: streamingTimeout,
+    );
+    await setNetworkConfig(updatedConfig);
+  }
+
+  /// Update retry settings while keeping other settings
+  Future<void> updateRetrySettings({
+    int? maxRetryAttempts,
+    Duration? initialRetryDelay,
+    double? retryBackoffMultiplier,
+    Duration? maxRetryDelay,
+    bool? enableRetryOnTimeout,
+    bool? enableRetryOnConnectionError,
+  }) async {
+    final updatedConfig = _networkConfig.copyWith(
+      maxRetryAttempts: maxRetryAttempts,
+      initialRetryDelay: initialRetryDelay,
+      retryBackoffMultiplier: retryBackoffMultiplier,
+      maxRetryDelay: maxRetryDelay,
+      enableRetryOnTimeout: enableRetryOnTimeout,
+      enableRetryOnConnectionError: enableRetryOnConnectionError,
+    );
+    await setNetworkConfig(updatedConfig);
   }
 }

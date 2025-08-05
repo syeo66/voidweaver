@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:http_plus/http_plus.dart' as http;
+import 'package:http_plus/http_plus.dart' as http_plus;
 import 'package:xml/xml.dart';
 import 'api_cache.dart';
+import 'network_config.dart';
+import 'network_retry.dart';
 
 class SubsonicApi {
   final String serverUrl;
@@ -13,13 +15,16 @@ class SubsonicApi {
   final String clientName = 'voidweaver';
   final String version = '1.16.1';
   final ApiCache _cache = ApiCache();
-  late final http.HttpPlusClient _httpClient;
+  late final http_plus.HttpPlusClient _httpClient;
+  late final NetworkRetryService _retryService;
+  final NetworkConfig _networkConfig;
 
   SubsonicApi({
     required this.serverUrl,
     required this.username,
     required this.password,
-  }) {
+    NetworkConfig? networkConfig,
+  }) : _networkConfig = networkConfig ?? NetworkConfig.defaultConfig {
     // Enforce HTTPS for security
     final uri = Uri.tryParse(serverUrl);
     if (uri == null || uri.scheme.toLowerCase() != 'https') {
@@ -31,10 +36,15 @@ class SubsonicApi {
   }
 
   void _initializeHttpClient() {
-    _httpClient = http.HttpPlusClient(
+    _httpClient = http_plus.HttpPlusClient(
       enableHttp2: true,
       maxOpenConnections: 8,
-      connectionTimeout: const Duration(seconds: 15),
+      connectionTimeout: _networkConfig.connectionTimeout,
+    );
+
+    _retryService = NetworkRetryService(
+      config: _networkConfig,
+      httpClient: _httpClient,
     );
   }
 
@@ -65,8 +75,11 @@ class SubsonicApi {
     };
   }
 
-  Future<XmlDocument> _makeRequest(String endpoint,
-      [Map<String, String>? extraParams]) async {
+  Future<XmlDocument> _makeRequest(
+    String endpoint, [
+    Map<String, String>? extraParams,
+    NetworkRequestType requestType = NetworkRequestType.metadata,
+  ]) async {
     final params = _getAuthParams();
     if (extraParams != null) {
       params.addAll(extraParams);
@@ -81,7 +94,12 @@ class SubsonicApi {
         'User-Agent': 'voidweaver/1.0',
       };
 
-      final response = await _httpClient.get(uri, headers: headers);
+      final response = await _retryService.getWithRetry(
+        uri,
+        headers: headers,
+        requestType: requestType,
+        contextDescription: 'Subsonic API: $endpoint',
+      );
 
       if (response.statusCode == 200) {
         // Properly decode UTF-8 bytes with malformed character handling
@@ -96,10 +114,21 @@ class SubsonicApi {
       } else {
         throw Exception('HTTP ${response.statusCode}: ${response.body}');
       }
+    } on NetworkTimeoutException catch (e) {
+      if (kDebugMode) {
+        debugPrint('Request timeout: $uri - $e');
+      }
+      throw Exception(
+          'Request timed out after ${e.attemptsMade} attempts: ${e.message}');
+    } on NetworkConnectionException catch (e) {
+      if (kDebugMode) {
+        debugPrint('Connection error: $uri - $e');
+      }
+      throw Exception(
+          'Connection failed after ${e.attemptsMade} attempts: ${e.message}');
     } catch (e) {
       if (kDebugMode) {
-        print('Network request failed: $uri');
-        print('Error: $e');
+        debugPrint('Network request failed: $uri - $e');
       }
       throw Exception('Network error: $e');
     }
@@ -110,8 +139,8 @@ class SubsonicApi {
       'getAlbumList2',
       {'type': 'recent', 'size': '500'},
       () async {
-        final doc = await _makeRequest(
-            'getAlbumList2', {'type': 'recent', 'size': '500'});
+        final doc = await _makeRequest('getAlbumList2',
+            {'type': 'recent', 'size': '500'}, NetworkRequestType.metadata);
         final albums = <Album>[];
 
         final albumElements = doc.findAllElements('album');
@@ -132,7 +161,8 @@ class SubsonicApi {
       {'id': id},
       () async {
         try {
-          final doc = await _makeRequest('getAlbum', {'id': id});
+          final doc = await _makeRequest(
+              'getAlbum', {'id': id}, NetworkRequestType.metadata);
           final albumElements = doc.findAllElements('album');
           if (albumElements.isEmpty) {
             // Debug: log the full response to understand the structure
@@ -251,7 +281,8 @@ class SubsonicApi {
             'songCount': songCount.toString(),
           };
 
-          final doc = await _makeRequest('search3', params);
+          final doc = await _makeRequest(
+              'search3', params, NetworkRequestType.metadata);
 
           // Debug: Print the XML response to understand the structure
           if (kDebugMode) {
@@ -363,8 +394,41 @@ class SubsonicApi {
     _cache.invalidatePattern('search');
   }
 
+  /// Update network configuration (recreates HTTP client and retry service)
+  void updateNetworkConfig(NetworkConfig newConfig) {
+    // Dispose existing resources
+    _httpClient.close();
+    _retryService.dispose();
+
+    // Update config and reinitialize
+    // Note: We can't update _networkConfig directly since it's final
+    // This would require a refactor to make it mutable, but for now
+    // we'll document that a new SubsonicApi instance is needed
+    throw UnsupportedError(
+        'Network configuration updates require creating a new SubsonicApi instance. '
+        'Current config: $_networkConfig');
+  }
+
+  /// Get current network configuration
+  NetworkConfig get networkConfig => _networkConfig;
+
+  /// Check if retry service is available and configured
+  bool get hasRetryCapability => _networkConfig.maxRetryAttempts > 0;
+
+  /// Get network timeout statistics
+  Map<String, dynamic> getNetworkStats() {
+    return {
+      'connectionTimeout': _networkConfig.connectionTimeout.inSeconds,
+      'requestTimeout': _networkConfig.requestTimeout.inSeconds,
+      'maxRetries': _networkConfig.maxRetryAttempts,
+      'retryEnabled': hasRetryCapability,
+      'config': _networkConfig.toString(),
+    };
+  }
+
   /// Dispose the HTTP client and clean up resources
   void dispose() {
+    _retryService.dispose();
     _httpClient.close();
   }
 }
