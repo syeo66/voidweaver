@@ -40,7 +40,7 @@ A high-quality Flutter music player application that streams music from your per
 - **Server Scrobbling**: Automatic play count tracking and listening statistics
 - **Robust Error Handling**: Graceful recovery from network issues and widget failures
 - **Background Sync**: Automatic library updates every 5 minutes
-- **Modern Dependencies**: Regularly updated dependencies with comprehensive testing (123+ test suite)
+- **Modern Dependencies**: Regularly updated dependencies with comprehensive testing (142+ test suite, last updated August 2025)
 - **just_audio Integration**: Enhanced audio performance with dual state synchronization for reliable Bluetooth and native media controls
 
 ## Getting Started

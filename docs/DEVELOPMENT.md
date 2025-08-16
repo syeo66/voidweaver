@@ -25,7 +25,7 @@ The project includes a Makefile for streamlined development workflows:
 
 ### Code Quality
 - `flutter analyze` - Static analysis (currently 0 issues)
-- `flutter test` - Run test suite (118+ passing with comprehensive just_audio mocks and Bluetooth controls validation)
+- `flutter test` - Run test suite (142+ passing with comprehensive just_audio mocks and Bluetooth controls validation)
 - `flutter pub deps` - Check dependency graph including HTTP/2 support
 - `flutter test test/utils/validators_test.dart` - Run input validation tests specifically
 - `flutter test test/widgets/error_boundary_test.dart` - Run error boundary tests specifically
@@ -66,11 +66,11 @@ Voidweaver uses a clean, optimized architecture with:
 
 ```bash
 flutter analyze          # Static analysis (currently 0 issues)
-flutter test             # Run tests (105/105 passing)
+flutter test             # Run tests (142/142 passing)
 flutter test --coverage  # Run tests with coverage report
 ```
 
-**Test Coverage**: 118 comprehensive tests covering:
+**Test Coverage**: 142 comprehensive tests covering:
 - Data model validation (Song, Album, Artist, SearchResult)
 - Utility functions (time formatting, ReplayGain parsing, URL validation)
 - Sleep timer functionality with comprehensive edge case testing
