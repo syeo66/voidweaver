@@ -125,7 +125,7 @@ mockAudioPlayer.simulatePositionChange(Duration(seconds: 30));
 **Features:**
 - Stream simulation for position, duration, completion, and state changes
 - Playback control mocking (play, pause, stop, seek, volume)
-- Helper methods for test scenarios
+- Helper methods for test scenarios including manual completion simulation
 - Proper resource cleanup
 
 ### Generated Mocks

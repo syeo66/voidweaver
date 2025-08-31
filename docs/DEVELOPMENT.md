@@ -221,14 +221,17 @@ Completely resolved double-skip race conditions that occurred when multiple skip
    - Auto-advance uses confirmed index to prevent race conditions
 
 3. **Completion Event Protection**
-   - `_lastCompletedSongId` prevents duplicate completion handling
+   - `_lastCompletedSongId` prevents duplicate completion handling from just_audio events
+   - `_lastManualCompletedSongId` prevents duplicate manual completion handling
    - Song completion events blocked during active skip operations
+   - **Manual completion fallback** with position-based detection (500ms tolerance) handles cases where just_audio completion events fail due to network buffering or codec timing issues
    - Proper cleanup of duplicate event listeners
 
 4. **Comprehensive Logging**
    - 20-entry timestamped change log (`_indexChangeLog`)
    - Detailed operation source tracking for debugging
    - Index change validation with jump detection
+   - Manual completion fallback logging with position and duration details
 
 5. **Atomic Operations**
    - Immediate audio stop before track changes

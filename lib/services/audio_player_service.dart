@@ -39,6 +39,9 @@ class AudioPlayerService extends ChangeNotifier {
   static const _skipDebounceMs = 200;
   bool _skipOperationInProgress = false;
   String? _lastSkipSource;
+  
+  // Manual completion tracking to prevent duplicate manual completions
+  String? _lastManualCompletedSongId;
 
   // Index tracking for debugging double-skips
   int _confirmedIndex = 0; // Index of song that actually started playing
@@ -133,6 +136,10 @@ class AudioPlayerService extends ChangeNotifier {
   void _initializePlayer() {
     _positionSubscription = _audioPlayer.positionStream.listen((position) {
       _currentPosition = position;
+      
+      // Manual completion detection as fallback
+      _checkManualCompletion(position);
+      
       notifyListeners();
     });
 
@@ -233,6 +240,7 @@ class AudioPlayerService extends ChangeNotifier {
       _currentIndex = 0;
       _confirmedIndex = 0;
       _lastCompletedSongId = null;
+      _lastManualCompletedSongId = null;
       _indexChangeLog.clear();
       await _playSongAtIndex(0);
     } catch (e) {
@@ -269,6 +277,7 @@ class AudioPlayerService extends ChangeNotifier {
       _currentIndex = 0;
       _confirmedIndex = 0;
       _lastCompletedSongId = null;
+      _lastManualCompletedSongId = null;
       _indexChangeLog.clear();
       await _playSongAtIndex(0);
     } catch (e) {
@@ -293,6 +302,7 @@ class AudioPlayerService extends ChangeNotifier {
     _currentIndex = 0;
     _confirmedIndex = 0;
     _lastCompletedSongId = null;
+    _lastManualCompletedSongId = null;
     _indexChangeLog.clear();
     await _playSongAtIndex(0);
   }
@@ -517,6 +527,38 @@ class AudioPlayerService extends ChangeNotifier {
 
   Future<void> seekTo(Duration position) async {
     await _audioPlayer.seek(position);
+  }
+
+  /// Manual completion detection as fallback for when just_audio doesn't fire completion
+  void _checkManualCompletion(Duration position) {
+    // Only check if we have a current song, valid duration, and player is actually playing
+    if (_currentSong == null || 
+        _totalDuration == Duration.zero || 
+        !_audioPlayer.playerState.playing ||
+        _skipOperationInProgress) {
+      return;
+    }
+
+    // Prevent duplicate manual completions for the same song
+    if (_lastManualCompletedSongId == _currentSong!.id) {
+      return;
+    }
+
+    // Check if we're very close to the end (within 500ms tolerance for network/buffering issues)
+    final remainingTime = _totalDuration - position;
+    const completionTolerance = Duration(milliseconds: 500);
+    
+    if (remainingTime <= completionTolerance && remainingTime >= Duration.zero) {
+      debugPrint('[manual_completion] Song appears complete - position: ${position.inSeconds}s, duration: ${_totalDuration.inSeconds}s, remaining: ${remainingTime.inMilliseconds}ms');
+      
+      // Check if just_audio completion hasn't fired yet and we haven't already completed this song
+      if (_audioPlayer.playerState.processingState != ProcessingState.completed &&
+          _lastCompletedSongId != _currentSong!.id) {
+        debugPrint('[manual_completion] just_audio completion not detected, triggering manual completion');
+        _lastManualCompletedSongId = _currentSong!.id;
+        _onSongComplete();
+      }
+    }
   }
 
   void _onSongComplete() {
