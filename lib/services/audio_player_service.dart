@@ -39,7 +39,7 @@ class AudioPlayerService extends ChangeNotifier {
   static const _skipDebounceMs = 200;
   bool _skipOperationInProgress = false;
   String? _lastSkipSource;
-  
+
   // Manual completion tracking to prevent duplicate manual completions
   String? _lastManualCompletedSongId;
 
@@ -136,10 +136,10 @@ class AudioPlayerService extends ChangeNotifier {
   void _initializePlayer() {
     _positionSubscription = _audioPlayer.positionStream.listen((position) {
       _currentPosition = position;
-      
+
       // Manual completion detection as fallback
       _checkManualCompletion(position);
-      
+
       notifyListeners();
     });
 
@@ -532,8 +532,8 @@ class AudioPlayerService extends ChangeNotifier {
   /// Manual completion detection as fallback for when just_audio doesn't fire completion
   void _checkManualCompletion(Duration position) {
     // Only check if we have a current song, valid duration, and player is actually playing
-    if (_currentSong == null || 
-        _totalDuration == Duration.zero || 
+    if (_currentSong == null ||
+        _totalDuration == Duration.zero ||
         !_audioPlayer.playerState.playing ||
         _skipOperationInProgress) {
       return;
@@ -547,14 +547,18 @@ class AudioPlayerService extends ChangeNotifier {
     // Check if we're very close to the end (within 500ms tolerance for network/buffering issues)
     final remainingTime = _totalDuration - position;
     const completionTolerance = Duration(milliseconds: 500);
-    
-    if (remainingTime <= completionTolerance && remainingTime >= Duration.zero) {
-      debugPrint('[manual_completion] Song appears complete - position: ${position.inSeconds}s, duration: ${_totalDuration.inSeconds}s, remaining: ${remainingTime.inMilliseconds}ms');
-      
+
+    if (remainingTime <= completionTolerance &&
+        remainingTime >= Duration.zero) {
+      debugPrint(
+          '[manual_completion] Song appears complete - position: ${position.inSeconds}s, duration: ${_totalDuration.inSeconds}s, remaining: ${remainingTime.inMilliseconds}ms');
+
       // Check if just_audio completion hasn't fired yet and we haven't already completed this song
-      if (_audioPlayer.playerState.processingState != ProcessingState.completed &&
+      if (_audioPlayer.playerState.processingState !=
+              ProcessingState.completed &&
           _lastCompletedSongId != _currentSong!.id) {
-        debugPrint('[manual_completion] just_audio completion not detected, triggering manual completion');
+        debugPrint(
+            '[manual_completion] just_audio completion not detected, triggering manual completion');
         _lastManualCompletedSongId = _currentSong!.id;
         _onSongComplete();
       }

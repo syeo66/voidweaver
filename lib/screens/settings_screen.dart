@@ -76,20 +76,25 @@ class _SettingsContent extends StatelessWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            Column(
-              children: ThemeMode.values.map((mode) {
-                return RadioListTile<ThemeMode>(
-                  title: Text(_getThemeModeTitle(mode)),
-                  subtitle: Text(_getThemeModeDescription(mode)),
-                  value: mode,
-                  groupValue: settingsService.themeMode,
-                  onChanged: (ThemeMode? value) {
-                    if (value != null) {
-                      settingsService.setThemeMode(value);
-                    }
-                  },
-                );
-              }).toList(),
+            RadioGroup<ThemeMode>(
+              groupValue: settingsService.themeMode,
+              onChanged: (ThemeMode? value) {
+                if (value != null) {
+                  settingsService.setThemeMode(value);
+                }
+              },
+              child: Column(
+                children: ThemeMode.values.map((mode) {
+                  return ListTile(
+                    title: Text(_getThemeModeTitle(mode)),
+                    subtitle: Text(_getThemeModeDescription(mode)),
+                    leading: Radio<ThemeMode>(value: mode),
+                    onTap: () {
+                      settingsService.setThemeMode(mode);
+                    },
+                  );
+                }).toList(),
+              ),
             ),
           ],
         ),
@@ -146,21 +151,27 @@ class _SettingsContent extends StatelessWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            Column(
-              children: ReplayGainMode.values.map((mode) {
-                return RadioListTile<ReplayGainMode>(
-                  title: Text(_getReplayGainModeTitle(mode)),
-                  subtitle: Text(_getReplayGainModeDescription(mode)),
-                  value: mode,
-                  groupValue: settingsService.replayGainMode,
-                  onChanged: (ReplayGainMode? value) {
-                    if (value != null) {
-                      settingsService.setReplayGainMode(value);
+            RadioGroup<ReplayGainMode>(
+              groupValue: settingsService.replayGainMode,
+              onChanged: (ReplayGainMode? value) {
+                if (value != null) {
+                  settingsService.setReplayGainMode(value);
+                  _refreshAudioVolume(context);
+                }
+              },
+              child: Column(
+                children: ReplayGainMode.values.map((mode) {
+                  return ListTile(
+                    title: Text(_getReplayGainModeTitle(mode)),
+                    subtitle: Text(_getReplayGainModeDescription(mode)),
+                    leading: Radio<ReplayGainMode>(value: mode),
+                    onTap: () {
+                      settingsService.setReplayGainMode(mode);
                       _refreshAudioVolume(context);
-                    }
-                  },
-                );
-              }).toList(),
+                    },
+                  );
+                }).toList(),
+              ),
             ),
 
             if (settingsService.replayGainMode != ReplayGainMode.off) ...[
