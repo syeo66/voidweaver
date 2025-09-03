@@ -52,14 +52,7 @@ A high-quality Flutter music player application that streams music from your per
 - A Subsonic-compatible music server (Subsonic, Airsonic, Navidrome, etc.)
 - Flutter SDK 3.0.0 or later (for development)
 
-### Installation
-
-#### Download APK (Recommended)
-1. Download the latest APK from releases
-2. Install on your Android device
-3. Enable "Install from unknown sources" if prompted
-
-#### Build from Source
+### Build from Source
 ```bash
 git clone <repository-url>
 cd voidweaver
