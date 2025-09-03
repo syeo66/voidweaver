@@ -28,7 +28,7 @@ enum AudioLoadingState {
 class _PositionUpdate {
   final Duration position;
   final DateTime timestamp;
-  
+
   _PositionUpdate(this.position, this.timestamp);
 }
 
@@ -37,22 +37,22 @@ class AudioPlayerService extends ChangeNotifier {
   // These constants configure the enhanced dual-detection mechanism for song completion:
   // 1. Traditional detection: triggers when within 500ms of song end (see _checkManualCompletion)
   // 2. Stuck playhead detection: identifies when position stops moving in near-end zone
-  
+
   /// Time window (ms) to analyze recent position updates for stuck playhead detection
   static const int _stuckPositionTimeoutMs = 2000;
-  
+
   /// Zone from song end where stuck playhead detection becomes active (prevents false positives early in songs)
   static const Duration _nearEndThreshold = Duration(seconds: 2);
-  
+
   /// Minimum position change expected over time periods (used to identify "stuck" playhead)
   static const Duration _minPositionMovement = Duration(milliseconds: 100);
-  
+
   /// Minimum duration position must appear stuck before triggering completion (prevents glitch detection)
   static const int _minStuckDurationMs = 1000;
-  
+
   /// Maximum position updates retained in memory for movement analysis (prevents memory growth)
   static const int _maxPositionHistorySize = 10;
-  
+
   final AudioPlayer _audioPlayer;
   final SubsonicApi _api;
   final SettingsService _settingsService;
@@ -571,7 +571,7 @@ class AudioPlayerService extends ChangeNotifier {
   void _trackPositionUpdate(Duration position) {
     final now = DateTime.now();
     _recentPositions.add(_PositionUpdate(position, now));
-    
+
     // Keep only the last N position updates to avoid memory growth
     if (_recentPositions.length > _maxPositionHistorySize) {
       _recentPositions.removeAt(0);
@@ -581,44 +581,45 @@ class AudioPlayerService extends ChangeNotifier {
   /// Checks if the playhead appears to be stuck (not moving) in the last seconds of a song.
   /// This addresses cases where just_audio completion events fail due to network buffering,
   /// streaming interruptions, or codec timing issues that cause songs to hang near the end.
-  /// 
+  ///
   /// Returns true if:
   /// - We're in the near-end zone (last 2 seconds of song)
-  /// - Position hasn't moved significantly over the past 1+ seconds  
+  /// - Position hasn't moved significantly over the past 1+ seconds
   /// - Player should be playing (not paused by user)
   bool _isPlayheadStuck(Duration currentPosition) {
     // Need at least 3 position updates to detect stuckness
     if (_recentPositions.length < 3) return false;
-    
+
     // Check if we're in the near-end zone (last 2 seconds)
     final remainingTime = _totalDuration - currentPosition;
     if (remainingTime > _nearEndThreshold) return false;
-    
+
     final now = DateTime.now();
-    
+
     // Look for position updates in the last 2 seconds
     final recentUpdates = _recentPositions.where((update) {
       final age = now.difference(update.timestamp).inMilliseconds;
       return age <= _stuckPositionTimeoutMs;
     }).toList();
-    
+
     if (recentUpdates.length < 2) return false;
-    
+
     // Check if position hasn't changed significantly in recent updates
     final oldestRecent = recentUpdates.first;
     final newestRecent = recentUpdates.last;
-    
+
     final positionChange = newestRecent.position - oldestRecent.position;
     final timeSpan = newestRecent.timestamp.difference(oldestRecent.timestamp);
-    
+
     // If position moved less than minimum expected over a sufficient time period, consider it stuck
-    final isStuck = positionChange < _minPositionMovement && 
-                   timeSpan.inMilliseconds > _minStuckDurationMs;
-    
+    final isStuck = positionChange < _minPositionMovement &&
+        timeSpan.inMilliseconds > _minStuckDurationMs;
+
     if (isStuck) {
-      debugPrint('[stuck_detection] Playhead appears stuck - position change: ${positionChange.inMilliseconds}ms over ${timeSpan.inMilliseconds}ms');
+      debugPrint(
+          '[stuck_detection] Playhead appears stuck - position change: ${positionChange.inMilliseconds}ms over ${timeSpan.inMilliseconds}ms');
     }
-    
+
     return isStuck;
   }
 
@@ -641,29 +642,31 @@ class AudioPlayerService extends ChangeNotifier {
     // Method 1: Traditional close-to-end detection (within 500ms of song end)
     //   - Reliable for normal playback completion
     //   - Handles cases where just_audio completion fires late
-    // 
+    //
     // Method 2: Stuck playhead detection (position not advancing in near-end zone)
     //   - Catches streaming/buffering issues that freeze playhead
     //   - Prevents songs from hanging indefinitely in final seconds
     //   - Only active in last 2 seconds to avoid false positives
-    
+
     final remainingTime = _totalDuration - position;
     const completionTolerance = Duration(milliseconds: 500);
-    
+
     bool shouldTriggerCompletion = false;
     String completionReason = '';
-    
+
     // Method 1: Traditional close-to-end detection
-    if (remainingTime <= completionTolerance && remainingTime >= Duration.zero) {
+    if (remainingTime <= completionTolerance &&
+        remainingTime >= Duration.zero) {
       shouldTriggerCompletion = true;
-      completionReason = 'close to end (${remainingTime.inMilliseconds}ms remaining)';
+      completionReason =
+          'close to end (${remainingTime.inMilliseconds}ms remaining)';
     }
     // Method 2: Stuck playhead detection
     else if (_isPlayheadStuck(position)) {
       shouldTriggerCompletion = true;
       completionReason = 'stuck playhead detected in near-end zone';
     }
-    
+
     if (shouldTriggerCompletion) {
       debugPrint(
           '[manual_completion] Song appears complete - position: ${position.inSeconds}s, duration: ${_totalDuration.inSeconds}s, reason: $completionReason');
