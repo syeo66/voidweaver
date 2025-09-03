@@ -10,6 +10,7 @@ A high-quality Flutter music player application that streams music from your per
 - **Search**: Real-time search across artists, albums, and songs
 - **Playlist Management**: Full-featured player with skip, seek, and queue controls
 - **Random Play**: Shuffle through your entire music library
+- **Persistent Playback**: Automatically saves and restores your playlist, current track, and playback position across app sessions
 
 ### 🎧 **Audio Experience**
 - **ReplayGain Audio Normalization**: Intelligent volume normalization for consistent playback
@@ -31,6 +32,7 @@ A high-quality Flutter music player application that streams music from your per
 - **Real-time Updates**: Background sync keeps your library fresh
 - **Comprehensive Feedback**: Clear loading states and user-friendly error messages with troubleshooting suggestions
 - **Pull-to-Refresh**: Manual refresh on album and artist lists
+- **Session Continuity**: Resume exactly where you left off when reopening the app
 
 ### 🔒 **Security & Reliability**
 - **HTTPS Enforcement**: Mandatory encrypted connections to your music server for secure streaming and credential protection
@@ -42,6 +44,7 @@ A high-quality Flutter music player application that streams music from your per
 - **Background Sync**: Automatic library updates every 5 minutes
 - **Modern Dependencies**: Regularly updated dependencies with comprehensive testing (142+ test suite, last updated August 2025)
 - **just_audio Integration**: Enhanced audio performance with dual state synchronization for reliable Bluetooth and native media controls
+- **Persistent State Management**: Playlist and playback position automatically saved with validation and error recovery
 
 ## Getting Started
 

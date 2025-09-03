@@ -513,6 +513,39 @@ class Album {
     }
     return true;
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'artist': artist,
+      'artistId': artistId,
+      'coverArt': coverArt,
+      'songCount': songCount,
+      'duration': duration,
+      'created': created?.toIso8601String(),
+      'songs': songs.map((song) => song.toJson()).toList(),
+    };
+  }
+
+  static Album fromJson(Map<String, dynamic> json) {
+    return Album(
+      id: json['id'] ?? '',
+      name: json['name'] ?? '',
+      artist: json['artist'] ?? '',
+      artistId: json['artistId'],
+      coverArt: json['coverArt'],
+      songCount: json['songCount'],
+      duration: json['duration'],
+      created:
+          json['created'] != null ? DateTime.tryParse(json['created']) : null,
+      songs: (json['songs'] as List<dynamic>?)
+              ?.map(
+                  (songJson) => Song.fromJson(songJson as Map<String, dynamic>))
+              .toList() ??
+          [],
+    );
+  }
 }
 
 class Song {
@@ -622,6 +655,44 @@ class Song {
       replayGainAlbumGain,
       replayGainTrackPeak,
       replayGainAlbumPeak,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'artist': artist,
+      'album': album,
+      'albumId': albumId,
+      'coverArt': coverArt,
+      'duration': duration,
+      'track': track,
+      'contentType': contentType,
+      'suffix': suffix,
+      'replayGainTrackGain': replayGainTrackGain,
+      'replayGainAlbumGain': replayGainAlbumGain,
+      'replayGainTrackPeak': replayGainTrackPeak,
+      'replayGainAlbumPeak': replayGainAlbumPeak,
+    };
+  }
+
+  static Song fromJson(Map<String, dynamic> json) {
+    return Song(
+      id: json['id'] ?? '',
+      title: json['title'] ?? '',
+      artist: json['artist'] ?? '',
+      album: json['album'] ?? '',
+      albumId: json['albumId'],
+      coverArt: json['coverArt'],
+      duration: json['duration'],
+      track: json['track'],
+      contentType: json['contentType'],
+      suffix: json['suffix'],
+      replayGainTrackGain: json['replayGainTrackGain']?.toDouble(),
+      replayGainAlbumGain: json['replayGainAlbumGain']?.toDouble(),
+      replayGainTrackPeak: json['replayGainTrackPeak']?.toDouble(),
+      replayGainAlbumPeak: json['replayGainAlbumPeak']?.toDouble(),
     );
   }
 }

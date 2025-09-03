@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'subsonic_api.dart';
 import 'settings_service.dart';
 import 'replaygain_reader.dart';
+import 'playback_persistence.dart';
 
 enum PlaybackState {
   stopped,
@@ -56,6 +57,7 @@ class AudioPlayerService extends ChangeNotifier {
   final AudioPlayer _audioPlayer;
   final SubsonicApi _api;
   final SettingsService _settingsService;
+  final PlaybackPersistenceService? _persistence;
 
   PlaybackState _playbackState = PlaybackState.stopped;
   List<Song> _playlist = [];
@@ -63,6 +65,10 @@ class AudioPlayerService extends ChangeNotifier {
   Duration _currentPosition = Duration.zero;
   Duration _totalDuration = Duration.zero;
   Song? _currentSong;
+
+  // Playlist source tracking for persistence
+  String? _playlistSource;
+  String? _sourceId;
 
   // Skip debouncing and operation control
   DateTime? _lastSkipTime;
@@ -103,8 +109,9 @@ class AudioPlayerService extends ChangeNotifier {
   bool _isSleepTimerActive = false;
 
   AudioPlayerService(this._api, this._settingsService,
-      {AudioPlayer? audioPlayer})
-      : _audioPlayer = audioPlayer ?? AudioPlayer() {
+      {AudioPlayer? audioPlayer, PlaybackPersistenceService? persistence})
+      : _audioPlayer = audioPlayer ?? AudioPlayer(),
+        _persistence = persistence {
     _initializePlayer();
   }
 
@@ -176,6 +183,11 @@ class AudioPlayerService extends ChangeNotifier {
       // Manual completion detection as fallback
       _checkManualCompletion(position);
 
+      // Throttled position saving during playback
+      if (_playbackState == PlaybackState.playing) {
+        _schedulePositionSave();
+      }
+
       notifyListeners();
     });
 
@@ -235,6 +247,113 @@ class AudioPlayerService extends ChangeNotifier {
     });
   }
 
+  // Persistence methods
+  Future<bool> restorePlaybackState() async {
+    if (_persistence == null) {
+      debugPrint('Persistence service not available, skipping restoration');
+      return false;
+    }
+
+    try {
+      final savedState = await _persistence!.loadPlaybackState();
+      if (savedState == null || savedState.isEmpty) {
+        debugPrint('No saved playback state to restore');
+        return false;
+      }
+
+      debugPrint(
+          'Attempting to restore playlist with ${savedState.playlist.length} songs');
+
+      // Validate playlist integrity first
+      await _validatePlaylist(savedState.playlist);
+
+      // Restore state
+      _playlist = savedState.playlist;
+      _currentIndex = savedState.currentIndex;
+      _confirmedIndex = savedState.currentIndex;
+      _playlistSource = savedState.playlistSource;
+      _sourceId = savedState.sourceId;
+
+      if (savedState.hasValidIndex) {
+        _currentSong = savedState.currentSong;
+
+        // Set up audio source but don't auto-play
+        final streamUrl = _api.getStreamUrl(savedState.currentSong!.id);
+        await _audioPlayer.setUrl(streamUrl);
+
+        // Seek to saved position
+        await _audioPlayer.seek(savedState.currentPosition);
+
+        // Restore playback state (but don't auto-play)
+        if (savedState.isPlaying) {
+          _playbackState = PlaybackState.paused; // User must manually resume
+        } else {
+          _playbackState = PlaybackState.paused;
+        }
+
+        debugPrint(
+            'Successfully restored playback state: ${savedState.currentSong?.title} at ${savedState.currentPosition}');
+        notifyListeners();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Failed to restore playback state: $e');
+      // Clear invalid saved state
+      await _persistence?.clearPlaybackState();
+    }
+
+    return false;
+  }
+
+  Future<void> _validatePlaylist(List<Song> playlist) async {
+    // Quick validation: check if first few songs still exist on server
+    const maxChecks = 3;
+    final checksToPerform =
+        playlist.length < maxChecks ? playlist.length : maxChecks;
+
+    for (int i = 0; i < checksToPerform; i++) {
+      final song = playlist[i];
+      try {
+        // Simple check: try to get stream URL (this validates song exists)
+        _api.getStreamUrl(song.id);
+      } catch (e) {
+        throw Exception('Saved playlist contains invalid songs');
+      }
+    }
+  }
+
+  Future<void> _saveCurrentState() async {
+    if (_persistence == null || _playlist.isEmpty) return;
+
+    final state = PersistedPlaybackState(
+      playlist: _playlist,
+      currentIndex: _currentIndex,
+      currentPosition: _currentPosition,
+      isPlaying: _playbackState == PlaybackState.playing,
+      lastUpdated: DateTime.now(),
+      playlistSource: _playlistSource,
+      sourceId: _sourceId,
+    );
+
+    await _persistence!.savePlaybackState(state);
+  }
+
+  void _schedulePositionSave() {
+    if (_persistence == null || _playlist.isEmpty) return;
+
+    final state = PersistedPlaybackState(
+      playlist: _playlist,
+      currentIndex: _currentIndex,
+      currentPosition: _currentPosition,
+      isPlaying: _playbackState == PlaybackState.playing,
+      lastUpdated: DateTime.now(),
+      playlistSource: _playlistSource,
+      sourceId: _sourceId,
+    );
+
+    _persistence!.schedulePositionSave(state);
+  }
+
   Future<void> playAlbum(Album album) async {
     try {
       _playbackState = PlaybackState.loading;
@@ -278,7 +397,15 @@ class AudioPlayerService extends ChangeNotifier {
       _lastCompletedSongId = null;
       _lastManualCompletedSongId = null;
       _indexChangeLog.clear();
+
+      // Track playlist source for persistence
+      _playlistSource = 'album';
+      _sourceId = album.id;
+
       await _playSongAtIndex(0);
+
+      // Save state after setting up new playlist
+      await _saveCurrentState();
     } catch (e) {
       debugPrint('Error playing album: $e');
       _playbackState = PlaybackState.stopped;
@@ -315,7 +442,15 @@ class AudioPlayerService extends ChangeNotifier {
       _lastCompletedSongId = null;
       _lastManualCompletedSongId = null;
       _indexChangeLog.clear();
+
+      // Track playlist source for persistence
+      _playlistSource = 'random';
+      _sourceId = count.toString();
+
       await _playSongAtIndex(0);
+
+      // Save state after setting up new playlist
+      await _saveCurrentState();
     } catch (e) {
       debugPrint('Error playing random songs: $e');
       _playbackState = PlaybackState.stopped;
@@ -517,6 +652,9 @@ class AudioPlayerService extends ChangeNotifier {
       _skipOperationInProgress = false;
       _lastSkipSource = null;
       debugPrint('[$source] Skip operation completed');
+
+      // Save state after track change
+      await _saveCurrentState();
     }
   }
 
@@ -559,6 +697,9 @@ class AudioPlayerService extends ChangeNotifier {
       _skipOperationInProgress = false;
       _lastSkipSource = null;
       debugPrint('[$source] Skip operation completed');
+
+      // Save state after track change
+      await _saveCurrentState();
     }
   }
 
@@ -996,6 +1137,7 @@ class AudioPlayerService extends ChangeNotifier {
     _playerCompleteSubscription?.cancel();
     _playerStateSubscription?.cancel();
     _sleepTimer?.cancel();
+    _persistence?.dispose();
     _audioPlayer.dispose();
     super.dispose();
   }

@@ -7,6 +7,7 @@ import 'subsonic_api.dart';
 import 'audio_player_service.dart';
 import 'audio_handler.dart';
 import 'settings_service.dart';
+import 'playback_persistence.dart';
 
 enum SyncStatus {
   idle,
@@ -35,6 +36,7 @@ class AppState extends ChangeNotifier {
   SubsonicApi? _api;
   AudioPlayerService? _audioPlayerService;
   SettingsService? _settingsService;
+  PlaybackPersistenceService? _persistenceService;
   VoidweaverAudioHandler? _audioHandler;
   List<Album> _albums = [];
   bool _isLoading = false;
@@ -70,6 +72,10 @@ class AppState extends ChangeNotifier {
   Future<void> initialize() async {
     _settingsService = SettingsService();
     await _settingsService!.initialize();
+
+    _persistenceService = PlaybackPersistenceService();
+    await _persistenceService!.initialize();
+
     await _loadServerConfig();
   }
 
@@ -86,7 +92,11 @@ class AppState extends ChangeNotifier {
         password: password,
       );
 
-      _audioPlayerService = AudioPlayerService(_api!, _settingsService!);
+      _audioPlayerService = AudioPlayerService(
+        _api!,
+        _settingsService!,
+        persistence: _persistenceService,
+      );
 
       // Initialize audio service for native controls
       await _initializeAudioService();
@@ -95,6 +105,18 @@ class AppState extends ChangeNotifier {
       _configurationLoadingState = LoadingState.success;
 
       await _saveServerConfig(serverUrl, username, password);
+
+      // Attempt to restore previous playback state
+      try {
+        final restored = await _audioPlayerService!.restorePlaybackState();
+        if (restored) {
+          debugPrint('Successfully restored previous playback state');
+        }
+      } catch (e) {
+        debugPrint('Failed to restore playback state: $e');
+        // Continue normally if restoration fails
+      }
+
       await loadAlbums();
       _startBackgroundSync();
       notifyListeners();
@@ -296,6 +318,7 @@ class AppState extends ChangeNotifier {
   void dispose() {
     _stopBackgroundSync();
     _api?.dispose();
+    _persistenceService?.dispose();
     super.dispose();
   }
 }
