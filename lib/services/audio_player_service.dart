@@ -281,7 +281,7 @@ class AudioPlayerService extends ChangeNotifier {
       _confirmedIndex = savedState.currentIndex;
       _playlistSource = savedState.playlistSource;
       _sourceId = savedState.sourceId;
-      
+
       // Clear scrobbled songs for new playlist
       _scrobbledSongs.clear();
 
@@ -905,7 +905,7 @@ class AudioPlayerService extends ChangeNotifier {
       // Send scrobble submission with the timestamp when the song started playing
       _api.scrobbleSubmission(_currentSong!.id,
           playedAt: _currentSongStartTime!);
-      
+
       // Mark this song as scrobbled to prevent duplicate scrobbles
       _scrobbledSongs.add(_currentSong!.id);
     }
@@ -916,7 +916,7 @@ class AudioPlayerService extends ChangeNotifier {
   /// or at least 1 minute, whichever comes first.
   bool _shouldScrobbleCurrentSong() {
     if (_currentSong == null || _currentSongStartTime == null) return false;
-    
+
     // Don't scrobble if already scrobbled
     if (_scrobbledSongs.contains(_currentSong!.id)) return false;
 
