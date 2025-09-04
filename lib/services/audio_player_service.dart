@@ -108,6 +108,9 @@ class AudioPlayerService extends ChangeNotifier {
   DateTime? _sleepTimerStartTime;
   bool _isSleepTimerActive = false;
 
+  // Scrobble tracking
+  final Set<String> _scrobbledSongs = {};
+
   AudioPlayerService(this._api, this._settingsService,
       {AudioPlayer? audioPlayer, PlaybackPersistenceService? persistence})
       : _audioPlayer = audioPlayer ?? AudioPlayer(),
@@ -182,6 +185,11 @@ class AudioPlayerService extends ChangeNotifier {
 
       // Manual completion detection as fallback
       _checkManualCompletion(position);
+
+      // Check for automatic scrobbling during playback
+      if (_playbackState == PlaybackState.playing) {
+        _scrobbleCurrentSongIfEligible();
+      }
 
       // Throttled position saving during playback
       if (_playbackState == PlaybackState.playing) {
@@ -273,6 +281,9 @@ class AudioPlayerService extends ChangeNotifier {
       _confirmedIndex = savedState.currentIndex;
       _playlistSource = savedState.playlistSource;
       _sourceId = savedState.sourceId;
+      
+      // Clear scrobbled songs for new playlist
+      _scrobbledSongs.clear();
 
       if (savedState.hasValidIndex) {
         _currentSong = savedState.currentSong;
@@ -370,6 +381,8 @@ class AudioPlayerService extends ChangeNotifier {
         try {
           final fullAlbum = await _api.getAlbum(album.id);
           _playlist = fullAlbum.songs;
+          // Clear scrobbled songs for new playlist
+          _scrobbledSongs.clear();
         } catch (e) {
           debugPrint('Failed to fetch album details: $e');
           // If we can't get album details, we can't play it
@@ -381,6 +394,8 @@ class AudioPlayerService extends ChangeNotifier {
         }
       } else {
         _playlist = album.songs;
+        // Clear scrobbled songs for new playlist
+        _scrobbledSongs.clear();
       }
 
       if (_playlist.isEmpty) {
@@ -427,6 +442,8 @@ class AudioPlayerService extends ChangeNotifier {
       _clearPreload();
 
       _playlist = await _api.getRandomSongs(count);
+      // Clear scrobbled songs for new playlist
+      _scrobbledSongs.clear();
 
       if (_playlist.isEmpty) {
         _playbackState = PlaybackState.stopped;
@@ -470,6 +487,8 @@ class AudioPlayerService extends ChangeNotifier {
     _clearPreload();
 
     _playlist = [song];
+    // Clear scrobbled songs for new playlist
+    _scrobbledSongs.clear();
     _currentIndex = 0;
     _confirmedIndex = 0;
     _lastCompletedSongId = null;
@@ -886,27 +905,33 @@ class AudioPlayerService extends ChangeNotifier {
       // Send scrobble submission with the timestamp when the song started playing
       _api.scrobbleSubmission(_currentSong!.id,
           playedAt: _currentSongStartTime!);
+      
+      // Mark this song as scrobbled to prevent duplicate scrobbles
+      _scrobbledSongs.add(_currentSong!.id);
     }
   }
 
   /// Checks if the current song should be scrobbled based on progress.
-  /// A song should be scrobbled if it has been played for at least 30 seconds
-  /// or 50% of its duration, whichever is shorter.
+  /// A song should be scrobbled if it has been played to the middle
+  /// or at least 1 minute, whichever comes first.
   bool _shouldScrobbleCurrentSong() {
     if (_currentSong == null || _currentSongStartTime == null) return false;
+    
+    // Don't scrobble if already scrobbled
+    if (_scrobbledSongs.contains(_currentSong!.id)) return false;
 
     final playedDuration = _currentPosition;
     final songDuration = _totalDuration;
 
-    // Minimum play time is 30 seconds
-    const minPlayTime = Duration(seconds: 30);
+    // Minimum play time is 1 minute
+    const minPlayTime = Duration(minutes: 1);
 
-    // Check if we've played for at least 30 seconds
+    // Check if we've played for at least 1 minute
     if (playedDuration >= minPlayTime) {
       return true;
     }
 
-    // Check if we've played for at least 50% of the song
+    // Check if we've played for at least 50% of the song (middle)
     if (songDuration.inSeconds > 0 &&
         playedDuration.inSeconds >= songDuration.inSeconds * 0.5) {
       return true;
