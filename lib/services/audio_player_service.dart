@@ -101,6 +101,7 @@ class AudioPlayerService extends ChangeNotifier {
   Song? _preloadedSong;
   bool _isPreloading = false;
   String? _preloadedStreamUrl;
+  AudioSource? _preloadedAudioSource;
 
   // Sleep timer state
   Timer? _sleepTimer;
@@ -134,6 +135,7 @@ class AudioPlayerService extends ChangeNotifier {
   bool get hasPrevious => _currentIndex > 0;
   bool get isPreloading => _isPreloading;
   Song? get preloadedSong => _preloadedSong;
+  bool get hasPreloadedAudio => _preloadedAudioSource != null;
 
   // Enhanced loading state getters
   AudioLoadingState get audioLoadingState => _audioLoadingState;
@@ -520,10 +522,24 @@ class AudioPlayerService extends ChangeNotifier {
       String streamUrl;
 
       // Check if this song is already preloaded
+      bool usePreloadedAudio = false;
       if (_preloadedSong?.id == _currentSong!.id &&
           _preloadedStreamUrl != null) {
-        debugPrint('Using preloaded URL for song: ${_currentSong!.title}');
+        debugPrint('Using preloaded data for song: ${_currentSong!.title}');
         streamUrl = _preloadedStreamUrl!;
+
+        // If the preloaded song has ReplayGain data, update the current song
+        if (_preloadedSong!.replayGainTrackGain != null ||
+            _preloadedSong!.replayGainAlbumGain != null) {
+          debugPrint(
+              'Using preloaded ReplayGain data for: ${_currentSong!.title}');
+          _currentSong = _preloadedSong;
+          // Also update the playlist with the enhanced song
+          _playlist[_currentIndex] = _preloadedSong!;
+        }
+
+        // Check if we have a preloaded AudioSource for instant playback
+        usePreloadedAudio = _preloadedAudioSource != null;
 
         // Clear preload state since we're using it now
         _preloadedSong = null;
@@ -537,7 +553,17 @@ class AudioPlayerService extends ChangeNotifier {
       _currentSongStartTime = DateTime.now();
       _recentPositions.clear();
 
-      await _audioPlayer.setUrl(streamUrl);
+      // Use preloaded AudioSource for instant playback, or fall back to setUrl
+      if (usePreloadedAudio && _preloadedAudioSource != null) {
+        debugPrint(
+            'Using preloaded AudioSource for instant playback: ${_currentSong!.title}');
+        await _audioPlayer.setAudioSource(_preloadedAudioSource!);
+        // Clear the preloaded AudioSource since we're using it now
+        _preloadedAudioSource = null;
+      } else {
+        debugPrint('Loading audio from URL: ${_currentSong!.title}');
+        await _audioPlayer.setUrl(streamUrl);
+      }
       await _audioPlayer.play();
 
       // Song successfully started, reset loading state
@@ -547,7 +573,9 @@ class AudioPlayerService extends ChangeNotifier {
       // Send now playing notification to server
       _api.scrobbleNowPlaying(_currentSong!.id);
 
-      // Read ReplayGain metadata from the audio file and apply volume adjustment
+      // Apply ReplayGain volume adjustment
+      // If ReplayGain data is already available (from preloading), apply it immediately
+      // Otherwise, read the metadata and apply it
       _readReplayGainAndApplyVolume(streamUrl);
 
       // Preload next song if available
@@ -955,9 +983,11 @@ class AudioPlayerService extends ChangeNotifier {
   Future<void> _readReplayGainAndApplyVolume(String streamUrl) async {
     if (_currentSong == null) return;
 
-    // Skip if we already have ReplayGain data to prevent duplicate processing
+    // Apply volume immediately if we already have ReplayGain data (from preloading)
     if (_currentSong!.replayGainTrackGain != null ||
         _currentSong!.replayGainAlbumGain != null) {
+      debugPrint(
+          'Using preloaded ReplayGain data for immediate volume adjustment: ${_currentSong!.title}');
       _applyReplayGainVolume();
       return;
     }
@@ -1042,6 +1072,7 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   /// Preloads the next song in the playlist for seamless playback
+  /// Enhanced to also read ReplayGain metadata for volume-ready playback
   Future<void> _preloadNextSong() async {
     if (!hasNext || _isPreloading) return;
 
@@ -1059,15 +1090,82 @@ class AudioPlayerService extends ChangeNotifier {
       final streamUrl = _api.getStreamUrl(nextSong.id);
       debugPrint('Preloading next song: ${nextSong.title}');
 
-      // Store the preloaded URL (this is instant, just generates the URL)
-      _preloadedSong = nextSong;
+      // Read ReplayGain metadata for the next song if not already available
+      Song songWithReplayGain = nextSong;
+
+      // Only read ReplayGain if the song doesn't already have it
+      if (nextSong.replayGainTrackGain == null &&
+          nextSong.replayGainAlbumGain == null) {
+        try {
+          debugPrint('Preloading ReplayGain metadata for: ${nextSong.title}');
+          final replayGainData = await ReplayGainReader.readFromUrl(streamUrl);
+
+          if (replayGainData.hasAnyData) {
+            // Create updated song with ReplayGain metadata
+            songWithReplayGain = Song(
+              id: nextSong.id,
+              title: nextSong.title,
+              artist: nextSong.artist,
+              album: nextSong.album,
+              albumId: nextSong.albumId,
+              coverArt: nextSong.coverArt,
+              duration: nextSong.duration,
+              track: nextSong.track,
+              contentType: nextSong.contentType,
+              suffix: nextSong.suffix,
+              replayGainTrackGain: replayGainData.trackGain,
+              replayGainAlbumGain: replayGainData.albumGain,
+              replayGainTrackPeak: replayGainData.trackPeak,
+              replayGainAlbumPeak: replayGainData.albumPeak,
+            );
+
+            // Update the song in the playlist with ReplayGain data
+            _playlist[nextIndex] = songWithReplayGain;
+
+            debugPrint(
+                'Successfully preloaded ReplayGain for: ${nextSong.title} - TrackGain: ${replayGainData.trackGain}, AlbumGain: ${replayGainData.albumGain}');
+          } else {
+            debugPrint('No ReplayGain metadata found for: ${nextSong.title}');
+          }
+        } catch (e) {
+          debugPrint(
+              'Error reading ReplayGain during preload for ${nextSong.title}: $e');
+          // Continue with original song if ReplayGain reading fails
+        }
+      } else {
+        debugPrint(
+            'Song ${nextSong.title} already has ReplayGain metadata, skipping preload read');
+      }
+
+      // Create and prepare the AudioSource for true preloading
+      try {
+        debugPrint(
+            'Creating AudioSource for preloading: ${songWithReplayGain.title}');
+        _preloadedAudioSource = AudioSource.uri(Uri.parse(streamUrl));
+
+        // We could optionally prepare the source here, but that would start loading immediately
+        // For now, we'll let setAudioSource() handle the preparation when needed
+
+        debugPrint(
+            'Successfully created AudioSource for: ${songWithReplayGain.title}');
+      } catch (audioSourceError) {
+        debugPrint(
+            'Error creating AudioSource for ${songWithReplayGain.title}: $audioSourceError');
+        _preloadedAudioSource = null;
+        // Continue without audio source preloading, we still have the URL
+      }
+
+      // Store the preloaded song (with ReplayGain if available) and URL
+      _preloadedSong = songWithReplayGain;
       _preloadedStreamUrl = streamUrl;
 
-      debugPrint('Successfully preloaded URL for: ${nextSong.title}');
+      debugPrint(
+          'Successfully preloaded URL, metadata, and AudioSource for: ${songWithReplayGain.title}');
     } catch (e) {
       debugPrint('Error preloading next song: $e');
       _preloadedSong = null;
       _preloadedStreamUrl = null;
+      _preloadedAudioSource = null;
     } finally {
       _isPreloading = false;
       // Only reset loading state if we're not in an error state
@@ -1082,6 +1180,8 @@ class AudioPlayerService extends ChangeNotifier {
   void _clearPreload() {
     _preloadedSong = null;
     _preloadedStreamUrl = null;
+    // Dispose of the preloaded AudioSource to free resources
+    _preloadedAudioSource = null;
     _isPreloading = false;
   }
 
@@ -1162,6 +1262,8 @@ class AudioPlayerService extends ChangeNotifier {
     _playerCompleteSubscription?.cancel();
     _playerStateSubscription?.cancel();
     _sleepTimer?.cancel();
+    // Clear preloaded AudioSource to free resources
+    _preloadedAudioSource = null;
     _persistence?.dispose();
     _audioPlayer.dispose();
     super.dispose();
