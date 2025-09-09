@@ -266,33 +266,63 @@ class _ControlButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Selector<AudioPlayerService,
-        ({PlaybackState state, bool hasPrevious, bool hasNext})>(
+    return Selector<
+        AudioPlayerService,
+        ({
+          PlaybackState state,
+          bool hasPrevious,
+          bool hasNext,
+          bool isSkipping
+        })>(
       selector: (context, service) => (
         state: service.playbackState,
         hasPrevious: service.hasPrevious,
         hasNext: service.hasNext,
+        isSkipping: service.isSkipOperationInProgress,
       ),
       builder: (context, controls, child) {
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(
-              icon: const Icon(Icons.skip_previous),
-              onPressed: controls.hasPrevious
-                  ? () => context.read<AudioPlayerService>().previous()
-                  : null,
+            _buildSkipButton(
+              icon: Icons.skip_previous,
+              enabled: controls.hasPrevious && !controls.isSkipping,
+              isSkipping: controls.isSkipping,
+              onPressed: () => context.read<AudioPlayerService>().previous(),
             ),
             _buildPlayPauseButton(controls.state),
-            IconButton(
-              icon: const Icon(Icons.skip_next),
-              onPressed: controls.hasNext
-                  ? () => context.read<AudioPlayerService>().next()
-                  : null,
+            _buildSkipButton(
+              icon: Icons.skip_next,
+              enabled: controls.hasNext && !controls.isSkipping,
+              isSkipping: controls.isSkipping,
+              onPressed: () => context.read<AudioPlayerService>().next(),
             ),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildSkipButton({
+    required IconData icon,
+    required bool enabled,
+    required bool isSkipping,
+    required VoidCallback onPressed,
+  }) {
+    if (isSkipping) {
+      return const Padding(
+        padding: EdgeInsets.all(8.0),
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    return IconButton(
+      icon: Icon(icon),
+      onPressed: enabled ? onPressed : null,
     );
   }
 
