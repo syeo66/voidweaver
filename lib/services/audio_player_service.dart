@@ -564,6 +564,12 @@ class AudioPlayerService extends ChangeNotifier {
         debugPrint('Loading audio from URL: ${_currentSong!.title}');
         await _audioPlayer.setUrl(streamUrl);
       }
+
+      // Apply ReplayGain volume adjustment BEFORE starting playback
+      // If ReplayGain data is already available (from preloading), apply it immediately
+      // Otherwise, read the metadata and apply it
+      await _readReplayGainAndApplyVolume(streamUrl);
+
       await _audioPlayer.play();
 
       // Song successfully started, reset loading state
@@ -572,11 +578,6 @@ class AudioPlayerService extends ChangeNotifier {
 
       // Send now playing notification to server
       _api.scrobbleNowPlaying(_currentSong!.id);
-
-      // Apply ReplayGain volume adjustment
-      // If ReplayGain data is already available (from preloading), apply it immediately
-      // Otherwise, read the metadata and apply it
-      _readReplayGainAndApplyVolume(streamUrl);
 
       // Preload next song if available
       _preloadNextSong();
