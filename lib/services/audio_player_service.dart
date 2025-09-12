@@ -942,7 +942,7 @@ class AudioPlayerService extends ChangeNotifier {
 
   /// Checks if the current song should be scrobbled based on progress.
   /// A song should be scrobbled if it has been played to the middle
-  /// or at least 1 minute, whichever comes first.
+  /// or at least 2 minutes, whichever comes first.
   bool _shouldScrobbleCurrentSong() {
     if (_currentSong == null || _currentSongStartTime == null) return false;
 
@@ -952,10 +952,10 @@ class AudioPlayerService extends ChangeNotifier {
     final playedDuration = _currentPosition;
     final songDuration = _totalDuration;
 
-    // Minimum play time is 1 minute
-    const minPlayTime = Duration(minutes: 1);
+    // Minimum play time is 2 minutes
+    const minPlayTime = Duration(minutes: 2);
 
-    // Check if we've played for at least 1 minute
+    // Check if we've played for at least 2 minutes
     if (playedDuration >= minPlayTime) {
       return true;
     }

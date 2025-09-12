@@ -39,7 +39,7 @@ A high-quality Flutter music player application that streams music from your per
 - **Secure Login**: Encrypted credential storage with automatic session management (flutter_secure_storage v9.2.4)
 - **Input Validation**: Comprehensive validation and sanitization of all user inputs to prevent crashes and security issues
 - **Error Boundaries**: Global error handling system that prevents app crashes and provides user-friendly error recovery
-- **Intelligent Scrobbling**: Automatic play count tracking that submits scrobbles when songs reach the middle (50%) or 1 minute mark, whichever comes first, with duplicate prevention to ensure accurate listening statistics
+- **Intelligent Scrobbling**: Automatic play count tracking that submits scrobbles when songs reach the middle (50%) or 2 minute mark, whichever comes first, with duplicate prevention to ensure accurate listening statistics
 - **Robust Error Handling**: Graceful recovery from network issues and widget failures
 - **Background Sync**: Automatic library updates every 5 minutes
 - **Modern Dependencies**: Regularly updated dependencies with comprehensive testing (142+ test suite, last updated August 2025)
