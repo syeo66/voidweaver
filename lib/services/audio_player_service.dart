@@ -23,6 +23,27 @@ enum AudioLoadingState {
   error,
 }
 
+/// Container for a preloaded track with all necessary data for offline playback
+class PreloadedTrack {
+  final Song song;
+  final String streamUrl;
+  final AudioSource? audioSource;
+  final DateTime preloadedAt;
+
+  PreloadedTrack({
+    required this.song,
+    required this.streamUrl,
+    required this.audioSource,
+    required this.preloadedAt,
+  });
+
+  /// Disposes the AudioSource to free resources
+  void dispose() {
+    // AudioSource disposal is handled by just_audio when needed
+    // No explicit disposal required
+  }
+}
+
 /// Tracks position updates with timestamps for stuck playhead detection.
 /// Used to analyze position movement patterns and identify when playhead stops
 /// advancing during the final seconds of a song (indicating streaming/buffering issues).
@@ -97,11 +118,10 @@ class AudioPlayerService extends ChangeNotifier {
   AudioLoadingState _audioLoadingState = AudioLoadingState.idle;
   String? _audioLoadingError;
 
-  // Preload state
-  Song? _preloadedSong;
+  // Multi-track preload state (supports 3 tracks ahead)
+  final Map<int, PreloadedTrack> _preloadedTracks = {};
   bool _isPreloading = false;
-  String? _preloadedStreamUrl;
-  AudioSource? _preloadedAudioSource;
+  static const int _maxPreloadTracks = 3;
 
   // Sleep timer state
   Timer? _sleepTimer;
@@ -134,8 +154,10 @@ class AudioPlayerService extends ChangeNotifier {
   bool get hasNext => _currentIndex < _playlist.length - 1;
   bool get hasPrevious => _currentIndex > 0;
   bool get isPreloading => _isPreloading;
-  Song? get preloadedSong => _preloadedSong;
-  bool get hasPreloadedAudio => _preloadedAudioSource != null;
+  Song? get preloadedSong => _preloadedTracks[_currentIndex + 1]?.song;
+  bool get hasPreloadedAudio =>
+      _preloadedTracks[_currentIndex + 1]?.audioSource != null;
+  int get preloadedTrackCount => _preloadedTracks.length;
 
   // Enhanced loading state getters
   AudioLoadingState get audioLoadingState => _audioLoadingState;
@@ -374,8 +396,8 @@ class AudioPlayerService extends ChangeNotifier {
       _audioLoadingError = null;
       notifyListeners();
 
-      // Clear any existing preload since we're changing playlist
-      _clearPreload();
+      // Clear any existing preloads since we're changing playlist
+      _clearAllPreloads();
 
       if (album.songs.isEmpty) {
         debugPrint(
@@ -440,8 +462,8 @@ class AudioPlayerService extends ChangeNotifier {
       _audioLoadingError = null;
       notifyListeners();
 
-      // Clear any existing preload since we're changing playlist
-      _clearPreload();
+      // Clear any existing preloads since we're changing playlist
+      _clearAllPreloads();
 
       _playlist = await _api.getRandomSongs(count);
       // Clear scrobbled songs for new playlist
@@ -485,8 +507,8 @@ class AudioPlayerService extends ChangeNotifier {
     _audioLoadingError = null;
     notifyListeners();
 
-    // Clear any existing preload since we're changing playlist
-    _clearPreload();
+    // Clear any existing preloads since we're changing playlist
+    _clearAllPreloads();
 
     _playlist = [song];
     // Clear scrobbled songs for new playlist
@@ -521,32 +543,44 @@ class AudioPlayerService extends ChangeNotifier {
     try {
       String streamUrl;
 
-      // Check if this song is already preloaded
+      // Check if this song is already preloaded for offline-resilient playback
       bool usePreloadedAudio = false;
-      if (_preloadedSong?.id == _currentSong!.id &&
-          _preloadedStreamUrl != null) {
-        debugPrint('Using preloaded data for song: ${_currentSong!.title}');
-        streamUrl = _preloadedStreamUrl!;
+      PreloadedTrack? preloadedTrack = _preloadedTracks[index];
 
-        // If the preloaded song has ReplayGain data, update the current song
-        if (_preloadedSong!.replayGainTrackGain != null ||
-            _preloadedSong!.replayGainAlbumGain != null) {
-          debugPrint(
-              'Using preloaded ReplayGain data for: ${_currentSong!.title}');
-          _currentSong = _preloadedSong;
-          // Also update the playlist with the enhanced song
-          _playlist[_currentIndex] = _preloadedSong!;
-        }
+      if (preloadedTrack != null) {
+        debugPrint('Using preloaded data for song: ${_currentSong!.title}');
+        streamUrl = preloadedTrack.streamUrl;
+
+        // Use preloaded song with ReplayGain data if available
+        _currentSong = preloadedTrack.song;
+        _playlist[_currentIndex] = preloadedTrack.song;
 
         // Check if we have a preloaded AudioSource for instant playback
-        usePreloadedAudio = _preloadedAudioSource != null;
+        usePreloadedAudio = preloadedTrack.audioSource != null;
 
-        // Clear preload state since we're using it now
-        _preloadedSong = null;
-        _preloadedStreamUrl = null;
+        debugPrint(
+            'Using preloaded track: ${_currentSong!.title} (AudioSource: ${usePreloadedAudio ? "available" : "unavailable"})');
       } else {
-        streamUrl = _api.getStreamUrl(_currentSong!.id);
-        debugPrint('Playing song: ${_currentSong!.title} from URL: $streamUrl');
+        // No preloaded data - attempt network request
+        try {
+          streamUrl = _api.getStreamUrl(_currentSong!.id);
+          debugPrint('Loading song from network: ${_currentSong!.title}');
+        } catch (e) {
+          // Network error - check if we have any preloaded tracks we can fall back to
+          final fallbackTrack = _findNearestPreloadedTrack(index);
+          if (fallbackTrack != null) {
+            debugPrint(
+                'Network unavailable, using nearest preloaded track as fallback');
+            streamUrl = fallbackTrack.streamUrl;
+            _currentSong = fallbackTrack.song;
+            _playlist[_currentIndex] = fallbackTrack.song;
+            usePreloadedAudio = fallbackTrack.audioSource != null;
+          } else {
+            debugPrint(
+                'Network unavailable and no preloaded fallback available');
+            rethrow;
+          }
+        }
       }
 
       // Record when this song started playing and clear position tracking
@@ -554,15 +588,26 @@ class AudioPlayerService extends ChangeNotifier {
       _recentPositions.clear();
 
       // Use preloaded AudioSource for instant playback, or fall back to setUrl
-      if (usePreloadedAudio && _preloadedAudioSource != null) {
+      if (usePreloadedAudio && preloadedTrack?.audioSource != null) {
         debugPrint(
             'Using preloaded AudioSource for instant playback: ${_currentSong!.title}');
-        await _audioPlayer.setAudioSource(_preloadedAudioSource!);
-        // Clear the preloaded AudioSource since we're using it now
-        _preloadedAudioSource = null;
+        await _audioPlayer.setAudioSource(preloadedTrack!.audioSource!);
       } else {
         debugPrint('Loading audio from URL: ${_currentSong!.title}');
-        await _audioPlayer.setUrl(streamUrl);
+        try {
+          await _audioPlayer.setUrl(streamUrl);
+        } catch (e) {
+          debugPrint(
+              'Failed to load audio from URL, network may be offline: $e');
+          // If we're here, we already tried preloaded content and it wasn't available
+          rethrow;
+        }
+      }
+
+      // Remove used preloaded track to free memory
+      if (preloadedTrack != null) {
+        _preloadedTracks.remove(index);
+        preloadedTrack.dispose();
       }
 
       // Apply ReplayGain volume adjustment BEFORE starting playback
@@ -579,8 +624,8 @@ class AudioPlayerService extends ChangeNotifier {
       // Send now playing notification to server
       _api.scrobbleNowPlaying(_currentSong!.id);
 
-      // Preload next song if available
-      _preloadNextSong();
+      // Batch preload next songs (up to 3 tracks ahead)
+      _preloadUpcomingSongs();
 
       // Mark this index as confirmed now that the song actually started
       _confirmedIndex = _currentIndex;
@@ -701,7 +746,8 @@ class AudioPlayerService extends ChangeNotifier {
       _lastSkipSource = null;
       debugPrint('[$source] Skip operation completed');
 
-      // Save state after track change
+      // Clean up old preloads and save state after track change
+      _cleanupOldPreloads();
       await _saveCurrentState();
     }
   }
@@ -746,7 +792,8 @@ class AudioPlayerService extends ChangeNotifier {
       _lastSkipSource = null;
       debugPrint('[$source] Skip operation completed');
 
-      // Save state after track change
+      // Clean up old preloads and save state after track change
+      _cleanupOldPreloads();
       await _saveCurrentState();
     }
   }
@@ -920,6 +967,7 @@ class AudioPlayerService extends ChangeNotifier {
     _playSongAtIndex(targetIdx).then((_) {
       _skipOperationInProgress = false;
       _lastSkipSource = null;
+      _cleanupOldPreloads(); // Clean up old preloads after auto-advance
       debugPrint('[$source] Auto-advance completed to index $targetIdx');
     }).catchError((e) {
       _skipOperationInProgress = false;
@@ -1072,101 +1120,56 @@ class AudioPlayerService extends ChangeNotifier {
     _applyReplayGainVolume();
   }
 
-  /// Preloads the next song in the playlist for seamless playback
-  /// Enhanced to also read ReplayGain metadata for volume-ready playback
-  Future<void> _preloadNextSong() async {
-    if (!hasNext || _isPreloading) return;
+  /// Finds the nearest preloaded track to the given index for fallback purposes
+  PreloadedTrack? _findNearestPreloadedTrack(int targetIndex) {
+    if (_preloadedTracks.isEmpty) return null;
 
-    final nextIndex = _currentIndex + 1;
-    final nextSong = _playlist[nextIndex];
+    // First try tracks after the target index
+    for (int i = targetIndex + 1; i <= targetIndex + _maxPreloadTracks; i++) {
+      if (_preloadedTracks.containsKey(i)) {
+        return _preloadedTracks[i];
+      }
+    }
 
-    // Don't preload if it's already preloaded
-    if (_preloadedSong?.id == nextSong.id) return;
+    // Then try tracks before the target index
+    for (int i = targetIndex - 1; i >= 0; i--) {
+      if (_preloadedTracks.containsKey(i)) {
+        return _preloadedTracks[i];
+      }
+    }
+
+    return null;
+  }
+
+  /// Preloads multiple upcoming songs in the playlist for seamless offline-resilient playback
+  /// Enhanced to preload up to 3 tracks ahead with ReplayGain metadata
+  Future<void> _preloadUpcomingSongs() async {
+    if (_isPreloading) return;
 
     _isPreloading = true;
     _audioLoadingState = AudioLoadingState.preloading;
     notifyListeners();
 
     try {
-      final streamUrl = _api.getStreamUrl(nextSong.id);
-      debugPrint('Preloading next song: ${nextSong.title}');
+      final preloadTasks = <Future<void>>[];
 
-      // Read ReplayGain metadata for the next song if not already available
-      Song songWithReplayGain = nextSong;
+      // Preload next 3 tracks (or until end of playlist)
+      for (int i = 1; i <= _maxPreloadTracks; i++) {
+        final targetIndex = _currentIndex + i;
+        if (targetIndex >= _playlist.length) break;
 
-      // Only read ReplayGain if the song doesn't already have it
-      if (nextSong.replayGainTrackGain == null &&
-          nextSong.replayGainAlbumGain == null) {
-        try {
-          debugPrint('Preloading ReplayGain metadata for: ${nextSong.title}');
-          final replayGainData = await ReplayGainReader.readFromUrl(streamUrl);
+        // Skip if already preloaded
+        if (_preloadedTracks.containsKey(targetIndex)) continue;
 
-          if (replayGainData.hasAnyData) {
-            // Create updated song with ReplayGain metadata
-            songWithReplayGain = Song(
-              id: nextSong.id,
-              title: nextSong.title,
-              artist: nextSong.artist,
-              album: nextSong.album,
-              albumId: nextSong.albumId,
-              coverArt: nextSong.coverArt,
-              duration: nextSong.duration,
-              track: nextSong.track,
-              contentType: nextSong.contentType,
-              suffix: nextSong.suffix,
-              replayGainTrackGain: replayGainData.trackGain,
-              replayGainAlbumGain: replayGainData.albumGain,
-              replayGainTrackPeak: replayGainData.trackPeak,
-              replayGainAlbumPeak: replayGainData.albumPeak,
-            );
-
-            // Update the song in the playlist with ReplayGain data
-            _playlist[nextIndex] = songWithReplayGain;
-
-            debugPrint(
-                'Successfully preloaded ReplayGain for: ${nextSong.title} - TrackGain: ${replayGainData.trackGain}, AlbumGain: ${replayGainData.albumGain}');
-          } else {
-            debugPrint('No ReplayGain metadata found for: ${nextSong.title}');
-          }
-        } catch (e) {
-          debugPrint(
-              'Error reading ReplayGain during preload for ${nextSong.title}: $e');
-          // Continue with original song if ReplayGain reading fails
-        }
-      } else {
-        debugPrint(
-            'Song ${nextSong.title} already has ReplayGain metadata, skipping preload read');
+        preloadTasks.add(_preloadSingleTrack(targetIndex));
       }
 
-      // Create and prepare the AudioSource for true preloading
-      try {
+      if (preloadTasks.isNotEmpty) {
+        debugPrint('Starting batch preload of ${preloadTasks.length} tracks');
+        await Future.wait(preloadTasks, eagerError: false);
         debugPrint(
-            'Creating AudioSource for preloading: ${songWithReplayGain.title}');
-        _preloadedAudioSource = AudioSource.uri(Uri.parse(streamUrl));
-
-        // We could optionally prepare the source here, but that would start loading immediately
-        // For now, we'll let setAudioSource() handle the preparation when needed
-
-        debugPrint(
-            'Successfully created AudioSource for: ${songWithReplayGain.title}');
-      } catch (audioSourceError) {
-        debugPrint(
-            'Error creating AudioSource for ${songWithReplayGain.title}: $audioSourceError');
-        _preloadedAudioSource = null;
-        // Continue without audio source preloading, we still have the URL
+            'Completed batch preload - ${_preloadedTracks.length} tracks cached');
       }
-
-      // Store the preloaded song (with ReplayGain if available) and URL
-      _preloadedSong = songWithReplayGain;
-      _preloadedStreamUrl = streamUrl;
-
-      debugPrint(
-          'Successfully preloaded URL, metadata, and AudioSource for: ${songWithReplayGain.title}');
-    } catch (e) {
-      debugPrint('Error preloading next song: $e');
-      _preloadedSong = null;
-      _preloadedStreamUrl = null;
-      _preloadedAudioSource = null;
     } finally {
       _isPreloading = false;
       // Only reset loading state if we're not in an error state
@@ -1177,13 +1180,108 @@ class AudioPlayerService extends ChangeNotifier {
     }
   }
 
-  /// Clears the preloaded song (called when playlist changes)
-  void _clearPreload() {
-    _preloadedSong = null;
-    _preloadedStreamUrl = null;
-    // Dispose of the preloaded AudioSource to free resources
-    _preloadedAudioSource = null;
+  /// Preloads a single track at the specified index
+  Future<void> _preloadSingleTrack(int index) async {
+    if (index < 0 || index >= _playlist.length) return;
+
+    final song = _playlist[index];
+    debugPrint('Preloading track at index $index: ${song.title}');
+
+    try {
+      final streamUrl = _api.getStreamUrl(song.id);
+
+      // Read ReplayGain metadata if not already available
+      Song songWithReplayGain = song;
+
+      if (song.replayGainTrackGain == null &&
+          song.replayGainAlbumGain == null) {
+        try {
+          final replayGainData = await ReplayGainReader.readFromUrl(streamUrl);
+
+          if (replayGainData.hasAnyData) {
+            songWithReplayGain = Song(
+              id: song.id,
+              title: song.title,
+              artist: song.artist,
+              album: song.album,
+              albumId: song.albumId,
+              coverArt: song.coverArt,
+              duration: song.duration,
+              track: song.track,
+              contentType: song.contentType,
+              suffix: song.suffix,
+              replayGainTrackGain: replayGainData.trackGain,
+              replayGainAlbumGain: replayGainData.albumGain,
+              replayGainTrackPeak: replayGainData.trackPeak,
+              replayGainAlbumPeak: replayGainData.albumPeak,
+            );
+
+            // Update playlist with ReplayGain data
+            _playlist[index] = songWithReplayGain;
+
+            debugPrint(
+                'Loaded ReplayGain for ${song.title}: Track=${replayGainData.trackGain}, Album=${replayGainData.albumGain}');
+          }
+        } catch (e) {
+          debugPrint('Error reading ReplayGain for ${song.title}: $e');
+        }
+      }
+
+      // Create AudioSource for instant playback
+      AudioSource? audioSource;
+      try {
+        audioSource = AudioSource.uri(Uri.parse(streamUrl));
+        debugPrint('Created AudioSource for ${songWithReplayGain.title}');
+      } catch (e) {
+        debugPrint(
+            'Error creating AudioSource for ${songWithReplayGain.title}: $e');
+      }
+
+      // Store preloaded track
+      _preloadedTracks[index] = PreloadedTrack(
+        song: songWithReplayGain,
+        streamUrl: streamUrl,
+        audioSource: audioSource,
+        preloadedAt: DateTime.now(),
+      );
+
+      debugPrint(
+          'Successfully preloaded track $index: ${songWithReplayGain.title}');
+    } catch (e) {
+      debugPrint('Error preloading track $index (${song.title}): $e');
+      // Don't rethrow - continue with other preloads
+    }
+  }
+
+  /// Clears all preloaded tracks (called when playlist changes)
+  void _clearAllPreloads() {
+    debugPrint('Clearing ${_preloadedTracks.length} preloaded tracks');
+
+    // Dispose all preloaded tracks
+    for (final track in _preloadedTracks.values) {
+      track.dispose();
+    }
+
+    _preloadedTracks.clear();
     _isPreloading = false;
+  }
+
+  /// Clears old preloaded tracks that are no longer needed (behind current position)
+  void _cleanupOldPreloads() {
+    final indicesToRemove = <int>[];
+
+    for (final index in _preloadedTracks.keys) {
+      // Remove tracks that are more than 1 position behind current (keep some buffer)
+      if (index < _currentIndex - 1) {
+        indicesToRemove.add(index);
+      }
+    }
+
+    for (final index in indicesToRemove) {
+      final track = _preloadedTracks.remove(index);
+      track?.dispose();
+      debugPrint('Cleaned up old preloaded track at index $index');
+    }
   }
 
   /// Starts the sleep timer with the specified duration
@@ -1263,8 +1361,8 @@ class AudioPlayerService extends ChangeNotifier {
     _playerCompleteSubscription?.cancel();
     _playerStateSubscription?.cancel();
     _sleepTimer?.cancel();
-    // Clear preloaded AudioSource to free resources
-    _preloadedAudioSource = null;
+    // Clear all preloaded tracks to free resources
+    _clearAllPreloads();
     _persistence?.dispose();
     _audioPlayer.dispose();
     super.dispose();

@@ -21,14 +21,14 @@ A high-quality Flutter music player application that streams music from your per
 - **Native Media Controls**: Reliable control from lock screen, notification panel, and Bluetooth devices with comprehensive audio focus management ensuring single-press reliability
 - **Interactive Progress**: Tap or drag to seek to any position in tracks
 - **Sleep Timer**: Auto-pause with preset durations (5min to 2 hours)
-- **Seamless Playback**: Next track preloading for instant transitions
+- **Offline-Resilient Playback**: Multi-track preloading (3 tracks ahead) with automatic fallback during network outages for uninterrupted listening
 
 ### 🎨 **Interface & Experience**
 - **Dark Mode**: System-aware theme with manual override
 - **Landscape Support**: Responsive layouts optimized for both portrait and landscape orientations
 - **Fast Loading**: HTTP/2 support with connection reuse and advanced caching for instant response
 - **Network Optimization**: Intelligent timeout handling with configurable retry logic and connection presets (Fast/Default/Slow) for different network conditions
-- **Offline Capability**: Browse cached content without network
+- **Enhanced Offline Resilience**: Browse cached content and continue playback with preloaded tracks even during network outages
 - **Real-time Updates**: Background sync keeps your library fresh
 - **Comprehensive Feedback**: Clear loading states and user-friendly error messages with troubleshooting suggestions
 - **Pull-to-Refresh**: Manual refresh on album and artist lists
