@@ -267,6 +267,11 @@ class AudioPlayerService extends ChangeNotifier {
             // This is the key fix: ready + not playing = paused
             _playbackState = PlaybackState.paused;
             debugPrint('[audio_player] Set state to PAUSED');
+
+            // Additional completion detection: if we're paused/stopped very close to the end,
+            // check if this should trigger completion (handles cases where position stream
+            // stops updating before completion event fires)
+            _checkCompletionOnStop();
             break;
           case ProcessingState.completed:
             // Don't handle completion here - handled in separate subscription
@@ -857,6 +862,47 @@ class AudioPlayerService extends ChangeNotifier {
     }
 
     return isStuck;
+  }
+
+  /// Checks if we should trigger completion when playback stops near the end.
+  /// This handles cases where the position stream stops updating before the
+  /// completion event fires, causing playback to get stuck.
+  void _checkCompletionOnStop() {
+    // Only check if we have a current song, valid duration, and aren't already handling a skip
+    if (_currentSong == null ||
+        _totalDuration == Duration.zero ||
+        _skipOperationInProgress) {
+      return;
+    }
+
+    // Prevent duplicate completions for the same song
+    if (_lastManualCompletedSongId == _currentSong!.id) {
+      return;
+    }
+
+    // Get current position from the player
+    final currentPosition = _currentPosition;
+    final remainingTime = _totalDuration - currentPosition;
+
+    // If we're within 2 seconds of the end, consider this a completion
+    // (generous threshold to catch cases where playback stopped slightly before the actual end)
+    const stoppedNearEndThreshold = Duration(seconds: 2);
+
+    if (remainingTime <= stoppedNearEndThreshold &&
+        remainingTime >= Duration.zero) {
+      debugPrint(
+          '[stop_completion] Playback stopped near end - position: ${currentPosition.inSeconds}s, duration: ${_totalDuration.inSeconds}s, remaining: ${remainingTime.inSeconds}s');
+
+      // Verify the completion event hasn't fired
+      if (_audioPlayer.playerState.processingState !=
+              ProcessingState.completed &&
+          _lastCompletedSongId != _currentSong!.id) {
+        debugPrint(
+            '[stop_completion] Triggering completion - playback stopped ${remainingTime.inMilliseconds}ms from end');
+        _lastManualCompletedSongId = _currentSong!.id;
+        _onSongComplete();
+      }
+    }
   }
 
   /// Manual completion detection as fallback for when just_audio doesn't fire completion
