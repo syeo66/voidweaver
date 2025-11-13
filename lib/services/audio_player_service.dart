@@ -56,9 +56,10 @@ class _PositionUpdate {
 
 class AudioPlayerService extends ChangeNotifier {
   // End-of-song detection configuration constants
-  // These constants configure the enhanced dual-detection mechanism for song completion:
+  // These constants configure the enhanced triple-detection mechanism for song completion:
   // 1. Traditional detection: triggers when within 500ms of song end (see _checkManualCompletion)
   // 2. Stuck playhead detection: identifies when position stops moving in near-end zone
+  // 3. Stop-based detection: triggers when playback stops within 2s of end (see _checkCompletionOnStop)
 
   /// Time window (ms) to analyze recent position updates for stuck playhead detection
   static const int _stuckPositionTimeoutMs = 2000;
