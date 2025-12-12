@@ -322,6 +322,9 @@ class AudioPlayerService extends ChangeNotifier {
         final streamUrl = _api.getStreamUrl(savedState.currentSong!.id);
         await _audioPlayer.setUrl(streamUrl);
 
+        // Apply ReplayGain volume adjustment to ensure settings are applied after restoration
+        await _readReplayGainAndApplyVolume(streamUrl);
+
         // Seek to saved position
         await _audioPlayer.seek(savedState.currentPosition);
 
