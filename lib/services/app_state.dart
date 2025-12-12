@@ -25,9 +25,7 @@ enum LoadingState {
 
 class AppState extends ChangeNotifier {
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage(
-    aOptions: AndroidOptions(
-      encryptedSharedPreferences: true,
-    ),
+    aOptions: AndroidOptions(),
     iOptions: IOSOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
     ),

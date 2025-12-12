@@ -18,10 +18,10 @@
 @import audio_session;
 #endif
 
-#if __has_include(<flutter_secure_storage/FlutterSecureStoragePlugin.h>)
-#import <flutter_secure_storage/FlutterSecureStoragePlugin.h>
+#if __has_include(<flutter_secure_storage_darwin/FlutterSecureStorageDarwinPlugin.h>)
+#import <flutter_secure_storage_darwin/FlutterSecureStorageDarwinPlugin.h>
 #else
-@import flutter_secure_storage;
+@import flutter_secure_storage_darwin;
 #endif
 
 #if __has_include(<just_audio/JustAudioPlugin.h>)
@@ -53,7 +53,7 @@
 + (void)registerWithRegistry:(NSObject<FlutterPluginRegistry>*)registry {
   [AudioServicePlugin registerWithRegistrar:[registry registrarForPlugin:@"AudioServicePlugin"]];
   [AudioSessionPlugin registerWithRegistrar:[registry registrarForPlugin:@"AudioSessionPlugin"]];
-  [FlutterSecureStoragePlugin registerWithRegistrar:[registry registrarForPlugin:@"FlutterSecureStoragePlugin"]];
+  [FlutterSecureStorageDarwinPlugin registerWithRegistrar:[registry registrarForPlugin:@"FlutterSecureStorageDarwinPlugin"]];
   [JustAudioPlugin registerWithRegistrar:[registry registrarForPlugin:@"JustAudioPlugin"]];
   [PathProviderPlugin registerWithRegistrar:[registry registrarForPlugin:@"PathProviderPlugin"]];
   [SharedPreferencesPlugin registerWithRegistrar:[registry registrarForPlugin:@"SharedPreferencesPlugin"]];
