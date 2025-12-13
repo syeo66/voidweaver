@@ -108,7 +108,8 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Verify scrobble was submitted
-      verify(mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')))
+      verify(mockApi.scrobbleSubmission('song1',
+              playedAt: anyNamed('playedAt')))
           .called(1);
     });
 
@@ -146,7 +147,8 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Verify scrobble was submitted
-      verify(mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')))
+      verify(mockApi.scrobbleSubmission('song1',
+              playedAt: anyNamed('playedAt')))
           .called(1);
     });
 
@@ -225,7 +227,8 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Verify scrobble was submitted only once
-      verify(mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')))
+      verify(mockApi.scrobbleSubmission('song1',
+              playedAt: anyNamed('playedAt')))
           .called(1);
     });
 
@@ -265,7 +268,8 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Verify scrobble was submitted on completion
-      verify(mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')))
+      verify(mockApi.scrobbleSubmission('song1',
+              playedAt: anyNamed('playedAt')))
           .called(1);
     });
 
@@ -309,7 +313,8 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Verify first scrobble was submitted
-      verify(mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')))
+      verify(mockApi.scrobbleSubmission('song1',
+              playedAt: anyNamed('playedAt')))
           .called(1);
 
       // Now manually skip to next song
@@ -354,7 +359,8 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Verify scrobble
-      verify(mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')))
+      verify(mockApi.scrobbleSubmission('song1',
+              playedAt: anyNamed('playedAt')))
           .called(1);
 
       // Create second album with SAME song ID (to test reset)
@@ -387,7 +393,8 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Verify scrobble was submitted AGAIN (because tracking was reset)
-      verify(mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')))
+      verify(mockApi.scrobbleSubmission('song1',
+              playedAt: anyNamed('playedAt')))
           .called(1);
     });
 
@@ -424,7 +431,8 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Should scrobble at 2 minutes (whichever comes first: 50% or 2 minutes)
-      verify(mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')))
+      verify(mockApi.scrobbleSubmission('song1',
+              playedAt: anyNamed('playedAt')))
           .called(1);
     });
 
@@ -466,7 +474,8 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Verify scrobble submission was called when criteria was met
-      verify(mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')))
+      verify(mockApi.scrobbleSubmission('song1',
+              playedAt: anyNamed('playedAt')))
           .called(1);
 
       // Playback should continue normally
@@ -512,8 +521,8 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Verify scrobble was called and capture the timestamp
-      final verification = verify(
-          mockApi.scrobbleSubmission('song1', playedAt: captureAnyNamed('playedAt')));
+      final verification = verify(mockApi.scrobbleSubmission('song1',
+          playedAt: captureAnyNamed('playedAt')));
       verification.called(1);
 
       // Verify the timestamp is reasonable (between before and after playback)
