@@ -26,6 +26,7 @@ import 'package:voidweaver/services/subsonic_api.dart' as _i3;
 // ignore_for_file: unnecessary_parenthesis
 // ignore_for_file: camel_case_types
 // ignore_for_file: subtype_of_sealed_class
+// ignore_for_file: invalid_use_of_internal_member
 
 class _FakeNetworkConfig_0 extends _i1.SmartFake implements _i2.NetworkConfig {
   _FakeNetworkConfig_0(
