@@ -12,6 +12,7 @@ This directory contains comprehensive tests for the Voidweaver Flutter music pla
 - **`utils/validators_test.dart`** - Input validation and sanitization tests with comprehensive security coverage
 - **`services/sleep_timer_test.dart`** - Comprehensive sleep timer functionality tests
 - **`services/api_cache_test.dart`** - API caching system tests with request deduplication
+- **`services/scrobble_queue_test.dart`** - Persistent scrobble queue tests with retry logic and network failure handling
 - **`widgets/error_boundary_test.dart`** - Error boundary and error handling widget tests
 - **`services/error_handler_test.dart`** - Global error handler and error reporting tests
 - **`services/memory_leak_test.dart`** - Memory leak prevention tests with comprehensive disposal verification
@@ -40,7 +41,7 @@ flutter test --verbose
 
 ## Test Coverage
 
-### Current Status: 118+/118+ Tests Passing ✅
+### Current Status: 172/172 Tests Passing ✅
 
 #### Data Models (6 tests)
 - Song class construction and equality
@@ -104,6 +105,26 @@ flutter test --verbose
 - Unsupported protocol rejection (FTP, etc.)
 - Proper resource disposal after HTTPS validation
 
+#### Scrobble Queue Persistence (19 tests)
+- Queue initialization and empty queue handling
+- Now playing and submission request queuing
+- Successful request processing
+- Automatic retry with exponential backoff
+- Queue persistence to SharedPreferences storage
+- Queue restoration after app restart
+- Maximum retry limit enforcement
+- Multiple request processing in order
+- Mixed request type handling (now playing + submission)
+- Concurrent processing prevention
+- Queue disposal during processing
+- Request serialization and deserialization
+- Retry count increment tracking
+- Immediate processing on enqueue
+- Periodic queue processing
+- Network failure handling
+- Request age cleanup (7-day limit)
+- Graceful error handling
+
 ## Mock Infrastructure
 
 ### MockAudioPlayer
@@ -163,10 +184,11 @@ AudioPlayerService(api, settings, audioPlayer: mockAudioPlayer)
 
 ### Test-Friendly Design
 
-- **Optional dependencies** - AudioPlayer is optional parameter with default
+- **Optional dependencies** - AudioPlayer and ScrobbleQueue are optional parameters with defaults
 - **Stream mocking** - Complete audio stream simulation
 - **Resource management** - Proper cleanup in tearDown methods
 - **Realistic scenarios** - Tests cover real-world usage patterns
+- **Persistent storage mocking** - SharedPreferences mocked for scrobble queue tests
 
 ## Adding New Tests
 

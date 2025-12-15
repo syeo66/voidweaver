@@ -25,11 +25,12 @@ The project includes a Makefile for streamlined development workflows:
 
 ### Code Quality
 - `flutter analyze` - Static analysis (currently 0 issues)
-- `flutter test` - Run test suite (142+ passing with comprehensive just_audio mocks and Bluetooth controls validation)
+- `flutter test` - Run test suite (172+ passing with comprehensive just_audio mocks, Bluetooth controls validation, and scrobble queue testing)
 - `flutter pub deps` - Check dependency graph including HTTP/2 support
 - `flutter test test/utils/validators_test.dart` - Run input validation tests specifically
 - `flutter test test/widgets/error_boundary_test.dart` - Run error boundary tests specifically
 - `flutter test test/services/error_handler_test.dart` - Run error handler tests specifically
+- `flutter test test/services/scrobble_queue_test.dart` - Run scrobble queue persistence tests specifically
 - `flutter doctor` - Check Flutter installation and dependencies
 
 ### Building
@@ -66,17 +67,18 @@ Voidweaver uses a clean, optimized architecture with:
 
 ```bash
 flutter analyze          # Static analysis (currently 0 issues)
-flutter test             # Run tests (142/142 passing)
+flutter test             # Run tests (172/172 passing)
 flutter test --coverage  # Run tests with coverage report
 ```
 
-**Test Coverage**: 142 comprehensive tests covering:
+**Test Coverage**: 172 comprehensive tests covering:
 - Data model validation (Song, Album, Artist, SearchResult)
 - Utility functions (time formatting, ReplayGain parsing, URL validation)
 - Sleep timer functionality with comprehensive edge case testing
 - API caching system with request deduplication and multi-level caching
 - Input validation and sanitization (37 comprehensive tests covering security scenarios, edge cases, and user input handling)
 - Error boundary system (15 tests covering widget error handling, global error management, and user recovery flows)
+- Scrobble queue persistence (19 tests covering queue persistence, retry logic, network failure handling, request ordering, and graceful degradation)
 - Widget instantiation and basic UI components
 - Mock infrastructure for AudioPlayer plugin testing
 - HTTPS security enforcement (5 comprehensive tests covering URL validation, API rejection of HTTP connections, and proper error handling)

@@ -6,6 +6,7 @@ import 'subsonic_api.dart';
 import 'settings_service.dart';
 import 'replaygain_reader.dart';
 import 'playback_persistence.dart';
+import 'scrobble_queue.dart';
 
 enum PlaybackState {
   stopped,
@@ -80,6 +81,7 @@ class AudioPlayerService extends ChangeNotifier {
   final SubsonicApi _api;
   final SettingsService _settingsService;
   final PlaybackPersistenceService? _persistence;
+  final ScrobbleQueue _scrobbleQueue;
 
   PlaybackState _playbackState = PlaybackState.stopped;
   List<Song> _playlist = [];
@@ -134,10 +136,14 @@ class AudioPlayerService extends ChangeNotifier {
   final Set<String> _scrobbledSongs = {};
 
   AudioPlayerService(this._api, this._settingsService,
-      {AudioPlayer? audioPlayer, PlaybackPersistenceService? persistence})
+      {AudioPlayer? audioPlayer,
+      PlaybackPersistenceService? persistence,
+      ScrobbleQueue? scrobbleQueue})
       : _audioPlayer = audioPlayer ?? AudioPlayer(),
-        _persistence = persistence {
+        _persistence = persistence,
+        _scrobbleQueue = scrobbleQueue ?? ScrobbleQueue(_api) {
     _initializePlayer();
+    _scrobbleQueue.initialize();
   }
 
   // Expose AudioPlayer for direct state access by VoidweaverAudioHandler
@@ -630,8 +636,8 @@ class AudioPlayerService extends ChangeNotifier {
       _audioLoadingState = AudioLoadingState.idle;
       _audioLoadingError = null;
 
-      // Send now playing notification to server
-      _api.scrobbleNowPlaying(_currentSong!.id);
+      // Send now playing notification to server (queued for reliability)
+      _scrobbleQueue.queueNowPlaying(_currentSong!.id);
 
       // Batch preload next songs (up to 3 tracks ahead)
       _preloadUpcomingSongs();
@@ -1029,8 +1035,8 @@ class AudioPlayerService extends ChangeNotifier {
 
   void _scrobbleCurrentSong() {
     if (_currentSong != null && _currentSongStartTime != null) {
-      // Send scrobble submission with the timestamp when the song started playing
-      _api.scrobbleSubmission(_currentSong!.id,
+      // Send scrobble submission with the timestamp when the song started playing (queued for reliability)
+      _scrobbleQueue.queueSubmission(_currentSong!.id,
           playedAt: _currentSongStartTime!);
 
       // Mark this song as scrobbled to prevent duplicate scrobbles
@@ -1414,6 +1420,7 @@ class AudioPlayerService extends ChangeNotifier {
     // Clear all preloaded tracks to free resources
     _clearAllPreloads();
     _persistence?.dispose();
+    _scrobbleQueue.dispose();
     _audioPlayer.dispose();
     super.dispose();
   }

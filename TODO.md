@@ -61,6 +61,13 @@
   - [x] **User-friendly error messages** - Intelligent error categorization with specific troubleshooting suggestions
   - [x] **Advanced settings UI** - Fine-grained timeout configuration with validation
   - [x] **Comprehensive test coverage** - 19 tests covering all timeout scenarios and error handling
+- [x] **Scrobble queue persistence** - ✅ **FULLY IMPLEMENTED** - Persistent scrobble queue with automatic retry:
+  - [x] **Persistent storage** - Queue saved to SharedPreferences and restored on app restart
+  - [x] **Automatic retry logic** - Exponential backoff with maximum 5 retry attempts
+  - [x] **Network failure handling** - Queue builds while offline, processes when network returns
+  - [x] **Non-blocking operation** - All operations asynchronous and don't affect playback
+  - [x] **Intelligent cleanup** - Old requests (>7 days) and failed requests (>5 retries) automatically dropped
+  - [x] **Comprehensive test coverage** - 19 tests covering queue persistence, retry logic, and error handling
 - [ ] **Offline mode** - Graceful handling when server unavailable
 - [ ] **Structured logging** - Implement proper logging system
 - [ ] **Crash reporting** - Add crash analytics for production
@@ -68,7 +75,7 @@
 ## 🧪 Testing & Quality
 
 ### Test Coverage
-- [x] **Unit tests** - ✅ Comprehensive test suite (142+ passing) covering data models, utilities, sleep timer, caching functionality, input validation, Bluetooth controls, and network timeout handling
+- [x] **Unit tests** - ✅ Comprehensive test suite (172+ passing) covering data models, utilities, sleep timer, caching functionality, input validation, Bluetooth controls, network timeout handling, and scrobble queue persistence
 - [x] **Mock infrastructure** - ✅ Robust AudioPlayer mocking system for reliable testing
 - [x] **Testable architecture** - ✅ Refactored AudioPlayerService with dependency injection
 - [x] **Caching system tests** - ✅ Added 7 comprehensive tests for API cache, request deduplication, and cache invalidation
@@ -76,7 +83,8 @@
 - [x] **Memory leak prevention tests** - ✅ Added 8 comprehensive tests covering service disposal, timer cleanup, stream subscription management, and resource safety
 - [x] **Bluetooth controls tests** - ✅ Added 5 comprehensive tests covering audio focus management, delayed requests, state tracking, and conflict prevention
 - [x] **Network timeout handling tests** - ✅ Added 19 comprehensive tests covering timeout configuration, retry logic, exponential backoff, error categorization, settings integration, and user-friendly error message generation
-- [x] **Dependency compatibility testing** - ✅ All tests validated after dependency updates (August 2025) to ensure no regressions with updated build tools and HTTP libraries
+- [x] **Scrobble queue tests** - ✅ Added 19 comprehensive tests covering queue persistence, retry logic, network failure handling, request ordering, and graceful degradation
+- [x] **Dependency compatibility testing** - ✅ All tests validated after dependency updates (December 2025) to ensure no regressions with scrobble queue implementation
 - [ ] **Integration tests** - Test complete user workflows
 - [ ] **Audio playback tests** - Test core playback functionality beyond mocking
 - [ ] **ReplayGain tests** - Test complex volume calculation logic

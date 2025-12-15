@@ -146,6 +146,44 @@ The system provides multiple recovery mechanisms:
 3. **Graceful Degradation** - App continues functioning even when components fail
 4. **Component Isolation** - Errors in one component don't affect others
 
+### Service-Level Error Handling
+
+#### Scrobble Queue Error Resilience
+
+The `ScrobbleQueue` service implements comprehensive error handling for play count tracking:
+
+**Network Failure Handling**:
+- Failed scrobble requests are caught and queued for retry
+- Exponential backoff prevents overwhelming the server during outages
+- Maximum 5 retry attempts before dropping requests
+- Automatic processing when network returns
+
+**Persistent State Management**:
+- Queue persisted to SharedPreferences for crash recovery
+- Graceful handling of storage failures (queue continues in-memory)
+- Automatic restoration on app restart
+- Old requests (>7 days) automatically cleaned up
+
+**Non-Blocking Architecture**:
+- All queue operations are asynchronous
+- Never blocks playback or skip functionality
+- Background processing every 30 seconds
+- Immediate processing attempts for new requests
+
+**Error Isolation**:
+```dart
+try {
+  await _sendScrobble(request);
+  successfulRequests.add(request);
+} catch (e) {
+  debugPrint('Failed to send scrobble: $e');
+  // Re-queue with incremented retry count
+  failedRequests.add(request.copyWithRetry());
+}
+```
+
+This approach ensures play counts are never lost due to temporary issues while maintaining app responsiveness.
+
 ## Testing
 
 The error boundary system includes comprehensive tests:
@@ -255,10 +293,10 @@ Context: Album loading operation
 Potential improvements to the error handling system:
 
 - **Remote error reporting** - Send errors to analytics service
-- **Error categorization** - Group similar errors for better insights  
+- **Error categorization** - Group similar errors for better insights
 - **User feedback integration** - Allow users to report bugs directly
 - **Performance monitoring** - Track error impact on app performance
-- **Smart retry logic** - Implement exponential backoff for network errors
+- ~~**Smart retry logic** - Implement exponential backoff for network errors~~ ✅ **Implemented in ScrobbleQueue**
 
 ## Related Documentation
 

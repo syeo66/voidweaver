@@ -40,9 +40,10 @@ A high-quality Flutter music player application that streams music from your per
 - **Input Validation**: Comprehensive validation and sanitization of all user inputs to prevent crashes and security issues
 - **Error Boundaries**: Global error handling system that prevents app crashes and provides user-friendly error recovery
 - **Intelligent Scrobbling**: Automatic play count tracking that submits scrobbles when songs reach the middle (50%) or 2 minute mark, whichever comes first, with duplicate prevention to ensure accurate listening statistics
+- **Persistent Scrobble Queue**: Never lose play counts due to network issues - scrobble requests are queued, persisted, and automatically retried with exponential backoff. Continues working even when offline, processing queued requests when network returns.
 - **Robust Error Handling**: Graceful recovery from network issues and widget failures
 - **Background Sync**: Automatic library updates every 5 minutes
-- **Modern Dependencies**: Regularly updated dependencies with comprehensive testing (142+ test suite, last updated August 2025)
+- **Modern Dependencies**: Regularly updated dependencies with comprehensive testing (172+ test suite, last updated December 2025)
 - **just_audio Integration**: Enhanced audio performance with dual state synchronization for reliable Bluetooth and native media controls
 - **Persistent State Management**: Playlist and playback position automatically saved with validation and error recovery
 

@@ -230,7 +230,89 @@ The following SubsonicApi methods use caching:
 Some operations are intentionally not cached:
 - **Stream URLs**: Generated per request with authentication
 - **Cover Art URLs**: Generated per request with authentication
-- **Scrobble Operations**: Real-time user actions
+- **Scrobble Operations**: Real-time user actions (but see Scrobble Queue below for persistent queuing)
+
+## Scrobble Queue Persistence
+
+### Overview
+
+While scrobble operations themselves are not cached, Voidweaver includes a persistent queue system that ensures play count data is never lost due to network issues.
+
+### Key Features
+
+- **Persistent Storage**: Scrobble requests stored in SharedPreferences and restored after app restart
+- **Automatic Retry**: Failed requests automatically retried with exponential backoff
+- **Network Resilience**: Queue continues to build while offline, processes when network returns
+- **Non-Blocking**: All queue operations asynchronous and don't affect playback performance
+- **Intelligent Cleanup**: Old requests (>7 days) and failed requests (>5 retries) automatically dropped
+
+### Architecture
+
+#### ScrobbleRequest Structure
+```dart
+class ScrobbleRequest {
+  final String songId;
+  final ScrobbleType type;        // nowPlaying or submission
+  final DateTime? playedAt;       // Timestamp for submissions
+  final DateTime queuedAt;        // When request was queued
+  final int retryCount;           // Number of retry attempts
+}
+```
+
+#### Queue Processing
+
+The queue operates with the following strategy:
+
+1. **Immediate Processing**: New requests processed immediately if network available
+2. **Periodic Processing**: Queue checked every 30 seconds for pending requests
+3. **Exponential Backoff**: Failed requests retried with increasing delays
+4. **Batch Processing**: Multiple queued requests processed sequentially with 100ms spacing
+5. **Persistent State**: Queue saved after every change, restored on app launch
+
+### Configuration
+
+- **Maximum Retries**: 5 attempts before dropping request
+- **Processing Interval**: 30 seconds between periodic checks
+- **Request Age Limit**: 7 days before automatic cleanup
+- **Inter-Request Delay**: 100ms between sequential requests
+
+### Performance Benefits
+
+- **Zero Data Loss**: Play counts preserved even during extended network outages
+- **Battery Efficient**: Batch processing minimizes wake-ups
+- **Memory Efficient**: Automatic cleanup prevents queue growth
+- **Fast Recovery**: Automatic processing when network returns
+
+### Storage Format
+
+Queue stored as JSON array in SharedPreferences:
+```json
+[
+  {
+    "songId": "song-123",
+    "type": "nowPlaying",
+    "playedAt": null,
+    "queuedAt": 1699123456789,
+    "retryCount": 0
+  },
+  {
+    "songId": "song-124",
+    "type": "submission",
+    "playedAt": 1699123500000,
+    "queuedAt": 1699123502000,
+    "retryCount": 1
+  }
+]
+```
+
+### Integration with AudioPlayerService
+
+The ScrobbleQueue integrates seamlessly with audio playback:
+
+1. **Initialization**: Queue created and restored during AudioPlayerService initialization
+2. **Queuing**: All scrobble operations go through queue instead of direct API calls
+3. **Disposal**: Queue properly disposed when audio service is destroyed
+4. **Non-Interference**: Queue operations never block playback or skip functionality
 
 ## Image Caching
 
