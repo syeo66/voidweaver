@@ -42,8 +42,7 @@ void main() {
     test('should queue scrobble submission', () async {
       await scrobbleQueue.initialize();
 
-      await scrobbleQueue.queueSubmission('song1',
-          playedAt: DateTime.now());
+      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
 
       expect(scrobbleQueue.queueSize, 1);
     });
@@ -100,7 +99,8 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 300));
 
       // Should have retried multiple times
-      verify(mockApi.scrobbleNowPlaying('song1')).called(greaterThanOrEqualTo(3));
+      verify(mockApi.scrobbleNowPlaying('song1'))
+          .called(greaterThanOrEqualTo(3));
       expect(scrobbleQueue.queueSize, 0);
     });
 
@@ -118,8 +118,7 @@ void main() {
 
       await scrobbleQueue.initialize();
       await scrobbleQueue.queueNowPlaying('song1');
-      await scrobbleQueue.queueSubmission('song2',
-          playedAt: DateTime.now());
+      await scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now());
 
       // Wait for processing attempt
       await Future.delayed(const Duration(milliseconds: 500));
@@ -147,8 +146,7 @@ void main() {
       // Create and queue requests
       await scrobbleQueue.initialize();
       await scrobbleQueue.queueNowPlaying('song1');
-      await scrobbleQueue.queueSubmission('song2',
-          playedAt: DateTime.now());
+      await scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now());
 
       // Wait for processing attempt (will fail)
       await Future.delayed(const Duration(milliseconds: 500));
@@ -219,8 +217,7 @@ void main() {
 
       await scrobbleQueue.initialize();
       await scrobbleQueue.queueNowPlaying('song1');
-      await scrobbleQueue.queueSubmission('song2',
-          playedAt: DateTime.now());
+      await scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now());
       await scrobbleQueue.queueNowPlaying('song3');
 
       // Wait for processing
@@ -235,9 +232,7 @@ void main() {
     });
 
     test('should not process when already processing', () async {
-      var callCount = 0;
       when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {
-        callCount++;
         await Future.delayed(const Duration(milliseconds: 500));
       });
 
