@@ -216,6 +216,7 @@ Completely resolved double-skip race conditions that occurred when multiple skip
    - `_skipOperationInProgress` flag prevents concurrent skip operations from any source
    - Immediate playback stop during manual skips prevents completion events
    - Global protection across UI controls, native controls, and auto-advance
+   - `try-finally` error handling ensures flag is always reset, preventing stuck loading states (fixed December 2025)
 
 2. **Dual Index Tracking**
    - `_currentIndex`: Working index during transitions
