@@ -1017,20 +1017,29 @@ class AudioPlayerService extends ChangeNotifier {
 
     debugPrint(
         '[$source] Auto-advancing from confirmed index $currentIdx to $targetIdx');
+
+    // Use async helper to ensure _skipOperationInProgress is always reset
+    _autoAdvanceToNext(targetIdx, source);
+  }
+
+  /// Async helper method for auto-advance with proper error handling.
+  /// Uses try-finally to ensure _skipOperationInProgress is always reset.
+  Future<void> _autoAdvanceToNext(int targetIdx, String source) async {
     _skipOperationInProgress = true;
     _lastSkipSource = source;
 
-    _playSongAtIndex(targetIdx).then((_) {
-      _skipOperationInProgress = false;
-      _lastSkipSource = null;
+    try {
+      await _playSongAtIndex(targetIdx);
       _cleanupOldPreloads(); // Clean up old preloads after auto-advance
       debugPrint('[$source] Auto-advance completed to index $targetIdx');
-    }).catchError((e) {
-      _skipOperationInProgress = false;
-      _lastSkipSource = null;
+    } catch (e) {
       debugPrint('[$source] Auto-advance failed: $e');
       _printIndexChangeLog();
-    });
+    } finally {
+      _skipOperationInProgress = false;
+      _lastSkipSource = null;
+      notifyListeners(); // Trigger UI rebuild to reset loading state
+    }
   }
 
   void _scrobbleCurrentSong() {

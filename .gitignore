@@ -45,3 +45,7 @@ app.*.map.json
 /android/app/release
 
 CLAUDE.md
+
+# Continuous Claude cache (local only)
+.claude/cache/
+thoughts/
