@@ -240,13 +240,21 @@ Completely resolved double-skip race conditions that occurred when multiple skip
    - Sequential operation completion with proper state cleanup
    - Zone-safe error handling and resource management
 
+6. **Auto-Advance Reliability** (Fixed January 2026)
+   - `_autoAdvanceToNext()` async helper method with `try-finally` error handling
+   - Finally block **always** resets `_skipOperationInProgress` flag, even on errors
+   - Calls `notifyListeners()` in finally block to trigger UI rebuild
+   - Prevents skip buttons from getting stuck in loading state
+   - Ensures auto-advance works reliably when songs complete naturally
+   - Replaces previous `.then()/.catchError()` pattern that could leave flag stuck if callbacks weren't invoked
+
 **Protected Sources:**
 - UI skip buttons and player controls
 - Native media controls (headphones, lock screen, notifications)
 - Automatic song completion events
 - External device controls (Bluetooth, car systems)
 
-This architecture ensures reliable single-track advancement regardless of timing, hardware speed, or operation source, completely eliminating double-skip behavior under all conditions.
+This architecture ensures reliable single-track advancement regardless of timing, hardware speed, or operation source, completely eliminating double-skip behavior and stuck loading states under all conditions.
 
 ## Android Configuration
 
