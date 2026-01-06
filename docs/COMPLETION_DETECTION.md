@@ -129,40 +129,6 @@ Multiple layers prevent duplicate completion events:
 - All mechanisms trigger the same `_onSongComplete()` method for consistency
 - Maintains all existing skip protection logic across all detection types
 
-### Auto-Advance Error Handling
-**Implementation**: `_autoAdvanceToNext()` helper method (lines 1026-1043)
-
-The auto-advance operation uses a dedicated async helper method with `try-finally` error handling to ensure reliable operation flag cleanup:
-
-```dart
-Future<void> _autoAdvanceToNext(int targetIdx, String source) async {
-  _skipOperationInProgress = true;
-  _lastSkipSource = source;
-
-  try {
-    await _playSongAtIndex(targetIdx);
-    _cleanupOldPreloads();
-    debugPrint('[$source] Auto-advance completed to index $targetIdx');
-  } catch (e) {
-    debugPrint('[$source] Auto-advance failed: $e');
-    _printIndexChangeLog();
-  } finally {
-    // Always reset the flag, even if an error occurred
-    _skipOperationInProgress = false;
-    _lastSkipSource = null;
-    debugPrint('[$source] Skip operation flag reset in finally block');
-  }
-}
-```
-
-**Rationale**:
-- Previous implementation used `.then()` and `.catchError()` callbacks which could miss error paths
-- `try-finally` guarantees flag cleanup in all scenarios, including synchronous exceptions
-- Prevents stuck loading states that block both UI skip buttons and auto-advance
-- Matches the error handling pattern used in `next()` and `previous()` methods
-
-**Fixed**: December 2025 (issue: buttons stuck in loading state preventing auto-advance)
-
 ## Debugging Information
 
 ### Log Messages
