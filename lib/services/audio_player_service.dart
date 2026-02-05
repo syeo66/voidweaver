@@ -1035,6 +1035,11 @@ class AudioPlayerService extends ChangeNotifier {
     } catch (e) {
       debugPrint('[$source] Auto-advance failed: $e');
       _printIndexChangeLog();
+
+      // Critical fix: Reset playback state on error to prevent stuck loading state
+      _playbackState = PlaybackState.stopped;
+      _audioLoadingState = AudioLoadingState.idle;
+      _audioLoadingError = 'Failed to advance: $e';
     } finally {
       _skipOperationInProgress = false;
       _lastSkipSource = null;
