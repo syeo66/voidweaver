@@ -604,26 +604,26 @@ class Song {
       suffix: element.getAttribute('suffix'),
       // Try nested <replayGain> child element first (OpenSubsonic extension),
       // then fall back to attributes on the song element for other servers.
-      replayGainTrackGain:
-          double.tryParse(replayGainElement?.getAttribute('trackGain') ?? '') ??
-              double.tryParse(element.getAttribute('replayGainTrackGain') ?? '') ??
-              double.tryParse(element.getAttribute('rgTrackGain') ?? '') ??
-              double.tryParse(element.getAttribute('trackGain') ?? ''),
-      replayGainAlbumGain:
-          double.tryParse(replayGainElement?.getAttribute('albumGain') ?? '') ??
-              double.tryParse(element.getAttribute('replayGainAlbumGain') ?? '') ??
-              double.tryParse(element.getAttribute('rgAlbumGain') ?? '') ??
-              double.tryParse(element.getAttribute('albumGain') ?? ''),
-      replayGainTrackPeak:
-          double.tryParse(replayGainElement?.getAttribute('trackPeak') ?? '') ??
-              double.tryParse(element.getAttribute('replayGainTrackPeak') ?? '') ??
-              double.tryParse(element.getAttribute('rgTrackPeak') ?? '') ??
-              double.tryParse(element.getAttribute('trackPeak') ?? ''),
-      replayGainAlbumPeak:
-          double.tryParse(replayGainElement?.getAttribute('albumPeak') ?? '') ??
-              double.tryParse(element.getAttribute('replayGainAlbumPeak') ?? '') ??
-              double.tryParse(element.getAttribute('rgAlbumPeak') ?? '') ??
-              double.tryParse(element.getAttribute('albumPeak') ?? ''),
+      replayGainTrackGain: double.tryParse(
+              replayGainElement?.getAttribute('trackGain') ?? '') ??
+          double.tryParse(element.getAttribute('replayGainTrackGain') ?? '') ??
+          double.tryParse(element.getAttribute('rgTrackGain') ?? '') ??
+          double.tryParse(element.getAttribute('trackGain') ?? ''),
+      replayGainAlbumGain: double.tryParse(
+              replayGainElement?.getAttribute('albumGain') ?? '') ??
+          double.tryParse(element.getAttribute('replayGainAlbumGain') ?? '') ??
+          double.tryParse(element.getAttribute('rgAlbumGain') ?? '') ??
+          double.tryParse(element.getAttribute('albumGain') ?? ''),
+      replayGainTrackPeak: double.tryParse(
+              replayGainElement?.getAttribute('trackPeak') ?? '') ??
+          double.tryParse(element.getAttribute('replayGainTrackPeak') ?? '') ??
+          double.tryParse(element.getAttribute('rgTrackPeak') ?? '') ??
+          double.tryParse(element.getAttribute('trackPeak') ?? ''),
+      replayGainAlbumPeak: double.tryParse(
+              replayGainElement?.getAttribute('albumPeak') ?? '') ??
+          double.tryParse(element.getAttribute('replayGainAlbumPeak') ?? '') ??
+          double.tryParse(element.getAttribute('rgAlbumPeak') ?? '') ??
+          double.tryParse(element.getAttribute('albumPeak') ?? ''),
     );
   }
 
