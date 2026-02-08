@@ -587,6 +587,10 @@ class Song {
     final albumId = element.getAttribute('albumId');
     final coverArt = element.getAttribute('coverArt') ?? albumId;
 
+    // OpenSubsonic servers (e.g. Navidrome) return ReplayGain as a nested
+    // <replayGain trackGain="..." albumGain="..." .../> child element.
+    final replayGainElement = element.getElement('replayGain');
+
     return Song(
       id: songId,
       title: title,
@@ -598,21 +602,26 @@ class Song {
       track: int.tryParse(element.getAttribute('track') ?? ''),
       contentType: element.getAttribute('contentType'),
       suffix: element.getAttribute('suffix'),
-      // Try multiple possible ReplayGain attribute names that Navidrome might use
+      // Try nested <replayGain> child element first (OpenSubsonic extension),
+      // then fall back to attributes on the song element for other servers.
       replayGainTrackGain:
-          double.tryParse(element.getAttribute('replayGainTrackGain') ?? '') ??
+          double.tryParse(replayGainElement?.getAttribute('trackGain') ?? '') ??
+              double.tryParse(element.getAttribute('replayGainTrackGain') ?? '') ??
               double.tryParse(element.getAttribute('rgTrackGain') ?? '') ??
               double.tryParse(element.getAttribute('trackGain') ?? ''),
       replayGainAlbumGain:
-          double.tryParse(element.getAttribute('replayGainAlbumGain') ?? '') ??
+          double.tryParse(replayGainElement?.getAttribute('albumGain') ?? '') ??
+              double.tryParse(element.getAttribute('replayGainAlbumGain') ?? '') ??
               double.tryParse(element.getAttribute('rgAlbumGain') ?? '') ??
               double.tryParse(element.getAttribute('albumGain') ?? ''),
       replayGainTrackPeak:
-          double.tryParse(element.getAttribute('replayGainTrackPeak') ?? '') ??
+          double.tryParse(replayGainElement?.getAttribute('trackPeak') ?? '') ??
+              double.tryParse(element.getAttribute('replayGainTrackPeak') ?? '') ??
               double.tryParse(element.getAttribute('rgTrackPeak') ?? '') ??
               double.tryParse(element.getAttribute('trackPeak') ?? ''),
       replayGainAlbumPeak:
-          double.tryParse(element.getAttribute('replayGainAlbumPeak') ?? '') ??
+          double.tryParse(replayGainElement?.getAttribute('albumPeak') ?? '') ??
+              double.tryParse(element.getAttribute('replayGainAlbumPeak') ?? '') ??
               double.tryParse(element.getAttribute('rgAlbumPeak') ?? '') ??
               double.tryParse(element.getAttribute('albumPeak') ?? ''),
     );
