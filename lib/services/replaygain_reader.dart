@@ -63,6 +63,9 @@ class ReplayGainReader {
   }
 
   static ReplayGainData _parseReplayGainFromBytes(Uint8List bytes) {
+    debugPrint('=== ReplayGain Parsing Started ===');
+    debugPrint('File size: ${bytes.length} bytes');
+
     // Check file format first
     if (bytes.length >= 12) {
       // Check for MP4/M4A format (ftyp box)
@@ -73,42 +76,57 @@ class ReplayGainReader {
         debugPrint('Detected MP4/M4A file format');
         final mp4Data = _parseMP4Tags(bytes);
         if (mp4Data.hasAnyData) {
-          debugPrint('Found ReplayGain data in MP4 tags: $mp4Data');
+          debugPrint('✓ Found ReplayGain data in MP4 tags: $mp4Data');
           return mp4Data;
+        } else {
+          debugPrint('✗ No ReplayGain data in MP4 tags');
         }
       }
     }
 
     // Try to parse ID3v2 tags (MP3)
+    debugPrint('Attempting ID3v2 tag parsing...');
     final id3Data = _parseID3v2Tags(bytes);
     if (id3Data.hasAnyData) {
-      debugPrint('Found ReplayGain data in ID3v2 tags: $id3Data');
+      debugPrint('✓ Found ReplayGain data in ID3v2 tags: $id3Data');
       return id3Data;
+    } else {
+      debugPrint('✗ No ReplayGain data in ID3v2 tags');
     }
 
     // Try to parse APE tags
+    debugPrint('Attempting APE tag parsing...');
     final apeData = _parseAPETags(bytes);
     if (apeData.hasAnyData) {
-      debugPrint('Found ReplayGain data in APE tags: $apeData');
+      debugPrint('✓ Found ReplayGain data in APE tags: $apeData');
       return apeData;
+    } else {
+      debugPrint('✗ No ReplayGain data in APE tags');
     }
 
     // Try to parse Vorbis comments (for FLAC/OGG)
+    debugPrint('Attempting Vorbis comment parsing...');
     final vorbisData = _parseVorbisComments(bytes);
     if (vorbisData.hasAnyData) {
-      debugPrint('Found ReplayGain data in Vorbis comments: $vorbisData');
+      debugPrint('✓ Found ReplayGain data in Vorbis comments: $vorbisData');
       return vorbisData;
+    } else {
+      debugPrint('✗ No ReplayGain data in Vorbis comments');
     }
 
     // Last resort: brute force search for ReplayGain strings anywhere in the data
+    debugPrint('Attempting brute force search...');
     final bruteForceData = _bruteForceSearch(bytes);
     if (bruteForceData.hasAnyData) {
       debugPrint(
-          'Found ReplayGain data via brute force search: $bruteForceData');
+          '✓ Found ReplayGain data via brute force search: $bruteForceData');
       return bruteForceData;
+    } else {
+      debugPrint('✗ No ReplayGain data via brute force search');
     }
 
-    debugPrint('No ReplayGain metadata found after all parsing attempts');
+    debugPrint('⚠ WARNING: No ReplayGain metadata found after all parsing attempts!');
+    debugPrint('=== ReplayGain Parsing Ended (NO DATA FOUND) ===');
     return const ReplayGainData();
   }
 

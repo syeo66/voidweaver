@@ -687,6 +687,28 @@ class Song {
   }
 
   static Song fromJson(Map<String, dynamic> json) {
+    // Parse ReplayGain data - support both flat and nested formats
+    // Nested format (Navidrome/OpenSubsonic): {"replayGain": {"trackGain": -12.61, ...}}
+    // Flat format (legacy): {"replayGainTrackGain": -12.61, ...}
+    double? trackGain;
+    double? albumGain;
+    double? trackPeak;
+    double? albumPeak;
+
+    if (json.containsKey('replayGain') && json['replayGain'] is Map) {
+      final replayGain = json['replayGain'] as Map<String, dynamic>;
+      trackGain = replayGain['trackGain']?.toDouble();
+      albumGain = replayGain['albumGain']?.toDouble();
+      trackPeak = replayGain['trackPeak']?.toDouble();
+      albumPeak = replayGain['albumPeak']?.toDouble();
+    } else {
+      // Fallback to flat format for backwards compatibility
+      trackGain = json['replayGainTrackGain']?.toDouble();
+      albumGain = json['replayGainAlbumGain']?.toDouble();
+      trackPeak = json['replayGainTrackPeak']?.toDouble();
+      albumPeak = json['replayGainAlbumPeak']?.toDouble();
+    }
+
     return Song(
       id: json['id'] ?? '',
       title: json['title'] ?? '',
@@ -698,10 +720,10 @@ class Song {
       track: json['track'],
       contentType: json['contentType'],
       suffix: json['suffix'],
-      replayGainTrackGain: json['replayGainTrackGain']?.toDouble(),
-      replayGainAlbumGain: json['replayGainAlbumGain']?.toDouble(),
-      replayGainTrackPeak: json['replayGainTrackPeak']?.toDouble(),
-      replayGainAlbumPeak: json['replayGainAlbumPeak']?.toDouble(),
+      replayGainTrackGain: trackGain,
+      replayGainAlbumGain: albumGain,
+      replayGainTrackPeak: trackPeak,
+      replayGainAlbumPeak: albumPeak,
     );
   }
 }
