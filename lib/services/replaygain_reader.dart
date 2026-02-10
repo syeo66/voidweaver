@@ -125,7 +125,8 @@ class ReplayGainReader {
       debugPrint('✗ No ReplayGain data via brute force search');
     }
 
-    debugPrint('⚠ WARNING: No ReplayGain metadata found after all parsing attempts!');
+    debugPrint(
+        '⚠ WARNING: No ReplayGain metadata found after all parsing attempts!');
     debugPrint('=== ReplayGain Parsing Ended (NO DATA FOUND) ===');
     return const ReplayGainData();
   }
