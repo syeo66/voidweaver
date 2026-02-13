@@ -32,6 +32,7 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          theme: ThemeData(useMaterial3: false),
           home: Scaffold(
             body: ErrorDisplay(
               error: errorDetails,
@@ -82,6 +83,7 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          theme: ThemeData(useMaterial3: false),
           home: Scaffold(
             body: ErrorDisplay(
               error: errorDetails,
@@ -106,6 +108,7 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          theme: ThemeData(useMaterial3: false),
           home: Scaffold(
             body: ErrorDisplay(
               error: errorDetails,
@@ -133,6 +136,7 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          theme: ThemeData(useMaterial3: false),
           home: Scaffold(
             body: ErrorDisplay(
               error: errorDetails,
