@@ -1102,18 +1102,41 @@ class AudioPlayerService extends ChangeNotifier {
   Future<void> _readReplayGainAndApplyVolume(String streamUrl) async {
     if (_currentSong == null) return;
 
+    debugPrint(
+        '[ReplayGain] Processing song: ${_currentSong!.title} (${_currentSong!.suffix})');
+    debugPrint('[ReplayGain] Initial RG values from API/cache:');
+    debugPrint(
+        '[ReplayGain]   TrackGain: ${_currentSong!.replayGainTrackGain?.toStringAsFixed(2) ?? "null"}');
+    debugPrint(
+        '[ReplayGain]   AlbumGain: ${_currentSong!.replayGainAlbumGain?.toStringAsFixed(2) ?? "null"}');
+
     // Apply volume immediately if we already have ReplayGain data (from preloading)
     if (_currentSong!.replayGainTrackGain != null ||
         _currentSong!.replayGainAlbumGain != null) {
       debugPrint(
-          'Using preloaded ReplayGain data for immediate volume adjustment: ${_currentSong!.title}');
+          '[ReplayGain] Using preloaded ReplayGain data for immediate volume adjustment');
       _applyReplayGainVolume();
       return;
     }
 
+    debugPrint(
+        '[ReplayGain] No ReplayGain in API response, reading from file...');
+    debugPrint('[ReplayGain] Stream URL: $streamUrl');
+
     try {
       // Read ReplayGain metadata directly from the audio file
       final replayGainData = await ReplayGainReader.readFromUrl(streamUrl);
+
+      debugPrint('[ReplayGain] File reading complete:');
+      debugPrint(
+          '[ReplayGain]   TrackGain: ${replayGainData.trackGain?.toStringAsFixed(2) ?? "null"}');
+      debugPrint(
+          '[ReplayGain]   AlbumGain: ${replayGainData.albumGain?.toStringAsFixed(2) ?? "null"}');
+      debugPrint(
+          '[ReplayGain]   TrackPeak: ${replayGainData.trackPeak?.toStringAsFixed(4) ?? "null"}');
+      debugPrint(
+          '[ReplayGain]   AlbumPeak: ${replayGainData.albumPeak?.toStringAsFixed(4) ?? "null"}');
+      debugPrint('[ReplayGain]   Has any data: ${replayGainData.hasAnyData}');
 
       // Update the current song with the read metadata WITHOUT triggering UI updates
       // We only update the ReplayGain fields, keeping everything else identical
@@ -1136,6 +1159,7 @@ class AudioPlayerService extends ChangeNotifier {
 
       // Only update if the new song is actually different (this should be true due to ReplayGain data)
       if (updatedSong != _currentSong) {
+        debugPrint('[ReplayGain] Updating song object with new RG data');
         // Update the internal reference without notifying listeners
         _currentSong = updatedSong;
 
@@ -1143,12 +1167,16 @@ class AudioPlayerService extends ChangeNotifier {
         if (_currentIndex >= 0 && _currentIndex < _playlist.length) {
           _playlist[_currentIndex] = updatedSong;
         }
+      } else {
+        debugPrint(
+            '[ReplayGain] Song unchanged (no new RG data found in file)');
       }
 
       // Apply the volume adjustment (this doesn't trigger UI updates)
       _applyReplayGainVolume();
-    } catch (e) {
-      debugPrint('Error reading ReplayGain metadata: $e');
+    } catch (e, stackTrace) {
+      debugPrint('[ReplayGain] ERROR reading ReplayGain metadata: $e');
+      debugPrint('[ReplayGain] Stack trace: $stackTrace');
       // Fall back to applying volume without metadata
       _applyReplayGainVolume();
     }
@@ -1176,14 +1204,32 @@ class AudioPlayerService extends ChangeNotifier {
     final hasAlbumGain = albumGain != null;
     final rgMode = _settingsService.replayGainMode.toString().split('.').last;
 
+    debugPrint('');
+    debugPrint('='.padRight(80, '='));
+    debugPrint('[ReplayGain] VOLUME APPLIED');
+    debugPrint('='.padRight(80, '='));
+    debugPrint('[ReplayGain] Song: ${_currentSong!.title}');
+    debugPrint('[ReplayGain] Mode: $rgMode');
     debugPrint(
-        'Applied ReplayGain volume: ${volumeMultiplier.toStringAsFixed(3)} for song: ${_currentSong!.title}');
+        '[ReplayGain] TrackGain: ${trackGain?.toStringAsFixed(2) ?? 'null'} dB');
     debugPrint(
-        '  Mode: $rgMode, TrackGain: ${trackGain?.toStringAsFixed(2) ?? 'null'}, AlbumGain: ${albumGain?.toStringAsFixed(2) ?? 'null'}');
+        '[ReplayGain] AlbumGain: ${albumGain?.toStringAsFixed(2) ?? 'null'} dB');
     debugPrint(
-        '  Preamp: ${_settingsService.replayGainPreamp.toStringAsFixed(1)}dB, Fallback: ${_settingsService.replayGainFallbackGain.toStringAsFixed(1)}dB');
+        '[ReplayGain] TrackPeak: ${trackPeak?.toStringAsFixed(4) ?? 'null'}');
     debugPrint(
-        '  Using ${hasTrackGain || hasAlbumGain ? 'metadata' : 'fallback'} gain');
+        '[ReplayGain] AlbumPeak: ${albumPeak?.toStringAsFixed(4) ?? 'null'}');
+    debugPrint(
+        '[ReplayGain] Preamp: ${_settingsService.replayGainPreamp.toStringAsFixed(1)} dB');
+    debugPrint(
+        '[ReplayGain] Fallback: ${_settingsService.replayGainFallbackGain.toStringAsFixed(1)} dB');
+    debugPrint(
+        '[ReplayGain] Prevent Clipping: ${_settingsService.replayGainPreventClipping}');
+    debugPrint(
+        '[ReplayGain] Source: ${hasTrackGain || hasAlbumGain ? 'METADATA' : 'FALLBACK'}');
+    debugPrint(
+        '[ReplayGain] Final Volume Multiplier: ${volumeMultiplier.toStringAsFixed(6)} (${(volumeMultiplier * 100).toStringAsFixed(2)}%)');
+    debugPrint('='.padRight(80, '='));
+    debugPrint('');
   }
 
   Future<void> refreshReplayGainVolume() async {

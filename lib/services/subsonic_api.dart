@@ -589,7 +589,10 @@ class Song {
 
     // OpenSubsonic servers (e.g. Navidrome) return ReplayGain as a nested
     // <replayGain trackGain="..." albumGain="..." .../> child element.
-    final replayGainElement = element.getElement('replayGain');
+    // Use findElements() instead of getElement() to ignore XML namespaces.
+    final replayGainElements = element.findElements('replayGain');
+    final replayGainElement =
+        replayGainElements.isNotEmpty ? replayGainElements.first : null;
 
     return Song(
       id: songId,
