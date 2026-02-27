@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http_plus/http_plus.dart' as http;
 
@@ -251,35 +252,50 @@ class ReplayGainReader {
 
       if (descEnd >= frameData.length) return const ReplayGainData();
 
-      // Skip BOM if present and decode UTF-16
+      // Determine endianness and skip BOM if present
       int descStart = offset;
-      if (descEnd - offset >= 2 &&
-          frameData[offset] == 0xFF &&
-          frameData[offset + 1] == 0xFE) {
-        descStart += 2; // Skip BOM
+      bool isLittleEndian = true; // Default to LE (most common in ID3v2)
+
+      if (descEnd - offset >= 2) {
+        if (frameData[offset] == 0xFF && frameData[offset + 1] == 0xFE) {
+          isLittleEndian = true; // UTF-16 LE
+          descStart += 2; // Skip BOM
+        } else if (frameData[offset] == 0xFE && frameData[offset + 1] == 0xFF) {
+          isLittleEndian = false; // UTF-16 BE
+          descStart += 2; // Skip BOM
+        }
       }
 
-      try {
-        description = utf8
-            .decode(frameData.sublist(descStart, descEnd), allowMalformed: true)
-            .toUpperCase();
-      } catch (e) {
-        description =
-            String.fromCharCodes(frameData.sublist(descStart, descEnd))
-                .toUpperCase();
-      }
+      // Decode UTF-16 description
+      description = _decodeUtf16(
+        frameData.sublist(descStart, descEnd),
+        isLittleEndian,
+      ).toUpperCase();
 
-      offset = descEnd + 2; // Skip null terminator
+      offset = descEnd + 2; // Skip null terminator (2 bytes)
 
       // Get value (rest of the frame)
       if (offset >= frameData.length) return const ReplayGainData();
 
-      try {
-        value =
-            utf8.decode(frameData.sublist(offset), allowMalformed: true).trim();
-      } catch (e) {
-        value = String.fromCharCodes(frameData.sublist(offset)).trim();
+      // Check for BOM in value field
+      int valueStart = offset;
+      bool valueIsLittleEndian = isLittleEndian; // Inherit from description
+
+      if (frameData.length - offset >= 2) {
+        if (frameData[offset] == 0xFF && frameData[offset + 1] == 0xFE) {
+          valueIsLittleEndian = true;
+          valueStart += 2; // Skip BOM
+        } else if (frameData[offset] == 0xFE && frameData[offset + 1] == 0xFF) {
+          valueIsLittleEndian = false;
+          valueStart += 2; // Skip BOM
+        }
       }
+
+      // Decode UTF-16 value
+      value = _decodeUtf16(
+        frameData.sublist(valueStart),
+        valueIsLittleEndian,
+      ).trim();
     } else {
       // ISO-8859-1 or ASCII (encoding == 0)
       // Find the description (null-terminated)
@@ -810,5 +826,34 @@ class ReplayGainReader {
       debugPrint('Stack trace: $stackTrace');
       return const ReplayGainData();
     }
+  }
+
+  /// Decodes UTF-16 encoded bytes to a String
+  ///
+  /// ID3v2 uses UTF-16 for TXXX frames when encoding=1.
+  /// This helper properly decodes both Little Endian and Big Endian.
+  static String _decodeUtf16(Uint8List bytes, bool isLittleEndian) {
+    if (bytes.isEmpty) return '';
+
+    // Ensure we have an even number of bytes (UTF-16 uses 2 bytes per char)
+    final length = bytes.length - (bytes.length % 2);
+    if (length == 0) return '';
+
+    // Create a Uint16List view for proper UTF-16 decoding
+    final buffer = bytes.buffer.asByteData();
+    final chars = <int>[];
+
+    for (int i = 0; i < length; i += 2) {
+      final charCode = isLittleEndian
+          ? buffer.getUint16(i, Endian.little)
+          : buffer.getUint16(i, Endian.big);
+
+      // Stop at null terminator
+      if (charCode == 0) break;
+
+      chars.add(charCode);
+    }
+
+    return String.fromCharCodes(chars);
   }
 }

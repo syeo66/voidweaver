@@ -594,7 +594,26 @@ class Song {
     final replayGainElement =
         replayGainElements.isNotEmpty ? replayGainElements.first : null;
 
-    return Song(
+    // Debug logging for ReplayGain parsing
+    if (kDebugMode &&
+        (title.contains('Facets') || title.contains('Propaganda'))) {
+      debugPrint('[ReplayGain XML] Parsing song: $title');
+      debugPrint(
+          '[ReplayGain XML] Found ${replayGainElements.length} replayGain elements');
+      if (replayGainElement != null) {
+        debugPrint('[ReplayGain XML] ReplayGain element attributes:');
+        debugPrint(
+            '[ReplayGain XML]   trackGain=${replayGainElement.getAttribute('trackGain')}');
+        debugPrint(
+            '[ReplayGain XML]   albumGain=${replayGainElement.getAttribute('albumGain')}');
+        debugPrint(
+            '[ReplayGain XML]   trackPeak=${replayGainElement.getAttribute('trackPeak')}');
+        debugPrint(
+            '[ReplayGain XML]   albumPeak=${replayGainElement.getAttribute('albumPeak')}');
+      }
+    }
+
+    final song = Song(
       id: songId,
       title: title,
       artist: element.getAttribute('artist') ?? '',
@@ -628,6 +647,18 @@ class Song {
           double.tryParse(element.getAttribute('rgAlbumPeak') ?? '') ??
           double.tryParse(element.getAttribute('albumPeak') ?? ''),
     );
+
+    // Debug logging for final parsed values
+    if (kDebugMode &&
+        (song.title.contains('Facets') || song.title.contains('Propaganda'))) {
+      debugPrint('[ReplayGain XML] Final parsed values for ${song.title}:');
+      debugPrint('[ReplayGain XML]   trackGain=${song.replayGainTrackGain}');
+      debugPrint('[ReplayGain XML]   albumGain=${song.replayGainAlbumGain}');
+      debugPrint('[ReplayGain XML]   trackPeak=${song.replayGainTrackPeak}');
+      debugPrint('[ReplayGain XML]   albumPeak=${song.replayGainAlbumPeak}');
+    }
+
+    return song;
   }
 
   @override
