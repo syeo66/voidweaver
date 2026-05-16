@@ -60,7 +60,7 @@ class AudioPlayerService extends ChangeNotifier {
   // These constants configure the enhanced triple-detection mechanism for song completion:
   // 1. Traditional detection: triggers when within 500ms of song end (see _checkManualCompletion)
   // 2. Stuck playhead detection: identifies when position stops moving in near-end zone
-  // 3. Stop-based detection: triggers when playback stops within 2s of end (see _checkCompletionOnStop)
+  // 3. Stop-based detection: triggers when playback stops within 300ms of end (see _checkCompletionOnStop)
 
   /// Time window (ms) to analyze recent position updates for stuck playhead detection
   static const int _stuckPositionTimeoutMs = 2000;
@@ -894,14 +894,18 @@ class AudioPlayerService extends ChangeNotifier {
     final currentPosition = _currentPosition;
     final remainingTime = _totalDuration - currentPosition;
 
-    // If we're within 2 seconds of the end, consider this a completion
-    // (generous threshold to catch cases where playback stopped slightly before the actual end)
-    const stoppedNearEndThreshold = Duration(seconds: 2);
+    // Use a tight threshold (300ms) to avoid false positives when playback is
+    // paused by an external cause such as audio focus loss. The legitimate case
+    // this covers (just_audio pausing a split-second before firing its own
+    // completion event) always happens within a few milliseconds of the true end.
+    // A 2-second threshold was causing songs to be incorrectly advanced when
+    // another media player briefly stole audio focus near the end of a track.
+    const stoppedNearEndThreshold = Duration(milliseconds: 300);
 
     if (remainingTime <= stoppedNearEndThreshold &&
         remainingTime >= Duration.zero) {
       debugPrint(
-          '[stop_completion] Playback stopped near end - position: ${currentPosition.inSeconds}s, duration: ${_totalDuration.inSeconds}s, remaining: ${remainingTime.inSeconds}s');
+          '[stop_completion] Playback stopped near end - position: ${currentPosition.inMilliseconds}ms, duration: ${_totalDuration.inMilliseconds}ms, remaining: ${remainingTime.inMilliseconds}ms');
 
       // Verify the completion event hasn't fired
       if (_audioPlayer.playerState.processingState !=

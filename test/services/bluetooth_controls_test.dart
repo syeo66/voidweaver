@@ -68,68 +68,30 @@ void main() {
       audioPlayerService.dispose();
     });
 
-    test('should handle play command without immediate audio focus conflicts',
+    test(
+        'play command does not request audio focus via custom channel (just_audio handles it)',
         () async {
-      // Simulate a play command from Bluetooth controls
+      // just_audio (ExoPlayer) manages audio focus internally via
+      // handleInterruptions: true. Requesting focus via our own listener would
+      // steal AUDIOFOCUS_GAIN events from ExoPlayer, preventing auto-resume
+      // after another app temporarily takes focus.
       await audioHandler.play();
-
-      // Wait for the delayed audio focus request
       await Future.delayed(const Duration(milliseconds: 150));
 
-      // Verify that audio focus was requested (with delay)
       expect(
           methodCalls
               .where((call) => call.method == 'requestAudioFocus')
               .length,
-          1);
-
-      // The test passes if no exceptions were thrown during the play operation
+          0);
     });
 
-    test('should track audio focus state to avoid duplicate requests',
+    test('multiple play commands do not trigger audio focus requests',
         () async {
-      // First play command
+      await audioHandler.play();
+      await Future.delayed(const Duration(milliseconds: 150));
       await audioHandler.play();
       await Future.delayed(const Duration(milliseconds: 150));
 
-      // Second play command (should not request focus again)
-      await audioHandler.play();
-      await Future.delayed(const Duration(milliseconds: 150));
-
-      // Audio focus should only be requested once (first time)
-      expect(
-          methodCalls
-              .where((call) => call.method == 'requestAudioFocus')
-              .length,
-          1);
-    });
-
-    test('should check existing audio focus before requesting', () async {
-      // Mock that we already have audio focus
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(audioFocusChannel,
-              (MethodCall methodCall) async {
-        methodCalls.add(methodCall);
-
-        switch (methodCall.method) {
-          case 'hasAudioFocus':
-            return true; // Simulate we already have focus
-          case 'requestAudioFocus':
-          case 'abandonAudioFocus':
-            return true;
-          default:
-            return null;
-        }
-      });
-
-      await audioHandler.play();
-      await Future.delayed(const Duration(milliseconds: 150));
-
-      // Should check for existing focus
-      expect(methodCalls.where((call) => call.method == 'hasAudioFocus').length,
-          1);
-
-      // Should not request new focus since we already have it
       expect(
           methodCalls
               .where((call) => call.method == 'requestAudioFocus')
