@@ -181,13 +181,11 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> play() async {
     debugPrint('[native_controls] Play requested from native controls');
 
-    // just_audio (via ExoPlayer) manages audio focus internally with
-    // handleInterruptions: true (the default). Requesting focus here via our
-    // own MethodChannel listener would make our no-op listener the primary
-    // focus holder, causing AUDIOFOCUS_GAIN events to be swallowed instead of
-    // reaching ExoPlayer — which prevents auto-resume after another player
-    // temporarily takes focus.
+    // Start playback immediately to avoid delays
     await _audioPlayerService.play();
+
+    // Request audio focus with a slight delay to avoid immediate conflicts
+    _requestAudioFocusDelayed();
   }
 
   @override
