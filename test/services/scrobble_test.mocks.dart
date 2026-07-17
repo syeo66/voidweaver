@@ -412,6 +412,18 @@ class MockSettingsService extends _i1.Mock implements _i6.SettingsService {
       ) as _i2.NetworkConfig);
 
   @override
+  double get scrobbleMinPlayTimeMinutes => (super.noSuchMethod(
+        Invocation.getter(#scrobbleMinPlayTimeMinutes),
+        returnValue: 0.0,
+      ) as double);
+
+  @override
+  double get scrobbleThresholdPercent => (super.noSuchMethod(
+        Invocation.getter(#scrobbleThresholdPercent),
+        returnValue: 0.0,
+      ) as double);
+
+  @override
   bool get hasListeners => (super.noSuchMethod(
         Invocation.getter(#hasListeners),
         returnValue: false,
@@ -585,6 +597,28 @@ class MockSettingsService extends _i1.Mock implements _i6.SettingsService {
             #enableRetryOnTimeout: enableRetryOnTimeout,
             #enableRetryOnConnectionError: enableRetryOnConnectionError,
           },
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> setScrobbleMinPlayTimeMinutes(double? minutes) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #setScrobbleMinPlayTimeMinutes,
+          [minutes],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> setScrobbleThresholdPercent(double? percent) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #setScrobbleThresholdPercent,
+          [percent],
         ),
         returnValue: _i5.Future<void>.value(),
         returnValueForMissingStub: _i5.Future<void>.value(),

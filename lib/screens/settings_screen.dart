@@ -50,6 +50,8 @@ class _SettingsContent extends StatelessWidget {
             _buildNetworkSection(context, settingsService),
             const SizedBox(height: 16),
             _buildReplayGainSection(context, settingsService),
+            const SizedBox(height: 16),
+            _buildScrobblingSection(context, settingsService),
           ],
         );
       },
@@ -305,6 +307,94 @@ class _SettingsContent extends StatelessWidget {
       case ThemeMode.dark:
         return 'Always use dark theme';
     }
+  }
+
+  Widget _buildScrobblingSection(
+      BuildContext context, SettingsService settingsService) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Scrobbling',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'A song is scrobbled once it has played for the minimum time '
+              'or reached the percentage threshold below, whichever comes first.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+            ),
+            const SizedBox(height: 16),
+
+            // Minimum play time
+            Text(
+              'Minimum Play Time: ${settingsService.scrobbleMinPlayTimeMinutes.toStringAsFixed(1)} min',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Slider(
+              value: settingsService.scrobbleMinPlayTimeMinutes,
+              min: 0.5,
+              max: 10.0,
+              divisions: 19,
+              label:
+                  '${settingsService.scrobbleMinPlayTimeMinutes.toStringAsFixed(1)} min',
+              onChanged: (value) {
+                final validationError =
+                    Validators.validateScrobbleMinPlayTimeMinutes(value);
+                if (validationError == null) {
+                  settingsService.setScrobbleMinPlayTimeMinutes(value);
+                } else {
+                  _showValidationError(context, validationError);
+                }
+              },
+            ),
+            Text(
+              'Scrobble once a song has played for this long',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Threshold percent
+            Text(
+              'Threshold: ${settingsService.scrobbleThresholdPercent.round()}%',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Slider(
+              value: settingsService.scrobbleThresholdPercent,
+              min: 10.0,
+              max: 100.0,
+              divisions: 90,
+              label: '${settingsService.scrobbleThresholdPercent.round()}%',
+              onChanged: (value) {
+                final validationError =
+                    Validators.validateScrobbleThresholdPercent(value);
+                if (validationError == null) {
+                  settingsService.setScrobbleThresholdPercent(value);
+                } else {
+                  _showValidationError(context, validationError);
+                }
+              },
+            ),
+            Text(
+              'Scrobble once this percentage of a song has played',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _refreshAudioVolume(BuildContext context) {

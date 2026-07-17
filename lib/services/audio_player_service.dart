@@ -1059,8 +1059,10 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   /// Checks if the current song should be scrobbled based on progress.
-  /// A song should be scrobbled if it has been played to the middle
-  /// or at least 2 minutes, whichever comes first.
+  /// A song should be scrobbled if it has been played to the configured
+  /// percentage threshold or the configured minimum play time, whichever
+  /// comes first (see [SettingsService.scrobbleMinPlayTimeMinutes] and
+  /// [SettingsService.scrobbleThresholdPercent]).
   bool _shouldScrobbleCurrentSong() {
     if (_currentSong == null || _currentSongStartTime == null) return false;
 
@@ -1070,17 +1072,20 @@ class AudioPlayerService extends ChangeNotifier {
     final playedDuration = _currentPosition;
     final songDuration = _totalDuration;
 
-    // Minimum play time is 2 minutes
-    const minPlayTime = Duration(minutes: 2);
+    final minPlayTime = Duration(
+        milliseconds:
+            (_settingsService.scrobbleMinPlayTimeMinutes * 60000).round());
 
-    // Check if we've played for at least 2 minutes
+    // Check if we've played for at least the configured minimum play time
     if (playedDuration >= minPlayTime) {
       return true;
     }
 
-    // Check if we've played for at least 50% of the song (middle)
+    // Check if we've played for at least the configured percentage of the song
+    final thresholdFraction = _settingsService.scrobbleThresholdPercent / 100;
     if (songDuration.inSeconds > 0 &&
-        playedDuration.inSeconds >= songDuration.inSeconds * 0.5) {
+        playedDuration.inSeconds >=
+            songDuration.inSeconds * thresholdFraction) {
       return true;
     }
 

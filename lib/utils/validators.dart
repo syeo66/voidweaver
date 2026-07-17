@@ -106,6 +106,46 @@ class Validators {
     return null;
   }
 
+  static String? validateScrobbleMinPlayTimeMinutes(double? value) {
+    if (value == null) {
+      return 'Minimum play time is required';
+    }
+
+    if (value.isNaN || value.isInfinite) {
+      return 'Invalid minimum play time value';
+    }
+
+    if (value < 0.5) {
+      return 'Minimum play time cannot be less than 0.5 minutes';
+    }
+
+    if (value > 10.0) {
+      return 'Minimum play time cannot be greater than 10 minutes';
+    }
+
+    return null;
+  }
+
+  static String? validateScrobbleThresholdPercent(double? value) {
+    if (value == null) {
+      return 'Scrobble threshold is required';
+    }
+
+    if (value.isNaN || value.isInfinite) {
+      return 'Invalid scrobble threshold value';
+    }
+
+    if (value < 10.0) {
+      return 'Scrobble threshold cannot be less than 10%';
+    }
+
+    if (value > 100.0) {
+      return 'Scrobble threshold cannot be greater than 100%';
+    }
+
+    return null;
+  }
+
   static bool isValidUrl(String? url) {
     if (url == null || url.trim().isEmpty) return false;
 

@@ -30,6 +30,8 @@ void main() {
       when(mockSettingsService.replayGainPreamp).thenReturn(0.0);
       when(mockSettingsService.replayGainFallbackGain).thenReturn(0.0);
       when(mockSettingsService.replayGainPreventClipping).thenReturn(true);
+      when(mockSettingsService.scrobbleMinPlayTimeMinutes).thenReturn(2.0);
+      when(mockSettingsService.scrobbleThresholdPercent).thenReturn(50.0);
       when(mockSettingsService.calculateVolumeAdjustment(
         trackGain: anyNamed('trackGain'),
         albumGain: anyNamed('albumGain'),

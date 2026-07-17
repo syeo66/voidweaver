@@ -18,6 +18,9 @@ class SettingsService extends ChangeNotifier {
   static const String _replayGainFallbackGainKey = 'replayGainFallbackGain';
   static const String _themeModeKey = 'themeMode';
   static const String _networkConfigKey = 'networkConfig';
+  static const String _scrobbleMinPlayTimeMinutesKey =
+      'scrobbleMinPlayTimeMinutes';
+  static const String _scrobbleThresholdPercentKey = 'scrobbleThresholdPercent';
 
   SharedPreferences? _prefs;
 
@@ -27,6 +30,8 @@ class SettingsService extends ChangeNotifier {
   double _replayGainFallbackGain = 0.0; // dB for files without ReplayGain data
   ThemeMode _themeMode = ThemeMode.system;
   NetworkConfig _networkConfig = NetworkConfig.defaultConfig;
+  double _scrobbleMinPlayTimeMinutes = 2.0;
+  double _scrobbleThresholdPercent = 50.0;
 
   ReplayGainMode get replayGainMode => _replayGainMode;
   double get replayGainPreamp => _replayGainPreamp;
@@ -34,6 +39,8 @@ class SettingsService extends ChangeNotifier {
   double get replayGainFallbackGain => _replayGainFallbackGain;
   ThemeMode get themeMode => _themeMode;
   NetworkConfig get networkConfig => _networkConfig;
+  double get scrobbleMinPlayTimeMinutes => _scrobbleMinPlayTimeMinutes;
+  double get scrobbleThresholdPercent => _scrobbleThresholdPercent;
 
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
@@ -68,6 +75,11 @@ class SettingsService extends ChangeNotifier {
     } else {
       _networkConfig = NetworkConfig.defaultConfig;
     }
+
+    _scrobbleMinPlayTimeMinutes =
+        _prefs!.getDouble(_scrobbleMinPlayTimeMinutesKey) ?? 2.0;
+    _scrobbleThresholdPercent =
+        _prefs!.getDouble(_scrobbleThresholdPercentKey) ?? 50.0;
 
     notifyListeners();
   }
@@ -203,5 +215,23 @@ class SettingsService extends ChangeNotifier {
       enableRetryOnConnectionError: enableRetryOnConnectionError,
     );
     await setNetworkConfig(updatedConfig);
+  }
+
+  /// Set the minimum play time (in minutes) required before a song can be
+  /// scrobbled, regardless of how much of the song has played.
+  Future<void> setScrobbleMinPlayTimeMinutes(double minutes) async {
+    _scrobbleMinPlayTimeMinutes = minutes.clamp(0.5, 10.0);
+    await _prefs?.setDouble(
+        _scrobbleMinPlayTimeMinutesKey, _scrobbleMinPlayTimeMinutes);
+    notifyListeners();
+  }
+
+  /// Set the percentage of a song that must be played before it is
+  /// scrobbled, regardless of elapsed play time.
+  Future<void> setScrobbleThresholdPercent(double percent) async {
+    _scrobbleThresholdPercent = percent.clamp(10.0, 100.0);
+    await _prefs?.setDouble(
+        _scrobbleThresholdPercentKey, _scrobbleThresholdPercent);
+    notifyListeners();
   }
 }
