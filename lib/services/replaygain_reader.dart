@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:http_plus/http_plus.dart' as http;
+import 'replaygain_debug_logger.dart';
 
 class ReplayGainData {
   final double? trackGain;
@@ -31,9 +32,17 @@ class ReplayGainData {
 class ReplayGainReader {
   static const int _maxHeaderSize = 256 * 1024; // Read first 256KB for metadata
 
+  /// Logs to both the console (debug builds) and the persistent ReplayGain
+  /// debug log (only when the user has enabled it in Settings).
+  static void _log(String message) {
+    debugPrint(message);
+    ReplayGainDebugLogger.instance.log(message);
+  }
+
   static Future<ReplayGainData> readFromUrl(String url) async {
     try {
-      debugPrint('Reading ReplayGain metadata from: $url');
+      _log(
+          'Reading ReplayGain metadata from: ${ReplayGainDebugLogger.redact(url)}');
 
       // Make a range request to get just the beginning of the file
       final response = await http.get(
@@ -42,29 +51,29 @@ class ReplayGainReader {
       );
 
       if (response.statusCode != 206 && response.statusCode != 200) {
-        debugPrint('Failed to fetch audio data: ${response.statusCode}');
+        _log('Failed to fetch audio data: ${response.statusCode}');
         return const ReplayGainData();
       }
 
       final bytes = response.bodyBytes;
       if (bytes.isNotEmpty) {
-        debugPrint(
+        _log(
             'Received ${bytes.length} bytes, first 16 bytes: ${bytes.take(16).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
         return _parseReplayGainFromBytes(bytes);
       } else {
-        debugPrint('Received empty response');
+        _log('Received empty response');
         return const ReplayGainData();
       }
     } catch (e, stackTrace) {
-      debugPrint('Error reading ReplayGain metadata: $e');
-      debugPrint('Stack trace: $stackTrace');
+      _log('Error reading ReplayGain metadata: $e');
+      _log('Stack trace: $stackTrace');
       return const ReplayGainData();
     }
   }
 
   static ReplayGainData _parseReplayGainFromBytes(Uint8List bytes) {
-    debugPrint('=== ReplayGain Parsing Started ===');
-    debugPrint('File size: ${bytes.length} bytes');
+    _log('=== ReplayGain Parsing Started ===');
+    _log('File size: ${bytes.length} bytes');
 
     // Check file format first
     if (bytes.length >= 12) {
@@ -73,61 +82,59 @@ class ReplayGainReader {
           bytes[5] == 0x74 &&
           bytes[6] == 0x79 &&
           bytes[7] == 0x70) {
-        debugPrint('Detected MP4/M4A file format');
+        _log('Detected MP4/M4A file format');
         final mp4Data = _parseMP4Tags(bytes);
         if (mp4Data.hasAnyData) {
-          debugPrint('✓ Found ReplayGain data in MP4 tags: $mp4Data');
+          _log('✓ Found ReplayGain data in MP4 tags: $mp4Data');
           return mp4Data;
         } else {
-          debugPrint('✗ No ReplayGain data in MP4 tags');
+          _log('✗ No ReplayGain data in MP4 tags');
         }
       }
     }
 
     // Try to parse ID3v2 tags (MP3)
-    debugPrint('Attempting ID3v2 tag parsing...');
+    _log('Attempting ID3v2 tag parsing...');
     final id3Data = _parseID3v2Tags(bytes);
     if (id3Data.hasAnyData) {
-      debugPrint('✓ Found ReplayGain data in ID3v2 tags: $id3Data');
+      _log('✓ Found ReplayGain data in ID3v2 tags: $id3Data');
       return id3Data;
     } else {
-      debugPrint('✗ No ReplayGain data in ID3v2 tags');
+      _log('✗ No ReplayGain data in ID3v2 tags');
     }
 
     // Try to parse APE tags
-    debugPrint('Attempting APE tag parsing...');
+    _log('Attempting APE tag parsing...');
     final apeData = _parseAPETags(bytes);
     if (apeData.hasAnyData) {
-      debugPrint('✓ Found ReplayGain data in APE tags: $apeData');
+      _log('✓ Found ReplayGain data in APE tags: $apeData');
       return apeData;
     } else {
-      debugPrint('✗ No ReplayGain data in APE tags');
+      _log('✗ No ReplayGain data in APE tags');
     }
 
     // Try to parse Vorbis comments (for FLAC/OGG)
-    debugPrint('Attempting Vorbis comment parsing...');
+    _log('Attempting Vorbis comment parsing...');
     final vorbisData = _parseVorbisComments(bytes);
     if (vorbisData.hasAnyData) {
-      debugPrint('✓ Found ReplayGain data in Vorbis comments: $vorbisData');
+      _log('✓ Found ReplayGain data in Vorbis comments: $vorbisData');
       return vorbisData;
     } else {
-      debugPrint('✗ No ReplayGain data in Vorbis comments');
+      _log('✗ No ReplayGain data in Vorbis comments');
     }
 
     // Last resort: brute force search for ReplayGain strings anywhere in the data
-    debugPrint('Attempting brute force search...');
+    _log('Attempting brute force search...');
     final bruteForceData = _bruteForceSearch(bytes);
     if (bruteForceData.hasAnyData) {
-      debugPrint(
-          '✓ Found ReplayGain data via brute force search: $bruteForceData');
+      _log('✓ Found ReplayGain data via brute force search: $bruteForceData');
       return bruteForceData;
     } else {
-      debugPrint('✗ No ReplayGain data via brute force search');
+      _log('✗ No ReplayGain data via brute force search');
     }
 
-    debugPrint(
-        '⚠ WARNING: No ReplayGain metadata found after all parsing attempts!');
-    debugPrint('=== ReplayGain Parsing Ended (NO DATA FOUND) ===');
+    _log('⚠ WARNING: No ReplayGain metadata found after all parsing attempts!');
+    _log('=== ReplayGain Parsing Ended (NO DATA FOUND) ===');
     return const ReplayGainData();
   }
 
@@ -160,7 +167,7 @@ class ReplayGainReader {
       tagSize = bytes.length; // Use available data
     }
 
-    debugPrint(
+    _log(
         'Found ID3v2.$version.$revision tag, size: $tagSize, available: ${bytes.length}');
 
     double? trackGain;
@@ -199,7 +206,7 @@ class ReplayGainReader {
         break;
       }
 
-      debugPrint('Found frame: $frameId, size: $frameSize');
+      _log('Found frame: $frameId, size: $frameSize');
 
       // Check for ReplayGain frames
       if (frameId == 'TXXX') {
@@ -318,7 +325,7 @@ class ReplayGainReader {
     final cleanDescription =
         description.replaceAll(RegExp(r'[^\x20-\x7E]'), '?');
     final cleanValue = value.replaceAll(RegExp(r'[^\x20-\x7E]'), '?');
-    debugPrint('Found TXXX frame: $cleanDescription = $cleanValue');
+    _log('Found TXXX frame: $cleanDescription = $cleanValue');
 
     double? parseGain(String gainStr) {
       // Remove " dB" suffix and parse
@@ -359,7 +366,7 @@ class ReplayGainReader {
       }
 
       if (matches) {
-        debugPrint('Found APE tag at offset $i');
+        _log('Found APE tag at offset $i');
         return _parseAPETagItems(bytes, i);
       }
     }
@@ -472,7 +479,7 @@ class ReplayGainReader {
   }
 
   static ReplayGainData _parseMP4Tags(Uint8List bytes) {
-    debugPrint('Parsing MP4/M4A metadata for ReplayGain tags');
+    _log('Parsing MP4/M4A metadata for ReplayGain tags');
 
     double? trackGain;
     double? albumGain;
@@ -497,7 +504,7 @@ class ReplayGainReader {
 
       final atomType =
           String.fromCharCodes(bytes.sublist(offset + 4, offset + 8));
-      debugPrint('Found MP4 atom: $atomType, size: $atomSize');
+      _log('Found MP4 atom: $atomType, size: $atomSize');
 
       // Look for metadata atoms
       if (atomType == 'moov' || atomType == 'udta' || atomType == 'meta') {
@@ -511,7 +518,7 @@ class ReplayGainReader {
 
       // Look for iTunes metadata atom 'ilst'
       if (atomType == 'ilst') {
-        debugPrint('Found iTunes metadata atom');
+        _log('Found iTunes metadata atom');
         final metadataData = bytes.sublist(offset + 8, offset + atomSize);
         return _parseItunesMetadata(metadataData);
       }
@@ -529,7 +536,7 @@ class ReplayGainReader {
         .firstMatch(textData);
     if (trackGainMatch != null) {
       trackGain = double.tryParse(trackGainMatch.group(1)!);
-      debugPrint('Found iTunes ReplayGain track gain: $trackGain');
+      _log('Found iTunes ReplayGain track gain: $trackGain');
     }
 
     final albumGainMatch = RegExp(
@@ -538,7 +545,7 @@ class ReplayGainReader {
         .firstMatch(textData);
     if (albumGainMatch != null) {
       albumGain = double.tryParse(albumGainMatch.group(1)!);
-      debugPrint('Found iTunes ReplayGain album gain: $albumGain');
+      _log('Found iTunes ReplayGain album gain: $albumGain');
     }
 
     final trackPeakMatch = RegExp(
@@ -547,7 +554,7 @@ class ReplayGainReader {
         .firstMatch(textData);
     if (trackPeakMatch != null) {
       trackPeak = double.tryParse(trackPeakMatch.group(1)!);
-      debugPrint('Found iTunes ReplayGain track peak: $trackPeak');
+      _log('Found iTunes ReplayGain track peak: $trackPeak');
     }
 
     final albumPeakMatch = RegExp(
@@ -556,7 +563,7 @@ class ReplayGainReader {
         .firstMatch(textData);
     if (albumPeakMatch != null) {
       albumPeak = double.tryParse(albumPeakMatch.group(1)!);
-      debugPrint('Found iTunes ReplayGain album peak: $albumPeak');
+      _log('Found iTunes ReplayGain album peak: $albumPeak');
     }
 
     // Also look for standard ReplayGain fields without iTunes prefix
@@ -567,7 +574,7 @@ class ReplayGainReader {
           .firstMatch(textData);
       if (stdTrackGainMatch != null) {
         trackGain = double.tryParse(stdTrackGainMatch.group(1)!);
-        debugPrint('Found standard ReplayGain track gain: $trackGain');
+        _log('Found standard ReplayGain track gain: $trackGain');
       }
     }
 
@@ -578,7 +585,7 @@ class ReplayGainReader {
           .firstMatch(textData);
       if (stdAlbumGainMatch != null) {
         albumGain = double.tryParse(stdAlbumGainMatch.group(1)!);
-        debugPrint('Found standard ReplayGain album gain: $albumGain');
+        _log('Found standard ReplayGain album gain: $albumGain');
       }
     }
 
@@ -589,7 +596,7 @@ class ReplayGainReader {
           .firstMatch(textData);
       if (stdTrackPeakMatch != null) {
         trackPeak = double.tryParse(stdTrackPeakMatch.group(1)!);
-        debugPrint('Found standard ReplayGain track peak: $trackPeak');
+        _log('Found standard ReplayGain track peak: $trackPeak');
       }
     }
 
@@ -600,7 +607,7 @@ class ReplayGainReader {
           .firstMatch(textData);
       if (stdAlbumPeakMatch != null) {
         albumPeak = double.tryParse(stdAlbumPeakMatch.group(1)!);
-        debugPrint('Found standard ReplayGain album peak: $albumPeak');
+        _log('Found standard ReplayGain album peak: $albumPeak');
       }
     }
 
@@ -632,7 +639,7 @@ class ReplayGainReader {
           String.fromCharCodes(bytes.sublist(offset + 4, offset + 8));
 
       if (atomType == 'ilst') {
-        debugPrint('Found nested iTunes metadata atom');
+        _log('Found nested iTunes metadata atom');
         final metadataData = bytes.sublist(offset + 8, offset + atomSize);
         return _parseItunesMetadata(metadataData);
       }
@@ -644,11 +651,11 @@ class ReplayGainReader {
   }
 
   static ReplayGainData _parseItunesMetadata(Uint8List bytes) {
-    debugPrint('Parsing iTunes metadata block');
+    _log('Parsing iTunes metadata block');
 
     // Convert to string and search for ReplayGain fields
     final textData = String.fromCharCodes(bytes);
-    debugPrint(
+    _log(
         'iTunes metadata text sample: ${textData.substring(0, math.min(200, textData.length))}');
 
     double? trackGain;
@@ -678,16 +685,16 @@ class ReplayGainReader {
 
         if (lowerPattern.contains('track_gain')) {
           trackGain = value;
-          debugPrint('Found iTunes track gain: $trackGain');
+          _log('Found iTunes track gain: $trackGain');
         } else if (lowerPattern.contains('album_gain')) {
           albumGain = value;
-          debugPrint('Found iTunes album gain: $albumGain');
+          _log('Found iTunes album gain: $albumGain');
         } else if (lowerPattern.contains('track_peak')) {
           trackPeak = value;
-          debugPrint('Found iTunes track peak: $trackPeak');
+          _log('Found iTunes track peak: $trackPeak');
         } else if (lowerPattern.contains('album_peak')) {
           albumPeak = value;
-          debugPrint('Found iTunes album peak: $albumPeak');
+          _log('Found iTunes album peak: $albumPeak');
         }
       }
     }
@@ -702,7 +709,7 @@ class ReplayGainReader {
 
   static ReplayGainData _bruteForceSearch(Uint8List bytes) {
     try {
-      debugPrint('Performing brute force search for ReplayGain metadata');
+      _log('Performing brute force search for ReplayGain metadata');
 
       // Convert bytes to string with error handling
       String textData;
@@ -774,7 +781,7 @@ class ReplayGainReader {
           final value = double.tryParse(match.group(1)!);
           final patternStr = pattern.pattern.toLowerCase();
 
-          debugPrint('Brute force found: ${match.group(0)} -> value: $value');
+          _log('Brute force found: ${match.group(0)} -> value: $value');
 
           if (patternStr.contains('track_gain') ||
               patternStr.contains('track_gain')) {
@@ -801,13 +808,13 @@ class ReplayGainReader {
           final value = double.tryParse(match.group(1)!);
           if (value != null && value >= -30 && value <= 15) {
             // Reasonable ReplayGain range
-            debugPrint(
+            _log(
                 'Found potential ReplayGain value: ${match.group(0)} -> $value');
 
             // If we haven't found any gains yet, use this as track gain
             if (trackGain == null && albumGain == null) {
               trackGain = value;
-              debugPrint('Assigned as track gain: $value');
+              _log('Assigned as track gain: $value');
               break; // Only take the first reasonable value
             }
           }
@@ -821,8 +828,8 @@ class ReplayGainReader {
         albumPeak: albumPeak,
       );
     } catch (e, stackTrace) {
-      debugPrint('Error in brute force search: $e');
-      debugPrint('Stack trace: $stackTrace');
+      _log('Error in brute force search: $e');
+      _log('Stack trace: $stackTrace');
       return const ReplayGainData();
     }
   }

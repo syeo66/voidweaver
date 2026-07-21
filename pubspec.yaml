@@ -17,6 +17,8 @@ dependencies:
   provider: ^6.1.1
   cached_network_image: ^3.3.1
   audio_service: ^0.18.15
+  path_provider: ^2.1.6
+  share_plus: ^13.2.1
 
 dev_dependencies:
   flutter_test:

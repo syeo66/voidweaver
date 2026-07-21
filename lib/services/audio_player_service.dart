@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'subsonic_api.dart';
 import 'settings_service.dart';
 import 'replaygain_reader.dart';
+import 'replaygain_debug_logger.dart';
 import 'playback_persistence.dart';
 import 'scrobble_queue.dart';
 
@@ -1104,44 +1105,52 @@ class AudioPlayerService extends ChangeNotifier {
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
+  /// Logs to both the console (debug builds) and the persistent ReplayGain
+  /// debug log (only when the user has enabled it in Settings).
+  void _rgLog(String message) {
+    debugPrint(message);
+    ReplayGainDebugLogger.instance.log(message);
+  }
+
   Future<void> _readReplayGainAndApplyVolume(String streamUrl) async {
     if (_currentSong == null) return;
 
-    debugPrint(
-        '[ReplayGain] Processing song: ${_currentSong!.title} (${_currentSong!.suffix})');
-    debugPrint('[ReplayGain] Initial RG values from API/cache:');
-    debugPrint(
+    _rgLog(
+        '[ReplayGain] Processing song: "${_currentSong!.title}" by "${_currentSong!.artist}" '
+        '(id=${_currentSong!.id}, album="${_currentSong!.album}", format=${_currentSong!.suffix}/${_currentSong!.contentType})');
+    _rgLog(
+        '[ReplayGain] Stream URL: ${ReplayGainDebugLogger.redact(streamUrl)}');
+    _rgLog('[ReplayGain] Initial RG values from API/cache:');
+    _rgLog(
         '[ReplayGain]   TrackGain: ${_currentSong!.replayGainTrackGain?.toStringAsFixed(2) ?? "null"}');
-    debugPrint(
+    _rgLog(
         '[ReplayGain]   AlbumGain: ${_currentSong!.replayGainAlbumGain?.toStringAsFixed(2) ?? "null"}');
 
     // Apply volume immediately if we already have ReplayGain data (from preloading)
     if (_currentSong!.replayGainTrackGain != null ||
         _currentSong!.replayGainAlbumGain != null) {
-      debugPrint(
+      _rgLog(
           '[ReplayGain] Using preloaded ReplayGain data for immediate volume adjustment');
       _applyReplayGainVolume();
       return;
     }
 
-    debugPrint(
-        '[ReplayGain] No ReplayGain in API response, reading from file...');
-    debugPrint('[ReplayGain] Stream URL: $streamUrl');
+    _rgLog('[ReplayGain] No ReplayGain in API response, reading from file...');
 
     try {
       // Read ReplayGain metadata directly from the audio file
       final replayGainData = await ReplayGainReader.readFromUrl(streamUrl);
 
-      debugPrint('[ReplayGain] File reading complete:');
-      debugPrint(
+      _rgLog('[ReplayGain] File reading complete:');
+      _rgLog(
           '[ReplayGain]   TrackGain: ${replayGainData.trackGain?.toStringAsFixed(2) ?? "null"}');
-      debugPrint(
+      _rgLog(
           '[ReplayGain]   AlbumGain: ${replayGainData.albumGain?.toStringAsFixed(2) ?? "null"}');
-      debugPrint(
+      _rgLog(
           '[ReplayGain]   TrackPeak: ${replayGainData.trackPeak?.toStringAsFixed(4) ?? "null"}');
-      debugPrint(
+      _rgLog(
           '[ReplayGain]   AlbumPeak: ${replayGainData.albumPeak?.toStringAsFixed(4) ?? "null"}');
-      debugPrint('[ReplayGain]   Has any data: ${replayGainData.hasAnyData}');
+      _rgLog('[ReplayGain]   Has any data: ${replayGainData.hasAnyData}');
 
       // Update the current song with the read metadata WITHOUT triggering UI updates
       // We only update the ReplayGain fields, keeping everything else identical
@@ -1164,7 +1173,7 @@ class AudioPlayerService extends ChangeNotifier {
 
       // Only update if the new song is actually different (this should be true due to ReplayGain data)
       if (updatedSong != _currentSong) {
-        debugPrint('[ReplayGain] Updating song object with new RG data');
+        _rgLog('[ReplayGain] Updating song object with new RG data');
         // Update the internal reference without notifying listeners
         _currentSong = updatedSong;
 
@@ -1173,15 +1182,14 @@ class AudioPlayerService extends ChangeNotifier {
           _playlist[_currentIndex] = updatedSong;
         }
       } else {
-        debugPrint(
-            '[ReplayGain] Song unchanged (no new RG data found in file)');
+        _rgLog('[ReplayGain] Song unchanged (no new RG data found in file)');
       }
 
       // Apply the volume adjustment (this doesn't trigger UI updates)
       _applyReplayGainVolume();
     } catch (e, stackTrace) {
-      debugPrint('[ReplayGain] ERROR reading ReplayGain metadata: $e');
-      debugPrint('[ReplayGain] Stack trace: $stackTrace');
+      _rgLog('[ReplayGain] ERROR reading ReplayGain metadata: $e');
+      _rgLog('[ReplayGain] Stack trace: $stackTrace');
       // Fall back to applying volume without metadata
       _applyReplayGainVolume();
     }
@@ -1209,32 +1217,35 @@ class AudioPlayerService extends ChangeNotifier {
     final hasAlbumGain = albumGain != null;
     final rgMode = _settingsService.replayGainMode.toString().split('.').last;
 
-    debugPrint('');
-    debugPrint('='.padRight(80, '='));
-    debugPrint('[ReplayGain] VOLUME APPLIED');
-    debugPrint('='.padRight(80, '='));
-    debugPrint('[ReplayGain] Song: ${_currentSong!.title}');
-    debugPrint('[ReplayGain] Mode: $rgMode');
-    debugPrint(
+    _rgLog('');
+    _rgLog('='.padRight(80, '='));
+    _rgLog('[ReplayGain] VOLUME APPLIED');
+    _rgLog('='.padRight(80, '='));
+    _rgLog(
+        '[ReplayGain] Song: "${_currentSong!.title}" by "${_currentSong!.artist}" (id=${_currentSong!.id})');
+    _rgLog(
+        '[ReplayGain] Stream URL: ${ReplayGainDebugLogger.redact(_api.getStreamUrl(_currentSong!.id))}');
+    _rgLog('[ReplayGain] Mode: $rgMode');
+    _rgLog(
         '[ReplayGain] TrackGain: ${trackGain?.toStringAsFixed(2) ?? 'null'} dB');
-    debugPrint(
+    _rgLog(
         '[ReplayGain] AlbumGain: ${albumGain?.toStringAsFixed(2) ?? 'null'} dB');
-    debugPrint(
+    _rgLog(
         '[ReplayGain] TrackPeak: ${trackPeak?.toStringAsFixed(4) ?? 'null'}');
-    debugPrint(
+    _rgLog(
         '[ReplayGain] AlbumPeak: ${albumPeak?.toStringAsFixed(4) ?? 'null'}');
-    debugPrint(
+    _rgLog(
         '[ReplayGain] Preamp: ${_settingsService.replayGainPreamp.toStringAsFixed(1)} dB');
-    debugPrint(
+    _rgLog(
         '[ReplayGain] Fallback: ${_settingsService.replayGainFallbackGain.toStringAsFixed(1)} dB');
-    debugPrint(
+    _rgLog(
         '[ReplayGain] Prevent Clipping: ${_settingsService.replayGainPreventClipping}');
-    debugPrint(
+    _rgLog(
         '[ReplayGain] Source: ${hasTrackGain || hasAlbumGain ? 'METADATA' : 'FALLBACK'}');
-    debugPrint(
+    _rgLog(
         '[ReplayGain] Final Volume Multiplier: ${volumeMultiplier.toStringAsFixed(6)} (${(volumeMultiplier * 100).toStringAsFixed(2)}%)');
-    debugPrint('='.padRight(80, '='));
-    debugPrint('');
+    _rgLog('='.padRight(80, '='));
+    _rgLog('');
   }
 
   Future<void> refreshReplayGainVolume() async {
@@ -1317,6 +1328,9 @@ class AudioPlayerService extends ChangeNotifier {
       if (song.replayGainTrackGain == null &&
           song.replayGainAlbumGain == null) {
         try {
+          _rgLog('[ReplayGain] Preloading: "${song.title}" by "${song.artist}" '
+              '(id=${song.id}, format=${song.suffix}/${song.contentType}) '
+              'url=${ReplayGainDebugLogger.redact(streamUrl)}');
           final replayGainData = await ReplayGainReader.readFromUrl(streamUrl);
 
           if (replayGainData.hasAnyData) {
@@ -1340,11 +1354,15 @@ class AudioPlayerService extends ChangeNotifier {
             // Update playlist with ReplayGain data
             _playlist[index] = songWithReplayGain;
 
-            debugPrint(
-                'Loaded ReplayGain for ${song.title}: Track=${replayGainData.trackGain}, Album=${replayGainData.albumGain}');
+            _rgLog(
+                '[ReplayGain] Preload loaded ReplayGain for "${song.title}": Track=${replayGainData.trackGain}, Album=${replayGainData.albumGain}');
+          } else {
+            _rgLog(
+                '[ReplayGain] Preload found no ReplayGain data for "${song.title}" (id=${song.id})');
           }
         } catch (e) {
-          debugPrint('Error reading ReplayGain for ${song.title}: $e');
+          _rgLog(
+              '[ReplayGain] Error preloading ReplayGain for "${song.title}" (id=${song.id}): $e');
         }
       }
 

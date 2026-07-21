@@ -147,6 +147,17 @@ The app provides detailed debug output in the console showing:
 - Current settings (mode, preamp, fallback gain)
 - Whether metadata or fallback gain is being used
 
+#### Persistent Debug Log
+
+For issues that are hard to reproduce with a console attached (e.g. "ReplayGain isn't applied for some songs"), enable **Debug Logging** in the ReplayGain Debug Log section of Settings. While enabled, the app records the same diagnostics to a log file on the device for every track played or preloaded:
+- The (auth-redacted) stream URL and detected audio format
+- Where ReplayGain metadata came from: the server's API response, a nested `<replayGain>` XML element, JSON fields, or bytes read directly from the file
+- Parsed track/album gain and peak values at each stage
+- Current ReplayGain settings and the final computed volume multiplier
+- Any errors encountered while fetching or parsing metadata
+
+The log can be exported via the platform share sheet (to Files, email, AirDrop, etc.) or cleared from the same settings section. Auth parameters (username/token/salt) are redacted from logged URLs before they're written to disk, but the log still contains your server address and song titles, so only share it with people you trust. Logging is disabled by default and the log file is capped at 5MB (older entries are rotated out).
+
 ## Best Practices
 
 ### For Users

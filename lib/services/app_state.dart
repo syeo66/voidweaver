@@ -8,6 +8,7 @@ import 'audio_player_service.dart';
 import 'audio_handler.dart';
 import 'settings_service.dart';
 import 'playback_persistence.dart';
+import 'replaygain_debug_logger.dart';
 
 enum SyncStatus {
   idle,
@@ -70,6 +71,8 @@ class AppState extends ChangeNotifier {
   Future<void> initialize() async {
     _settingsService = SettingsService();
     await _settingsService!.initialize();
+
+    await ReplayGainDebugLogger.instance.initialize();
 
     _persistenceService = PlaybackPersistenceService();
     await _persistenceService!.initialize();
