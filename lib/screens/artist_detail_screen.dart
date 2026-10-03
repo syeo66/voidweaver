@@ -179,6 +179,7 @@ class _ArtistDetailScreenState extends State<ArtistDetailScreen> {
                 child: album.coverArt != null && api != null
                     ? CachedNetworkImage(
                         imageUrl: api.getCoverArtUrl(album.coverArt!),
+                        cacheKey: album.coverArt,
                         fit: BoxFit.cover,
                         placeholder: (context, url) => Container(
                           color: Colors.grey[300],

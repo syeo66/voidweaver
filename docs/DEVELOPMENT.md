@@ -25,7 +25,7 @@ The project includes a Makefile for streamlined development workflows:
 
 ### Code Quality
 - `flutter analyze` - Static analysis (currently 0 issues)
-- `flutter test` - Run test suite (172+ passing with comprehensive just_audio mocks, Bluetooth controls validation, and scrobble queue testing)
+- `flutter test` - Run test suite (199 passing with comprehensive just_audio mocks, Bluetooth controls validation, scrobble queue and cache testing)
 - `flutter pub deps` - Check dependency graph including HTTP/2 support
 - `flutter test test/utils/validators_test.dart` - Run input validation tests specifically
 - `flutter test test/widgets/error_boundary_test.dart` - Run error boundary tests specifically
@@ -67,15 +67,16 @@ Voidweaver uses a clean, optimized architecture with:
 
 ```bash
 flutter analyze          # Static analysis (currently 0 issues)
-flutter test             # Run tests (172/172 passing)
+flutter test             # Run tests (199/199 passing)
 flutter test --coverage  # Run tests with coverage report
 ```
 
-**Test Coverage**: 172 comprehensive tests covering:
+**Test Coverage**: 199 comprehensive tests covering:
 - Data model validation (Song, Album, Artist, SearchResult)
 - Utility functions (time formatting, ReplayGain parsing, URL validation)
 - Sleep timer functionality with comprehensive edge case testing
-- API caching system with request deduplication and multi-level caching
+- API caching system with request deduplication, multi-level caching and stale-data fallback
+- Audio file cache (downloads, deduplication, LRU eviction, partial download cleanup)
 - Input validation and sanitization (37 comprehensive tests covering security scenarios, edge cases, and user input handling)
 - Error boundary system (15 tests covering widget error handling, global error management, and user recovery flows)
 - Scrobble queue persistence (19 tests covering queue persistence, retry logic, network failure handling, request ordering, and graceful degradation)
@@ -84,6 +85,14 @@ flutter test --coverage  # Run tests with coverage report
 - HTTPS security enforcement (5 comprehensive tests covering URL validation, API rejection of HTTP connections, and proper error handling)
 
 ### Recent Technical Improvements
+
+- **Offline playback and caching** (October 2026): see [CACHING.md](CACHING.md)
+  - Upcoming tracks downloaded to a disk cache (`AudioCache`) and played from local files
+  - Persistent API cache fixed to actually serialize/deserialize typed data, with stale data served when the server is unreachable
+  - Cover art cached by stable keys so images survive changing auth tokens
+  - Playback state restored without discarding the queue when offline at startup
+  - Clear Cache button in Settings
+  - Dependencies upgraded, including cached_network_image 4 and flutter_secure_storage 11
 
 - **HTTPS enforcement**: Implemented mandatory encrypted connections for enhanced security
   - Multi-layer validation: validators, SubsonicApi constructor, and UI feedback
@@ -169,6 +178,7 @@ flutter test --coverage  # Run tests with coverage report
 - **Request deduplication** - Prevents duplicate API calls from running simultaneously
 - **Comprehensive API response caching** - Cached albums, artists, search results with configurable TTL
 - **Memory and persistent caching** - Multi-level caching for optimal performance and offline capability
+- **Audio file caching** - Upcoming tracks downloaded to disk for offline playback
 
 ## Error Handling
 

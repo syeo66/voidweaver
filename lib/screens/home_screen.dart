@@ -428,6 +428,7 @@ class _PlaylistItem extends StatelessWidget {
                         borderRadius: BorderRadius.circular(isCompact ? 6 : 8),
                         child: CachedNetworkImage(
                           imageUrl: api.getCoverArtUrl(song.coverArt!),
+                          cacheKey: song.coverArt,
                           key: ValueKey('playlist-${song.id}-${song.coverArt}'),
                           fit: BoxFit.cover,
                           placeholder: (context, url) => Icon(
@@ -681,6 +682,7 @@ class _StaticAlbumArtState extends State<_StaticAlbumArt> {
       borderRadius: BorderRadius.circular(12),
       child: CachedNetworkImage(
         imageUrl: _currentCoverArtUrl!,
+        cacheKey: _currentSong?.coverArt,
         key: ValueKey('main-$_currentCoverArtUrl'),
         fit: BoxFit.cover,
         placeholder: (context, url) => Container(

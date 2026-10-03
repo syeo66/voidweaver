@@ -50,6 +50,8 @@ class _SettingsContent extends StatelessWidget {
             const SizedBox(height: 16),
             _buildNetworkSection(context, settingsService),
             const SizedBox(height: 16),
+            const _CacheSection(),
+            const SizedBox(height: 16),
             _buildReplayGainSection(context, settingsService),
             const SizedBox(height: 16),
             const _ReplayGainDebugLogSection(),
@@ -565,6 +567,148 @@ class _SettingsContent extends StatelessWidget {
         content: Text(message),
         backgroundColor: Colors.red,
         duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+}
+
+class _CacheSection extends StatefulWidget {
+  const _CacheSection();
+
+  @override
+  State<_CacheSection> createState() => _CacheSectionState();
+}
+
+class _CacheSectionState extends State<_CacheSection> {
+  late Future<int> _sizeFuture;
+  bool _clearing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _sizeFuture = _loadSize();
+  }
+
+  Future<int> _loadSize() async {
+    final playerService = context.read<AppState>().audioPlayerService;
+    return await playerService?.audioCacheSize() ?? 0;
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} KB';
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+  }
+
+  Future<void> _handleClear() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear Cache?'),
+        content: const Text(
+            'This deletes downloaded songs, saved album and artist lists, and '
+            'cover art. They will be downloaded again as needed, but won\'t '
+            'be available offline until then.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _clearing = true);
+    try {
+      await context.read<AppState>().clearCaches();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cache cleared'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to clear cache: $e'),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _clearing = false;
+          _sizeFuture = _loadSize();
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Cache',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Upcoming songs are downloaded so playback continues offline. '
+              'Album lists and cover art are also kept for offline browsing.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+            ),
+            const SizedBox(height: 8),
+            FutureBuilder<int>(
+              future: _sizeFuture,
+              builder: (context, snapshot) {
+                final size = snapshot.data;
+                return Text(
+                  size == null
+                      ? 'Downloaded songs: calculating…'
+                      : 'Downloaded songs: ${_formatBytes(size)}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.grey[600],
+                      ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _clearing ? null : _handleClear,
+                icon: _clearing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.delete_outline),
+                label: const Text('Clear Cache'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

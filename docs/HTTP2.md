@@ -129,6 +129,8 @@ To verify HTTP/2 benefits:
 3. **Client Type**: Changed from `http.Client` to `http.HttpPlusClient`
 4. **Disposal**: Added proper HTTP client cleanup in `AppState.dispose()`
 
+`package:http` is a direct dependency again for the `Request`/`Client` types used by the audio file cache (`lib/services/audio_cache.dart`), which streams downloads through an `HttpPlusClient`.
+
 ### Files Modified
 - `/pubspec.yaml` - Updated dependency
 - `/lib/services/subsonic_api.dart` - HTTP/2 client implementation

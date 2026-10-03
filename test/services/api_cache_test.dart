@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/api_cache.dart';
+import 'package:voidweaver/services/subsonic_api.dart';
 
 void main() {
   group('API Cache Tests', () {
@@ -228,6 +229,69 @@ void main() {
           cacheDuration: const Duration(seconds: 10));
 
       expect(callCount, 5); // 2 new fetches for album endpoints
+    });
+
+    test('should persist typed data across instances using codecs', () async {
+      final albums = [
+        Album(id: 'a1', name: 'First', artist: 'Artist', songs: [
+          Song(id: 's1', title: 'Song', artist: 'Artist', album: 'First'),
+        ]),
+      ];
+      Object? toJson(List<Album> data) => data.map((a) => a.toJson()).toList();
+      List<Album> fromJson(dynamic json) => (json as List<dynamic>)
+          .map((a) => Album.fromJson(a as Map<String, dynamic>))
+          .toList();
+
+      await cache.getOrFetch<List<Album>>(
+          'getAlbumList2', null, () async => albums,
+          usePersistentCache: true, toJson: toJson, fromJson: fromJson);
+
+      // A fresh instance (e.g. after app restart) has an empty memory cache
+      final restarted = ApiCache.forTesting();
+      await restarted.initialize();
+      var fetched = false;
+      final result = await restarted
+          .getOrFetch<List<Album>>('getAlbumList2', null, () async {
+        fetched = true;
+        return <Album>[];
+      }, usePersistentCache: true, toJson: toJson, fromJson: fromJson);
+
+      expect(fetched, isFalse);
+      expect(result, albums);
+    });
+
+    test('should serve stale memory data when fetch fails', () async {
+      await cache.getOrFetch<String>('endpoint', null, () async => 'fresh',
+          cacheDuration: Duration.zero);
+      await Future.delayed(const Duration(milliseconds: 5));
+
+      final result = await cache.getOrFetch<String>(
+          'endpoint', null, () async => throw Exception('offline'));
+
+      expect(result, 'fresh');
+    });
+
+    test('should serve stale persistent data when fetch fails after restart',
+        () async {
+      await cache.getOrFetch<String>('endpoint', null, () async => 'saved',
+          cacheDuration: Duration.zero, usePersistentCache: true);
+      await Future.delayed(const Duration(milliseconds: 5));
+
+      final restarted = ApiCache.forTesting();
+      await restarted.initialize();
+      final result = await restarted.getOrFetch<String>(
+          'endpoint', null, () async => throw Exception('offline'),
+          usePersistentCache: true);
+
+      expect(result, 'saved');
+    });
+
+    test('should rethrow when fetch fails and nothing is cached', () async {
+      expect(
+        cache.getOrFetch<String>(
+            'endpoint', null, () async => throw Exception('offline')),
+        throwsException,
+      );
     });
   });
 }

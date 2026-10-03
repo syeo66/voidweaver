@@ -217,6 +217,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
         backgroundColor: Colors.grey[300],
         backgroundImage: CachedNetworkImageProvider(
           api.getCoverArtUrl(artist.coverArt!),
+          cacheKey: artist.coverArt,
         ),
       );
     }
@@ -312,6 +313,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                 child: album.coverArt != null && api != null
                     ? CachedNetworkImage(
                         imageUrl: api.getCoverArtUrl(album.coverArt!),
+                        cacheKey: album.coverArt,
                         fit: BoxFit.cover,
                         placeholder: (context, url) => Container(
                           color: Colors.grey[300],

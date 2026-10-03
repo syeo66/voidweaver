@@ -33,7 +33,7 @@
 ### Code Quality
 - [x] **Input validation** - ✅ Implemented comprehensive validation for login fields and settings with robust error handling, input sanitization, and 37 comprehensive test cases
 - [x] **Error boundaries** - ✅ Implemented comprehensive error boundary system with global error handler, ErrorBoundary widgets, and error reporting infrastructure throughout the app
-- [x] **Dependency updates** - ✅ **UPDATED AUGUST 2025** - Updated all resolvable dependencies to latest compatible versions, including build_runner 2.7.0, http 1.5.0, just_audio_platform_interface 4.6.0, and build tools. Remaining dependencies blocked by Flutter SDK constraints (expected behavior).
+- [x] **Dependency updates** - ✅ **UPDATED OCTOBER 2026** - Updated all direct dependencies to their latest versions, including major upgrades to cached_network_image 4.0.4 and flutter_secure_storage 11.2.0. Remaining outdated packages are transitive and blocked by upstream constraints.
 
 ### Performance Optimization
 - [x] **HTTP/2 support** - ✅ Implemented HTTP/2 client with connection reuse, header compression, and automatic fallback to HTTP/1.1
@@ -68,17 +68,18 @@
   - [x] **Non-blocking operation** - All operations asynchronous and don't affect playback
   - [x] **Intelligent cleanup** - Old requests (>7 days) and failed requests (>5 retries) automatically dropped
   - [x] **Comprehensive test coverage** - 19 tests covering queue persistence, retry logic, and error handling
-- [ ] **Offline mode** - Graceful handling when server unavailable
+- [x] **Offline resilience** - ✅ Cached library data served when the server is unreachable, upcoming tracks downloaded to disk, offline skipping to downloaded tracks, queue restored after an offline restart, and cover art cached by stable keys (see [docs/CACHING.md](docs/CACHING.md))
+- [ ] **Offline mode** - Explicit offline mode with indicator and browsing limited to downloaded content
 - [ ] **Structured logging** - Implement proper logging system
 - [ ] **Crash reporting** - Add crash analytics for production
 
 ## 🧪 Testing & Quality
 
 ### Test Coverage
-- [x] **Unit tests** - ✅ Comprehensive test suite (172+ passing) covering data models, utilities, sleep timer, caching functionality, input validation, Bluetooth controls, network timeout handling, and scrobble queue persistence
+- [x] **Unit tests** - ✅ Comprehensive test suite (199 passing) covering data models, utilities, sleep timer, caching functionality, input validation, Bluetooth controls, network timeout handling, and scrobble queue persistence
 - [x] **Mock infrastructure** - ✅ Robust AudioPlayer mocking system for reliable testing
 - [x] **Testable architecture** - ✅ Refactored AudioPlayerService with dependency injection
-- [x] **Caching system tests** - ✅ Added 7 comprehensive tests for API cache, request deduplication, and cache invalidation
+- [x] **Caching system tests** - ✅ 11 tests for API cache, request deduplication, cache invalidation, persistent codecs and stale-data fallback, plus 7 tests for the audio file cache
 - [x] **Input validation tests** - ✅ Added 37 comprehensive tests covering all validation scenarios, edge cases, and security concerns
 - [x] **Memory leak prevention tests** - ✅ Added 8 comprehensive tests covering service disposal, timer cleanup, stream subscription management, and resource safety
 - [x] **Bluetooth controls tests** - ✅ Added 5 comprehensive tests covering audio focus management, delayed requests, state tracking, and conflict prevention
@@ -99,7 +100,7 @@
 - [ ] **Volume controls** - In-app volume slider
 
 ### Extended Features
-- [ ] **Offline caching** - Download for offline listening
+- [ ] **Offline caching** - Download whole albums/playlists for offline listening (upcoming tracks are already cached automatically)
 
 ## 🌐 Platform Support
 

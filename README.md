@@ -21,14 +21,15 @@ A high-quality Flutter music player application that streams music from your per
 - **Native Media Controls**: Reliable control from lock screen, notification panel, and Bluetooth devices with comprehensive audio focus management ensuring single-press reliability
 - **Interactive Progress**: Tap or drag to seek to any position in tracks
 - **Sleep Timer**: Auto-pause with preset durations (5min to 2 hours)
-- **Offline-Resilient Playback**: Multi-track preloading (3 tracks ahead) with automatic fallback during network outages for uninterrupted listening
+- **Offline-Resilient Playback**: The next 3 tracks are downloaded to disk while you listen, so playback continues through network outages; when offline, playback skips ahead to the next downloaded track
 
 ### 🎨 **Interface & Experience**
 - **Dark Mode**: System-aware theme with manual override
 - **Landscape Support**: Responsive layouts optimized for both portrait and landscape orientations
 - **Fast Loading**: HTTP/2 support with connection reuse and advanced caching for instant response
 - **Network Optimization**: Intelligent timeout handling with configurable retry logic and connection presets (Fast/Default/Slow) for different network conditions
-- **Enhanced Offline Resilience**: Browse cached content and continue playback with preloaded tracks even during network outages
+- **Enhanced Offline Resilience**: Previously loaded albums, artists, search results and cover art stay available when the server is unreachable, and your queue survives restarting the app while offline
+- **Cache Management**: See how much space downloaded songs use and clear all cached data from Settings
 - **Real-time Updates**: Background sync keeps your library fresh
 - **Comprehensive Feedback**: Clear loading states and user-friendly error messages with troubleshooting suggestions
 - **Pull-to-Refresh**: Manual refresh on album and artist lists
@@ -36,14 +37,14 @@ A high-quality Flutter music player application that streams music from your per
 
 ### 🔒 **Security & Reliability**
 - **HTTPS Enforcement**: Mandatory encrypted connections to your music server for secure streaming and credential protection
-- **Secure Login**: Encrypted credential storage with automatic session management (flutter_secure_storage v9.2.4)
+- **Secure Login**: Encrypted credential storage with automatic session management (flutter_secure_storage v11)
 - **Input Validation**: Comprehensive validation and sanitization of all user inputs to prevent crashes and security issues
 - **Error Boundaries**: Global error handling system that prevents app crashes and provides user-friendly error recovery
 - **Intelligent Scrobbling**: Automatic play count tracking that submits scrobbles when songs reach the middle (50%) or 2 minute mark, whichever comes first, with duplicate prevention to ensure accurate listening statistics
 - **Persistent Scrobble Queue**: Never lose play counts due to network issues - scrobble requests are queued, persisted, and automatically retried with exponential backoff. Continues working even when offline, processing queued requests when network returns.
 - **Robust Error Handling**: Graceful recovery from network issues and widget failures
 - **Background Sync**: Automatic library updates every 5 minutes
-- **Modern Dependencies**: Regularly updated dependencies with comprehensive testing (172+ test suite, last updated December 2025)
+- **Modern Dependencies**: Regularly updated dependencies with comprehensive testing (199 test suite, last updated October 2026)
 - **just_audio Integration**: Enhanced audio performance with dual state synchronization for reliable Bluetooth and native media controls
 - **Persistent State Management**: Playlist and playback position automatically saved with validation and error recovery
 

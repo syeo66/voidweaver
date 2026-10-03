@@ -62,13 +62,23 @@ class ApiCache {
     return '$endpoint?$paramString';
   }
 
-  /// Get cached data or execute request with deduplication
+  /// Get cached data or execute request with deduplication.
+  ///
+  /// When [usePersistentCache] is set, [toJson] and [fromJson] convert the
+  /// result to and from JSON-encodable data. Without them only values that
+  /// survive a JSON round trip unchanged (strings, numbers, ...) can be
+  /// persisted.
+  ///
+  /// If the fetch fails (e.g. the device is offline) and an expired entry is
+  /// still available, the stale data is returned instead of the error.
   Future<T> getOrFetch<T>(
     String endpoint,
     Map<String, String>? params,
     Future<T> Function() fetcher, {
     Duration cacheDuration = const Duration(minutes: 5),
     bool usePersistentCache = false,
+    Object? Function(T data)? toJson,
+    T Function(dynamic json)? fromJson,
   }) async {
     final key = _generateKey(endpoint, params);
 
@@ -80,8 +90,10 @@ class ApiCache {
     }
 
     // Check persistent cache if enabled
+    CacheEntry<T>? persistentCached;
     if (usePersistentCache) {
-      final persistentCached = await _getPersistentCache<T>(key);
+      await initialize();
+      persistentCached = _getPersistentCache<T>(key, fromJson);
       if (persistentCached != null && persistentCached.isValid) {
         debugPrint('Cache HIT (persistent): $key');
         // Store in memory cache for faster access
@@ -98,6 +110,9 @@ class ApiCache {
 
     // Start new request
     final completer = Completer<T>();
+    // Errors are rethrown to the caller below; don't also report them as
+    // unhandled when no deduplicated request is waiting on this future.
+    completer.future.ignore();
     _ongoingRequests[key] = completer;
 
     try {
@@ -114,12 +129,20 @@ class ApiCache {
 
       // Store in persistent cache if enabled
       if (usePersistentCache) {
-        await _setPersistentCache(key, entry);
+        await _setPersistentCache(key, entry, toJson);
       }
 
       completer.complete(result);
       return result;
     } catch (error) {
+      // Fall back to stale data rather than failing outright
+      final stale = memoryCached ?? persistentCached;
+      if (stale != null) {
+        debugPrint('Cache STALE (fetch failed: $error): $key');
+        _memoryCache[key] = stale;
+        completer.complete(stale.data as T);
+        return stale.data as T;
+      }
       completer.completeError(error);
       rethrow;
     } finally {
@@ -127,8 +150,9 @@ class ApiCache {
     }
   }
 
-  /// Get data from persistent cache
-  Future<CacheEntry<T>?> _getPersistentCache<T>(String key) async {
+  /// Get data from persistent cache, including expired entries
+  CacheEntry<T>? _getPersistentCache<T>(
+      String key, T Function(dynamic json)? fromJson) {
     if (_prefs == null) return null;
 
     try {
@@ -136,7 +160,7 @@ class ApiCache {
       if (jsonString == null) return null;
 
       final json = jsonDecode(jsonString) as Map<String, dynamic>;
-      return CacheEntry<T>.fromJson(json, (data) => data as T);
+      return CacheEntry<T>.fromJson(json, fromJson ?? (data) => data as T);
     } catch (e) {
       debugPrint('Error reading persistent cache for $key: $e');
       // Remove corrupted entry
@@ -146,11 +170,15 @@ class ApiCache {
   }
 
   /// Set data in persistent cache
-  Future<void> _setPersistentCache<T>(String key, CacheEntry<T> entry) async {
+  Future<void> _setPersistentCache<T>(
+      String key, CacheEntry<T> entry, Object? Function(T data)? toJson) async {
     if (_prefs == null) return;
 
     try {
-      final jsonString = jsonEncode(entry.toJson());
+      final jsonString = jsonEncode({
+        ...entry.toJson(),
+        'data': toJson != null ? toJson(entry.data) : entry.data,
+      });
       await _prefs!.setString('cache_$key', jsonString);
     } catch (e) {
       debugPrint('Error writing persistent cache for $key: $e');

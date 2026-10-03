@@ -145,9 +145,10 @@ class ImageCacheManager {
     }
   }
 
-  /// Clear all cached images
+  /// Clear all cached images from disk and memory
   static Future<void> clearCache() async {
-    await CachedNetworkImage.evictFromCache('');
+    await CachedNetworkImageProvider.defaultCacheManager.emptyCache();
+    PaintingBinding.instance.imageCache.clear();
   }
 
   /// Get cache info

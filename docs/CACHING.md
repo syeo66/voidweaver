@@ -2,24 +2,25 @@
 
 ## Overview
 
-Voidweaver includes a comprehensive multi-level caching system with offline-resilient audio preloading that significantly improves performance by reducing redundant network requests and providing instant access to frequently used data. This document explains the caching architecture, features, and technical implementation.
+Voidweaver includes a comprehensive multi-level caching system with an on-disk audio cache for offline-resilient playback that significantly improves performance by reducing redundant network requests and providing instant access to frequently used data. This document explains the caching architecture, features, and technical implementation.
 
 ## Features
 
 ### Core Functionality
 - **Request Deduplication**: Prevents multiple identical API calls from running simultaneously
 - **Multi-level Caching**: Memory cache for instant access, persistent cache for offline capability
-- **Multi-Track Audio Preloading**: Maintains 3-track buffer with prepared AudioSource objects for offline-resilient playback
+- **Audio File Caching**: Downloads the next 3 tracks to disk for offline-resilient playback
+- **Offline Fallback**: Serves expired cached data when the server is unreachable
 - **Intelligent Cache Management**: Configurable TTL, automatic expiration, pattern-based invalidation
 - **Cache Statistics**: Real-time monitoring of cache performance and memory usage
 
 ### Performance Benefits
 - **Reduced Network Calls**: Eliminates redundant API requests
 - **Faster Loading**: Memory cache provides instant access to frequently used data
-- **Offline-Resilient Playback**: Multi-track preloading enables uninterrupted music during network outages
-- **Instant Track Switching**: Prepared AudioSource objects eliminate loading delays
+- **Offline-Resilient Playback**: Downloaded upcoming tracks keep music playing during network outages
+- **Instant Track Switching**: Downloaded tracks load from local files with no network delay
 - **Improved Responsiveness**: Persistent cache enables offline browsing of cached content
-- **Better Resource Management**: Intelligent cache and preload management prevents memory bloat
+- **Better Resource Management**: Size-limited audio cache with LRU eviction
 
 ## Architecture
 
@@ -37,11 +38,15 @@ Voidweaver includes a comprehensive multi-level caching system with offline-resi
 - **Lifetime**: Configurable TTL periods
 - **Benefits**: Survives app restarts, reduces cold start times
 
-#### 3. Audio Preload Cache
-- **Purpose**: Offline-resilient music playback with prepared audio content
-- **Storage**: In-memory `Map<int, PreloadedTrack>` with 3-track buffer
-- **Lifetime**: Dynamic based on playlist navigation
-- **Benefits**: Instant track switching, network failure resilience, seamless offline playback
+#### 3. Audio File Cache
+- **Purpose**: Offline-resilient playback of upcoming tracks
+- **Storage**: Downloaded audio files in the app cache directory (`audio_cache/`), managed by `AudioCache`
+- **Lifetime**: Least-recently-used eviction once the cache exceeds 1 GB
+- **Benefits**: Upcoming tracks play from disk, so playback continues when the network drops
+
+### Offline Fallback
+
+When a cached request fails (e.g. the device is offline), `ApiCache` returns the expired entry instead of the error, from memory or from persistent storage. Expired entries are only replaced, never deleted, so the last known album lists, artists, albums and search results stay browsable offline.
 
 ### Request Deduplication
 
@@ -58,110 +63,19 @@ final albums2 = api.getAlbumList(); // Waits for first call
 final albums3 = api.getAlbumList(); // Waits for first call
 ```
 
-## Multi-Track Audio Preloading
+## Audio File Caching
 
-### Offline-Resilient Preloading Architecture
+While a song plays, `AudioPlayerService` downloads the next 3 tracks to disk via `AudioCache`, one at a time, nearest first.
 
-The audio preloading system maintains a 3-track buffer ahead of the current playing position, providing seamless playback even during network outages.
+- **Playback**: `_playSongAtIndex` plays from the cached file when present (`setFilePath`), otherwise streams from the server.
+- **Offline skipping**: When advancing (manual next or auto-advance) to a track that can't be loaded and isn't cached, playback skips ahead to the next cached track in the playlist instead of stopping.
+- **ReplayGain**: Read from the downloaded file's header, so no separate range request is needed.
+- **Downloads**: Written to a `.part` file and renamed when complete; incomplete downloads, non-200 responses and Subsonic XML/JSON error documents are discarded. Concurrent requests for the same song share one download.
+- **Keys**: SHA-1 of the server URL and song id, so songs from different servers can't collide.
+- **Eviction**: Least recently used files (by modification time, refreshed on each play) are deleted once the cache exceeds 1 GB.
+- **Restore**: If the saved song can't be loaded at startup (e.g. offline), the saved queue is kept and the song is loaded again on the next play, resuming at the saved position.
 
-#### PreloadedTrack Structure
-```dart
-class PreloadedTrack {
-  final Song song;              // Song with ReplayGain metadata
-  final String streamUrl;       // Cached stream URL
-  final AudioSource? audioSource; // Prepared for instant playback
-  final DateTime preloadedAt;   // Timestamp for cleanup management
-}
-```
-
-#### Key Features
-
-##### 1. Multi-Track Buffer Management
-- **3-track lookahead**: Maintains preloaded content for positions `currentIndex + 1`, `currentIndex + 2`, `currentIndex + 3`
-- **Dynamic allocation**: Uses `Map<int, PreloadedTrack>` for efficient index-based access
-- **Gap-filling**: Automatically preloads missing tracks in the buffer window
-
-##### 2. Batch Preloading Strategy
-- **Parallel processing**: Uses `Future.wait()` with `eagerError: false` to continue on individual failures
-- **Smart scheduling**: Preloads during idle time to avoid impacting current playback
-- **Error isolation**: Individual preload failures don't affect other tracks or current playback
-
-##### 3. Offline Resilience
-- **Network failure detection**: Catches API errors during track switching and triggers fallback logic
-- **Intelligent fallback**: `_findNearestPreloadedTrack()` searches forward then backward for available cached content
-- **Graceful degradation**: Continues playback with preloaded tracks during complete network outages
-- **Seamless recovery**: Automatically resumes normal preloading when connectivity returns
-
-##### 4. Memory Management
-- **Automatic cleanup**: Removes preloaded tracks more than 1 position behind current
-- **Resource disposal**: Proper cleanup of AudioSource objects prevents memory leaks
-- **Smart memory usage**: Maintains optimal balance between performance and memory consumption
-
-#### Implementation Details
-
-##### Preloading Process
-```dart
-// Batch preloading of upcoming tracks
-Future<void> _preloadUpcomingSongs() async {
-  final preloadTasks = <Future<void>>[];
-
-  // Preload next 3 tracks (or until end of playlist)
-  for (int i = 1; i <= _maxPreloadTracks; i++) {
-    final targetIndex = _currentIndex + i;
-    if (targetIndex >= _playlist.length) break;
-    if (_preloadedTracks.containsKey(targetIndex)) continue;
-
-    preloadTasks.add(_preloadSingleTrack(targetIndex));
-  }
-
-  await Future.wait(preloadTasks, eagerError: false);
-}
-```
-
-##### Offline Fallback Logic
-```dart
-// Network failure fallback during track switching
-try {
-  streamUrl = _api.getStreamUrl(_currentSong!.id);
-} catch (e) {
-  final fallbackTrack = _findNearestPreloadedTrack(index);
-  if (fallbackTrack != null) {
-    // Use preloaded content as fallback
-    streamUrl = fallbackTrack.streamUrl;
-    usePreloadedAudio = fallbackTrack.audioSource != null;
-  } else {
-    // No fallback available
-    rethrow;
-  }
-}
-```
-
-##### Cleanup Strategy
-```dart
-// Remove old preloaded tracks behind current position
-void _cleanupOldPreloads() {
-  final indicesToRemove = <int>[];
-
-  for (final index in _preloadedTracks.keys) {
-    if (index < _currentIndex - 1) {  // Keep 1 track buffer
-      indicesToRemove.add(index);
-    }
-  }
-
-  for (final index in indicesToRemove) {
-    final track = _preloadedTracks.remove(index);
-    track?.dispose();
-  }
-}
-```
-
-### Performance Benefits
-
-- **Zero loading delays**: Prepared AudioSource objects enable instant track switching
-- **Network resilience**: Up to 3 tracks playable without network connectivity
-- **ReplayGain ready**: Volume normalization applied before playback starts
-- **Memory efficient**: Automatic cleanup prevents memory bloat
-- **Error resistant**: Individual failures don't interrupt the listening experience
+The currently playing track is streamed if it wasn't prefetched, so a network drop mid-song can still interrupt the first track of a new playlist.
 
 ## Cache Configuration
 
@@ -228,8 +142,8 @@ The following SubsonicApi methods use caching:
 ### Non-Cached Operations
 
 Some operations are intentionally not cached:
-- **Stream URLs**: Generated per request with authentication
-- **Cover Art URLs**: Generated per request with authentication
+- **Stream URLs**: Generated per request with authentication (the audio itself is cached, see Audio File Caching)
+- **Cover Art URLs**: Generated per request with authentication. Because the salt and token change every time, images pass the cover art id as `cacheKey` so the disk image cache still hits.
 - **Scrobble Operations**: Real-time user actions (but see Scrobble Queue below for persistent queuing)
 
 ## Scrobble Queue Persistence
@@ -341,6 +255,17 @@ static Widget buildCachedImage({
 }
 ```
 
+### Stable Cache Keys
+
+Cover art URLs contain a per-request salt and token, so the URL is different every time it's generated. Every cover art image therefore passes the cover art id as `cacheKey`, letting the disk cache hit across URL changes and app restarts, which keeps album art visible offline:
+
+```dart
+CachedNetworkImage(
+  imageUrl: api.getCoverArtUrl(album.coverArt!),
+  cacheKey: album.coverArt,
+)
+```
+
 ### Image Cache Features
 
 - **Size Limits**: 800x800 maximum for memory optimization
@@ -349,6 +274,16 @@ static Widget buildCachedImage({
 - **Memory Efficient**: Automatic memory management
 
 ## Cache Management
+
+### Clearing from Settings
+
+The **Cache** section in Settings shows how much space downloaded songs use and has a **Clear Cache** button. After confirmation it calls `AppState.clearCaches()`, which removes:
+
+- Downloaded audio (`AudioPlayerService.clearAudioCache()`)
+- Cached API responses, in memory and persistent (`SubsonicApi.clearCache()`)
+- Cover art, on disk and in memory (`ImageCacheManager.clearCache()`)
+
+Downloads already in progress still complete and are added to the cache.
 
 ### Manual Cache Control
 
@@ -366,6 +301,10 @@ api.clearExpiredCache();
 
 // Get cache statistics
 final stats = api.getCacheStats();
+
+// Downloaded audio
+final bytes = await audioPlayerService.audioCacheSize();
+await audioPlayerService.clearAudioCache();
 ```
 
 ### Pattern-Based Invalidation
@@ -457,9 +396,9 @@ try {
 
 ## Testing
 
-### Comprehensive Test Coverage
+### Test Coverage
 
-The caching system includes 7 comprehensive tests:
+`test/services/api_cache_test.dart` (11 tests):
 
 1. **Cache Hit/Miss Validation**: Verifies cache storage and retrieval
 2. **Request Deduplication**: Tests concurrent request handling
@@ -468,18 +407,19 @@ The caching system includes 7 comprehensive tests:
 5. **Cache Invalidation**: Tests manual cache clearing
 6. **Cache Statistics**: Validates performance monitoring
 7. **Pattern Matching**: Tests pattern-based invalidation
+8. **Persistent Codecs**: Typed data survives a new cache instance
+9. **Stale Memory Fallback**: Expired data served when a fetch fails
+10. **Stale Persistent Fallback**: Same, after a restart
+11. **Error Propagation**: Fetch errors rethrown when nothing is cached
 
-### Test Results
-- **49/49 tests passing** (100% pass rate)
-- **Zero analyzer warnings** maintained
-- **Comprehensive coverage** of all caching scenarios
+`test/services/audio_cache_test.dart` (7 tests): downloads, download deduplication, rejection of failed responses and error documents, index restoration and partial-file cleanup, LRU eviction, server namespacing, and clearing.
 
 ## Best Practices
 
 ### For Users
 1. **Regular App Updates**: Keep the app updated for cache optimizations
 2. **Stable Network**: Cache works best with reliable internet connection
-3. **Storage Management**: Cache uses minimal storage space automatically
+3. **Storage Management**: Downloaded songs are capped at 1 GB; use **Clear Cache** in Settings to free space
 
 ### For Developers
 1. **Appropriate TTL**: Choose cache durations based on data volatility
@@ -505,7 +445,7 @@ The caching system includes 7 comprehensive tests:
 #### Stale Data
 - **Cause**: Cached data appears outdated
 - **Solution**: Cache TTL is optimized for each data type
-- **Manual Fix**: Clear cache manually if needed
+- **Manual Fix**: Use **Clear Cache** in Settings
 
 ### Debug Information
 
@@ -521,6 +461,8 @@ Potential improvements for future versions:
 - **Adaptive TTL**: Dynamic cache duration based on usage patterns
 - **Compression**: Compress cached data for storage efficiency
 - **Background Sync**: Proactive cache warming
+- **Offline Albums**: Download whole albums or playlists on request
+- **Configurable Audio Cache Size**: Let users choose the 1 GB limit
 - **Analytics**: Detailed cache performance metrics
 - **Custom Cache Policies**: User-configurable cache behavior
 

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:http_plus/http_plus.dart' as http;
@@ -67,6 +68,24 @@ class ReplayGainReader {
     } catch (e, stackTrace) {
       _log('Error reading ReplayGain metadata: $e');
       _log('Stack trace: $stackTrace');
+      return const ReplayGainData();
+    }
+  }
+
+  /// Reads ReplayGain metadata from the start of a locally cached file.
+  static Future<ReplayGainData> readFromFile(File file) async {
+    try {
+      _log('Reading ReplayGain metadata from cached file: ${file.path}');
+      final raf = await file.open();
+      try {
+        final bytes = await raf.read(_maxHeaderSize);
+        if (bytes.isEmpty) return const ReplayGainData();
+        return _parseReplayGainFromBytes(bytes);
+      } finally {
+        await raf.close();
+      }
+    } catch (e) {
+      _log('Error reading ReplayGain metadata from file: $e');
       return const ReplayGainData();
     }
   }

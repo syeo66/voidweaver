@@ -5,6 +5,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:audio_service/audio_service.dart';
 import 'subsonic_api.dart';
 import 'audio_player_service.dart';
+import 'audio_cache.dart';
+import 'image_cache_manager.dart';
 import 'audio_handler.dart';
 import 'settings_service.dart';
 import 'playback_persistence.dart';
@@ -97,6 +99,7 @@ class AppState extends ChangeNotifier {
         _api!,
         _settingsService!,
         persistence: _persistenceService,
+        audioCache: AudioCache(namespace: serverUrl),
       );
 
       // Initialize audio service for native controls
@@ -159,6 +162,15 @@ class AppState extends ChangeNotifier {
       debugPrint('Error initializing audio service: $e');
       // Don't throw - app should still work without native controls
     }
+  }
+
+  /// Removes downloaded audio, cached library data and cover art.
+  Future<void> clearCaches() async {
+    await Future.wait([
+      if (_audioPlayerService != null) _audioPlayerService!.clearAudioCache(),
+      if (_api != null) _api!.clearCache(),
+      ImageCacheManager.clearCache(),
+    ]);
   }
 
   Future<void> loadAlbums() async {

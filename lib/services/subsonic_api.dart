@@ -135,6 +135,13 @@ class SubsonicApi {
     }
   }
 
+  static Object? _albumsToJson(List<Album> albums) =>
+      albums.map((a) => a.toJson()).toList();
+
+  static List<Album> _albumsFromJson(dynamic json) => (json as List<dynamic>)
+      .map((a) => Album.fromJson(a as Map<String, dynamic>))
+      .toList();
+
   Future<List<Album>> getAlbumList() async {
     return await _cache.getOrFetch<List<Album>>(
       'getAlbumList2',
@@ -153,6 +160,8 @@ class SubsonicApi {
       },
       cacheDuration: const Duration(minutes: 3),
       usePersistentCache: true,
+      toJson: _albumsToJson,
+      fromJson: _albumsFromJson,
     );
   }
 
@@ -178,6 +187,8 @@ class SubsonicApi {
       },
       cacheDuration: const Duration(minutes: 10),
       usePersistentCache: true,
+      toJson: (album) => album.toJson(),
+      fromJson: (json) => Album.fromJson(json as Map<String, dynamic>),
     );
   }
 
@@ -298,6 +309,8 @@ class SubsonicApi {
       },
       cacheDuration: const Duration(minutes: 5),
       usePersistentCache: true,
+      toJson: (result) => result.toJson(),
+      fromJson: (json) => SearchResult.fromJson(json as Map<String, dynamic>),
     );
   }
 
@@ -329,6 +342,10 @@ class SubsonicApi {
       },
       cacheDuration: const Duration(minutes: 15),
       usePersistentCache: true,
+      toJson: (artists) => artists.map((a) => a.toJson()).toList(),
+      fromJson: (json) => (json as List<dynamic>)
+          .map((a) => Artist.fromJson(a as Map<String, dynamic>))
+          .toList(),
     );
   }
 
@@ -356,6 +373,8 @@ class SubsonicApi {
       },
       cacheDuration: const Duration(minutes: 10),
       usePersistentCache: true,
+      toJson: _albumsToJson,
+      fromJson: _albumsFromJson,
     );
   }
 
@@ -814,6 +833,24 @@ class Artist {
   int get hashCode {
     return Object.hash(id, name, coverArt, albumCount);
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'coverArt': coverArt,
+      'albumCount': albumCount,
+    };
+  }
+
+  static Artist fromJson(Map<String, dynamic> json) {
+    return Artist(
+      id: json['id'] ?? '',
+      name: json['name'] ?? '',
+      coverArt: json['coverArt'],
+      albumCount: json['albumCount'],
+    );
+  }
 }
 
 class SearchResult {
@@ -882,6 +919,26 @@ class SearchResult {
     }
 
     return result;
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'artists': artists.map((a) => a.toJson()).toList(),
+      'albums': albums.map((a) => a.toJson()).toList(),
+      'songs': songs.map((s) => s.toJson()).toList(),
+    };
+  }
+
+  static SearchResult fromJson(Map<String, dynamic> json) {
+    List<T> parse<T>(String key, T Function(Map<String, dynamic>) f) =>
+        (json[key] as List<dynamic>? ?? [])
+            .map((e) => f(e as Map<String, dynamic>))
+            .toList();
+    return SearchResult(
+      artists: parse('artists', Artist.fromJson),
+      albums: parse('albums', Album.fromJson),
+      songs: parse('songs', Song.fromJson),
+    );
   }
 
   bool get isEmpty => artists.isEmpty && albums.isEmpty && songs.isEmpty;

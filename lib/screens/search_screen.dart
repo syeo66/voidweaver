@@ -297,6 +297,7 @@ class _SearchScreenState extends State<SearchScreen>
         backgroundImage: artist.coverArt != null
             ? CachedNetworkImageProvider(
                 context.read<AppState>().api!.getCoverArtUrl(artist.coverArt!),
+                cacheKey: artist.coverArt,
               )
             : null,
         child: artist.coverArt == null ? const Icon(Icons.person) : null,
@@ -322,6 +323,7 @@ class _SearchScreenState extends State<SearchScreen>
           ? CachedNetworkImage(
               imageUrl:
                   context.read<AppState>().api!.getCoverArtUrl(album.coverArt!),
+              cacheKey: album.coverArt,
               width: 50,
               height: 50,
               fit: BoxFit.cover,
@@ -358,6 +360,7 @@ class _SearchScreenState extends State<SearchScreen>
           ? CachedNetworkImage(
               imageUrl:
                   context.read<AppState>().api!.getCoverArtUrl(song.coverArt!),
+              cacheKey: song.coverArt,
               width: 50,
               height: 50,
               fit: BoxFit.cover,

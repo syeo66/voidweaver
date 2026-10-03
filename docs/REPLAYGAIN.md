@@ -109,7 +109,7 @@ if (preventClipping && peak > 0) {
 - **Efficient requests**: Only downloads first 64KB of files for metadata
 - **Caching**: ReplayGain data attached to Song objects for reuse
 - **Instant volume application**: ReplayGain volume is applied before audio playback starts, eliminating audible volume changes
-- **Preloading integration**: ReplayGain metadata cached during background preloading for immediate volume-correct playback
+- **Preloading integration**: When upcoming tracks are downloaded to the audio cache, ReplayGain metadata is read from the downloaded file (`ReplayGainReader.readFromFile`), so cached tracks need no extra network request and play volume-correct even offline
 - **Asynchronous processing**: Metadata extraction doesn't block audio playback
 - **Error handling**: Graceful fallback when metadata extraction fails
 - **Optimized code quality**: Zero analyzer warnings with const constructors for minimal widget rebuilds

@@ -41,7 +41,7 @@ flutter test --verbose
 
 ## Test Coverage
 
-### Current Status: 172/172 Tests Passing ✅
+### Current Status: 199/199 Tests Passing ✅
 
 #### Data Models (6 tests)
 - Song class construction and equality
@@ -65,12 +65,26 @@ flutter test --verbose
 - Input sanitization (control characters, malformed data)
 - Security edge cases and attack prevention
 
-#### API Caching (7 tests)  
+#### API Caching (11 tests)
 - Cache storage and retrieval
 - Request deduplication
 - Cache expiration and invalidation
 - Persistent vs memory caching
 - Cache statistics and management
+- Typed data persisted across instances via `toJson`/`fromJson` codecs
+- Stale data served when a fetch fails (memory and persistent)
+- Errors rethrown when nothing is cached
+
+#### Audio File Cache (7 tests)
+- Downloading a song and serving it from disk
+- Deduplication of concurrent downloads
+- Rejection of failed responses and Subsonic error documents
+- Index restoration on startup and removal of partial downloads
+- Least-recently-used eviction over the size limit
+- Namespace isolation between servers
+- Clearing the cache
+
+Uses `MockClient` from `package:http/testing.dart` and a temporary directory, so no network or plugins are needed.
 
 #### Sleep Timer (6 tests)
 - Timer start functionality
@@ -184,7 +198,7 @@ AudioPlayerService(api, settings, audioPlayer: mockAudioPlayer)
 
 ### Test-Friendly Design
 
-- **Optional dependencies** - AudioPlayer and ScrobbleQueue are optional parameters with defaults
+- **Optional dependencies** - AudioPlayer, ScrobbleQueue and AudioCache are optional parameters with defaults
 - **Stream mocking** - Complete audio stream simulation
 - **Resource management** - Proper cleanup in tearDown methods
 - **Realistic scenarios** - Tests cover real-world usage patterns
