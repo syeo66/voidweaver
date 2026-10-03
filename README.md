@@ -18,7 +18,7 @@ A high-quality Flutter music player application that streams music from your per
   - Track or Album normalization modes
   - Preamp control for personal preference
   - Works with MP3, FLAC, and OGG files
-- **Native Media Controls**: Reliable control from lock screen, notification panel, and Bluetooth devices with comprehensive audio focus management ensuring single-press reliability
+- **Native Media Controls**: Reliable control from lock screen, notification panel, and Bluetooth devices
 - **Interactive Progress**: Tap or drag to seek to any position in tracks
 - **Sleep Timer**: Auto-pause with preset durations (5min to 2 hours)
 - **Offline-Resilient Playback**: The next 3 tracks are downloaded to disk while you listen, so playback continues through network outages; when offline, playback skips ahead to the next downloaded track
@@ -44,7 +44,7 @@ A high-quality Flutter music player application that streams music from your per
 - **Persistent Scrobble Queue**: Never lose play counts due to network issues - scrobble requests are queued, persisted, and automatically retried with exponential backoff. Continues working even when offline, processing queued requests when network returns.
 - **Robust Error Handling**: Graceful recovery from network issues and widget failures
 - **Background Sync**: Automatic library updates every 5 minutes
-- **Modern Dependencies**: Regularly updated dependencies with comprehensive testing (199 test suite, last updated October 2026)
+- **Modern Dependencies**: Regularly updated dependencies with comprehensive testing (197 test suite, last updated October 2026)
 - **just_audio Integration**: Enhanced audio performance with dual state synchronization for reliable Bluetooth and native media controls
 - **Persistent State Management**: Playlist and playback position automatically saved with validation and error recovery
 
@@ -130,7 +130,7 @@ Control your music from anywhere with full reliability:
 - **Notification Panel**: Persistent media controls in notification area  
 - **Bluetooth Devices**: Headphone buttons and car stereo controls work perfectly with single-press reliability
 - **Background Playback**: Continues playing when app is backgrounded
-- **Audio Focus Management**: Intelligent handling prevents conflicts and ensures consistent behavior across all control interfaces
+- **Audio Focus**: Handled by just_audio, pausing on interruptions (calls, other media) and resuming after transient ones
 
 ## Troubleshooting
 

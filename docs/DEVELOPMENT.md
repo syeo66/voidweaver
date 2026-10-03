@@ -25,7 +25,7 @@ The project includes a Makefile for streamlined development workflows:
 
 ### Code Quality
 - `flutter analyze` - Static analysis (currently 0 issues)
-- `flutter test` - Run test suite (199 passing with comprehensive just_audio mocks, Bluetooth controls validation, scrobble queue and cache testing)
+- `flutter test` - Run test suite (197 passing with comprehensive just_audio mocks, Bluetooth controls validation, scrobble queue and cache testing)
 - `flutter pub deps` - Check dependency graph including HTTP/2 support
 - `flutter test test/utils/validators_test.dart` - Run input validation tests specifically
 - `flutter test test/widgets/error_boundary_test.dart` - Run error boundary tests specifically
@@ -67,11 +67,11 @@ Voidweaver uses a clean, optimized architecture with:
 
 ```bash
 flutter analyze          # Static analysis (currently 0 issues)
-flutter test             # Run tests (199/199 passing)
+flutter test             # Run tests (197/197 passing)
 flutter test --coverage  # Run tests with coverage report
 ```
 
-**Test Coverage**: 199 comprehensive tests covering:
+**Test Coverage**: 197 comprehensive tests covering:
 - Data model validation (Song, Album, Artist, SearchResult)
 - Utility functions (time formatting, ReplayGain parsing, URL validation)
 - Sleep timer functionality with comprehensive edge case testing
@@ -204,14 +204,14 @@ flutter test --coverage  # Run tests with coverage report
 - **just_audio backend**: Migrated from audioplayers to just_audio for improved ExoPlayer integration and enhanced Bluetooth support
 - **Dual State Architecture**: VoidweaverAudioHandler uses both AudioPlayerService state updates and direct just_audio PlayerState listening for reliable media controls
 - **Skip State Masking**: During skip operations, masks transient paused states from audio_service to prevent Bluetooth control confusion
-- **Audio Focus Optimization**: Removes interfering audio focus requests during skip operations to improve reliability
+- **Audio Focus**: Owned entirely by just_audio (via audio_session), which pauses on interruptions and resumes after transient ones. Don't request focus from app or native code; a second focus listener competes with just_audio's and stops playback from resuming after interruptions
 - Audio service initializes automatically when server is configured in AppState
 - VoidweaverAudioHandler manages communication between AudioPlayerService and system controls using audio_service
 - MediaItem updates occur automatically when tracks change
 - PlayerState monitoring: Uses just_audio's playerStateStream for real-time state synchronization
 - Graceful fallback ensures app works without native controls if initialization fails
 - Import conflicts resolved using namespace aliases (audio_player_service.dart as aps)
-- **Bluetooth Controls**: Skip operations now work reliably; minor play-after-pause issue remains (see [BLUETOOTH_CONTROLS.md](BLUETOOTH_CONTROLS.md) and TODO.md)
+- **Bluetooth Controls**: Skip and play-after-pause work reliably (see [BLUETOOTH_CONTROLS.md](BLUETOOTH_CONTROLS.md))
 
 ## Advanced Skip Protection Architecture
 
@@ -275,10 +275,18 @@ The app uses `audio_service` package for native media controls, requiring specif
 ```kotlin
 package com.example.voidweaver
 
+import io.flutter.embedding.engine.FlutterEngine
 import com.ryanheise.audioservice.AudioServiceActivity
 
-class MainActivity : AudioServiceActivity()
+class MainActivity : AudioServiceActivity() {
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        createNotificationChannel() // "com.voidweaver.audio" media controls channel
+    }
+}
 ```
+
+`MainActivity` must not handle audio focus; just_audio does that.
 
 #### AndroidManifest.xml Permissions
 ```xml
@@ -286,6 +294,10 @@ class MainActivity : AudioServiceActivity()
 <uses-permission android:name="android.permission.WAKE_LOCK" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+<uses-permission android:name="android.permission.BLUETOOTH" />
+<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+<uses-permission android:name="android.permission.MEDIA_CONTENT_CONTROL" />
 ```
 
 #### AndroidManifest.xml Service Configuration
@@ -307,7 +319,7 @@ class MainActivity : AudioServiceActivity()
 ```
 
 ### Key Configuration Files
-- `android/app/src/main/kotlin/com/example/voidweaver/MainActivity.kt` - AudioServiceActivity integration
+- `android/app/src/main/kotlin/com/example/voidweaver/MainActivity.kt` - AudioServiceActivity integration and notification channel
 - `android/app/src/main/AndroidManifest.xml` - Permissions and service declarations
 
 ## Important Implementation Details

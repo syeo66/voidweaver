@@ -4,20 +4,17 @@
 **All critical issues have been resolved! ✅**
 
 ## 🔧 Core Functionality Gaps
-- [x] **Fix bluetooth controls** - ✅ **FULLY FIXED** - Implemented comprehensive audio focus handling improvements:
+- [x] **Fix bluetooth controls** - ✅ **FULLY FIXED** - Implemented state masking and state synchronization improvements:
   - [x] **Skip commands pause instead of advancing** - ✅ **FIXED** - Skip operations now work reliably with state masking during transitions
-  - [x] **Play command requires double-press after pause** - ✅ **FIXED** - Implemented delayed audio focus requests and improved focus change handling to prevent conflicts
+  - [x] **Play command requires double-press after pause** - ✅ **FIXED** - Audio focus is left to just_audio/audio_session (a separate native focus request competed with it)
   - [x] **State synchronization issues** - ✅ **FIXED** - Implemented dual state architecture with direct just_audio PlayerState listening
   - [x] **Skip operation race conditions** - ✅ **FIXED** - Skip protection preserved while allowing proper state updates to audio_service
   
 ### Technical Fixes Implemented:
   - [x] **Skip state masking** - During skip operations, mask transient paused states from audio_service
   - [x] **Dual state listening** - VoidweaverAudioHandler listens directly to just_audio PlayerState for real-time updates
-  - [x] **Audio focus optimization** - Removed audio focus requests during skip operations
   - [x] **Processing state masking** - Show consistent ready state during skip transitions
-  - [x] **Delayed audio focus requests** - Request audio focus with 100ms delay after play to prevent immediate conflicts
-  - [x] **Focus state tracking** - Track audio focus state to avoid unnecessary requests
-  - [x] **Grace period for focus changes** - Android-side grace period (300ms) to ignore focus changes immediately after requests
+  - [x] **Single audio focus owner** - Removed the custom native focus request so just_audio can pause and resume around interruptions
 
 ## 🎨 UI/UX Improvements
 
@@ -76,13 +73,13 @@
 ## 🧪 Testing & Quality
 
 ### Test Coverage
-- [x] **Unit tests** - ✅ Comprehensive test suite (199 passing) covering data models, utilities, sleep timer, caching functionality, input validation, Bluetooth controls, network timeout handling, and scrobble queue persistence
+- [x] **Unit tests** - ✅ Comprehensive test suite (197 passing) covering data models, utilities, sleep timer, caching functionality, input validation, Bluetooth controls, network timeout handling, and scrobble queue persistence
 - [x] **Mock infrastructure** - ✅ Robust AudioPlayer mocking system for reliable testing
 - [x] **Testable architecture** - ✅ Refactored AudioPlayerService with dependency injection
 - [x] **Caching system tests** - ✅ 11 tests for API cache, request deduplication, cache invalidation, persistent codecs and stale-data fallback, plus 7 tests for the audio file cache
 - [x] **Input validation tests** - ✅ Added 37 comprehensive tests covering all validation scenarios, edge cases, and security concerns
 - [x] **Memory leak prevention tests** - ✅ Added 8 comprehensive tests covering service disposal, timer cleanup, stream subscription management, and resource safety
-- [x] **Bluetooth controls tests** - ✅ Added 5 comprehensive tests covering audio focus management, delayed requests, state tracking, and conflict prevention
+- [x] **Bluetooth controls tests** - ✅ Added tests covering native control delegation
 - [x] **Network timeout handling tests** - ✅ Added 19 comprehensive tests covering timeout configuration, retry logic, exponential backoff, error categorization, settings integration, and user-friendly error message generation
 - [x] **Scrobble queue tests** - ✅ Added 19 comprehensive tests covering queue persistence, retry logic, network failure handling, request ordering, and graceful degradation
 - [x] **Dependency compatibility testing** - ✅ All tests validated after dependency updates (December 2025) to ensure no regressions with scrobble queue implementation

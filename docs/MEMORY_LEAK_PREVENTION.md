@@ -73,21 +73,22 @@ void dispose() {
 - Connection pool cleanup
 
 ### VoidweaverAudioHandler
-**Location:** `lib/services/audio_handler.dart:223-228`
+**Location:** `lib/services/audio_handler.dart:254-258`
 
 Cleans up native audio control resources:
 ```dart
 void dispose() {
-  _abandonAudioFocus();
-  _audioPlayerService.removeListener(_updatePlaybackState);
+  _audioPlayerService.removeListener(_updateMediaItem);
   _positionSubscription.cancel();
+  _directPlayerStateSubscription.cancel();
 }
 ```
 
 **Resources managed:**
-- Audio focus release
 - Listener removal
-- Position subscription cleanup
+- Position and player state subscription cleanup
+
+Audio focus is owned and released by just_audio, so the handler has none to release.
 
 ## Widget-Level Disposal
 

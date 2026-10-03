@@ -15,15 +15,12 @@ After migrating from `audioplayers` to `just_audio`, Bluetooth controls experien
 ### Root Cause
 During skip operations, `just_audio` temporarily shows `playing=false` while transitioning between tracks. This transient state was being reported to `audio_service`, confusing Bluetooth systems which interpreted it as "user paused playback."
 
-## Solution: Comprehensive Audio Focus Management
+## Solution: Skip State Masking
 
 ### Implementation Strategy
 1. **Skip State Masking** - During skip operations, mask transient paused states from reaching `audio_service`
 2. **Direct PlayerState Listening** - `VoidweaverAudioHandler` subscribes directly to `just_audio` PlayerState for real-time updates
-3. **Delayed Audio Focus Requests** - Request audio focus with 100ms delay after play to prevent immediate conflicts
-4. **Focus State Tracking** - Track audio focus state to avoid unnecessary duplicate requests
-5. **Grace Period Handling** - Android-side grace period (300ms) to ignore focus changes immediately after requests
-6. **Processing State Consistency** - Show consistent ready state during track transitions
+3. **Processing State Consistency** - Show consistent ready state during track transitions
 
 ### Technical Details
 
@@ -70,61 +67,19 @@ class AudioPlayerService extends ChangeNotifier {
 }
 ```
 
-#### Audio Focus Management
-Implemented sophisticated audio focus handling to prevent conflicts:
+#### Audio Focus
+Audio focus is owned entirely by `just_audio`, which requests it through
+`audio_session` when playback starts and handles interruptions itself: it
+pauses when another app takes focus and resumes when a transient interruption
+ends.
 
-```dart
-@override
-Future<void> play() async {
-  // Start playback immediately to avoid delays
-  await _audioPlayerService.play();
-  
-  // Request audio focus with a slight delay to avoid immediate conflicts
-  _requestAudioFocusDelayed();
-}
-
-void _requestAudioFocusDelayed() {
-  _focusRequestTimer?.cancel();
-  _focusRequestTimer = Timer(const Duration(milliseconds: 100), () {
-    _requestAudioFocus();
-  });
-}
-
-void _requestAudioFocus() async {
-  if (_hasAudioFocus) {
-    return; // Already have focus
-  }
-  
-  // Check if we already have system focus
-  final hasSystemFocus = await _audioFocusChannel.invokeMethod('hasAudioFocus');
-  if (hasSystemFocus == true) {
-    _hasAudioFocus = true;
-    return;
-  }
-  
-  // Request new focus
-  final result = await _audioFocusChannel.invokeMethod('requestAudioFocus');
-  _hasAudioFocus = (result == true);
-}
-```
-
-#### Android-Side Grace Period
-```kotlin
-private fun handleAudioFocusChange(focusChange: Int) {
-  val timeSinceRequest = System.currentTimeMillis() - lastFocusRequestTime
-  
-  when (focusChange) {
-    AudioManager.AUDIOFOCUS_LOSS,
-    AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-      if (timeSinceRequest > FOCUS_CHANGE_GRACE_PERIOD_MS) {
-        // Handle focus loss
-      } else {
-        // Ignore - too soon after request (likely a conflict)
-      }
-    }
-  }
-}
-```
+The app must not request focus on its own (an earlier version did, through a
+`voidweaver/audio_focus` method channel in `MainActivity`). Android treats each
+focus listener as a separate client even within one app, so a second request
+pushed `just_audio`'s listener down the focus stack. When an interruption
+ended, Android handed focus back to the app's own listener, which did nothing,
+so `just_audio` never heard that the interruption was over and playback
+didn't resume.
 
 ## Current Status: ✅ FULLY RESOLVED
 
@@ -132,7 +87,7 @@ private fun handleAudioFocusChange(focusChange: Int) {
 - **Skip Operations**: Work reliably - no more pause-instead-of-skip
 - **Play After Pause**: Single press now resumes playback immediately
 - **State Synchronization**: Dual architecture provides consistent state updates
-- **Audio Focus Conflicts**: Eliminated through delayed requests and grace periods
+- **Audio Focus**: Left to just_audio/audio_session so interruptions pause and resume correctly
 - **Race Conditions**: Skip protection preserved while allowing proper state updates
 
 ## Testing
@@ -147,7 +102,6 @@ private fun handleAudioFocusChange(focusChange: Int) {
 - Pause/Play: ✅ Single press resumes playback immediately
 - State consistency: ✅ MediaItem and PlaybackState stay synchronized
 - Race conditions: ✅ No double-skipping or state confusion
-- Audio focus conflicts: ✅ Eliminated through intelligent timing
 
 ## Architecture Benefits
 
@@ -159,7 +113,7 @@ private fun handleAudioFocusChange(focusChange: Int) {
 ## Architecture Achievements
 
 1. **Complete Bluetooth Reliability**: All Bluetooth control operations work as expected
-2. **Robust Audio Focus Management**: Intelligent handling prevents conflicts across all scenarios
+2. **Single Audio Focus Owner**: just_audio handles focus and interruptions
 3. **Comprehensive State Management**: Dual architecture ensures consistent behavior
 4. **Production Ready**: Thoroughly tested and validated on real devices
 
@@ -167,5 +121,5 @@ private fun handleAudioFocusChange(focusChange: Int) {
 
 - `lib/services/audio_handler.dart` - Main implementation of dual state architecture
 - `lib/services/audio_player_service.dart` - Exposes necessary state for masking
-- `test/services/bluetooth_controls_test.dart` - Comprehensive validation tests (5 test cases)
+- `test/services/bluetooth_controls_test.dart` - Native control delegation tests
 - `TODO.md` - Current status and remaining issues

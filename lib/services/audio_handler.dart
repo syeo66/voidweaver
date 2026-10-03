@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'audio_player_service.dart' as aps;
 import 'subsonic_api.dart';
@@ -11,15 +10,9 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
   final SubsonicApi _api;
   late StreamSubscription _positionSubscription;
   late StreamSubscription _directPlayerStateSubscription;
-  static const MethodChannel _audioFocusChannel =
-      MethodChannel('voidweaver/audio_focus');
 
   // State masking for skip operations
   bool _lastKnownPlayingState = false;
-
-  // Audio focus management
-  bool _hasAudioFocus = false;
-  Timer? _focusRequestTimer;
 
   VoidweaverAudioHandler(this._audioPlayerService, this._api) {
     _init();
@@ -184,12 +177,11 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> play() async {
     debugPrint('[native_controls] Play requested from native controls');
-
-    // Start playback immediately to avoid delays
+    // Audio focus and interruptions (calls, other media) are handled by
+    // just_audio through audio_session. Don't request focus separately here:
+    // a second focus listener in the same app competes with just_audio's and
+    // prevents it from being told when an interruption ends.
     await _audioPlayerService.play();
-
-    // Request audio focus with a slight delay to avoid immediate conflicts
-    _requestAudioFocusDelayed();
   }
 
   @override
@@ -201,13 +193,11 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> stop() async {
     await _audioPlayerService.stop();
-    await _abandonAudioFocus();
   }
 
   @override
   Future<void> skipToNext() async {
     debugPrint('[native_controls] Skip next requested from native controls');
-    // Don't request audio focus during skip - app should already have it if playing
     await _audioPlayerService.next();
   }
 
@@ -215,7 +205,6 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> skipToPrevious() async {
     debugPrint(
         '[native_controls] Skip previous requested from native controls');
-    // Don't request audio focus during skip - app should already have it if playing
     await _audioPlayerService.previous();
   }
 
@@ -262,63 +251,7 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
     await _audioPlayerService.seekTo(clampedPosition);
   }
 
-  /// Request audio focus to ensure this app receives media button events
-  void _requestAudioFocus() async {
-    if (_hasAudioFocus) {
-      debugPrint(
-          '[native_controls] Already have audio focus, skipping request');
-      return;
-    }
-
-    // Check if we already have audio focus from the system's perspective
-    try {
-      final hasSystemFocus =
-          await _audioFocusChannel.invokeMethod('hasAudioFocus');
-      if (hasSystemFocus == true) {
-        _hasAudioFocus = true;
-        debugPrint('[native_controls] Already have system audio focus');
-        return;
-      }
-    } catch (e) {
-      debugPrint('[native_controls] Could not check audio focus state: $e');
-    }
-
-    // Make this non-blocking to prevent interference with playback
-    _audioFocusChannel.invokeMethod('requestAudioFocus').then((result) {
-      if (result == true) {
-        _hasAudioFocus = true;
-        debugPrint('[native_controls] Audio focus granted');
-      } else {
-        debugPrint('[native_controls] Audio focus denied');
-      }
-    }).catchError((e) {
-      debugPrint('[native_controls] Failed to request audio focus: $e');
-    });
-  }
-
-  /// Request audio focus with a delay to prevent immediate conflicts
-  void _requestAudioFocusDelayed() {
-    _focusRequestTimer?.cancel();
-    _focusRequestTimer = Timer(const Duration(milliseconds: 100), () {
-      _requestAudioFocus();
-    });
-  }
-
-  /// Abandon audio focus when stopping playback
-  Future<void> _abandonAudioFocus() async {
-    _focusRequestTimer?.cancel();
-    try {
-      await _audioFocusChannel.invokeMethod('abandonAudioFocus');
-      _hasAudioFocus = false;
-      debugPrint('[native_controls] Audio focus abandoned');
-    } catch (e) {
-      debugPrint('[native_controls] Failed to abandon audio focus: $e');
-    }
-  }
-
   void dispose() {
-    _focusRequestTimer?.cancel();
-    _abandonAudioFocus();
     _audioPlayerService.removeListener(_updateMediaItem);
     _positionSubscription.cancel();
     _directPlayerStateSubscription.cancel();
