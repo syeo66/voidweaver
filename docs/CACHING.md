@@ -412,7 +412,7 @@ try {
 10. **Stale Persistent Fallback**: Same, after a restart
 11. **Error Propagation**: Fetch errors rethrown when nothing is cached
 
-`test/services/audio_cache_test.dart` (7 tests): downloads, download deduplication, rejection of failed responses and error documents, index restoration and partial-file cleanup, LRU eviction, server namespacing, and clearing.
+`test/services/audio_cache_test.dart` (8 tests): downloads, download deduplication, rejection of failed responses and error documents, index restoration and partial-file cleanup, LRU eviction, server namespacing, externally deleted files, and clearing.
 
 ## Best Practices
 

@@ -72,12 +72,8 @@ class AudioCache {
 
   /// Returns the cached file for [songId], or null if it isn't fully cached.
   File? getCachedFile(String songId) {
-    final file = _index[_keyFor(songId)];
+    final file = _existingFile(songId);
     if (file == null) return null;
-    if (!file.existsSync()) {
-      _index.remove(_keyFor(songId));
-      return null;
-    }
     // Mark as recently used for LRU eviction
     try {
       file.setLastModifiedSync(DateTime.now());
@@ -85,7 +81,20 @@ class AudioCache {
     return file;
   }
 
-  bool isCached(String songId) => _index.containsKey(_keyFor(songId));
+  /// Whether [songId] is cached, without marking it as recently used.
+  bool isCached(String songId) => _existingFile(songId) != null;
+
+  /// Indexed file for [songId], dropping the entry if the OS deleted it.
+  File? _existingFile(String songId) {
+    final key = _keyFor(songId);
+    final file = _index[key];
+    if (file == null) return null;
+    if (!file.existsSync()) {
+      _index.remove(key);
+      return null;
+    }
+    return file;
+  }
 
   /// Downloads [songId] from [url] unless it's already cached or in flight.
   /// Returns the cached file, or null if the download failed.

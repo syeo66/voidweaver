@@ -119,6 +119,18 @@ void main() {
       expect(serverB.isCached('1'), isFalse);
     });
 
+    test('treats files deleted outside the cache as not cached', () async {
+      final cache = createCache(audioClient());
+      final file = await cache.prefetch('song1', 'https://x/s');
+
+      await file!.delete();
+
+      expect(cache.isCached('song1'), isFalse);
+      await cache.prefetch('song1', 'https://x/s');
+      expect(cache.isCached('song1'), isTrue);
+      expect(requestCount, 2);
+    });
+
     test('clear removes all cached files', () async {
       final cache = createCache(audioClient());
       await cache.prefetch('song1', 'https://x/s');
