@@ -33,6 +33,10 @@ class ReplayGainData {
 class ReplayGainReader {
   static const int _maxHeaderSize = 256 * 1024; // Read first 256KB for metadata
 
+  // Upper bound when a tag is larger than the initial read (e.g. huge cover
+  // art placed before the ReplayGain frames)
+  static const int _maxMetadataSize = 16 * 1024 * 1024;
+
   /// Logs to both the console (debug builds) and the persistent ReplayGain
   /// debug log (only when the user has enabled it in Settings).
   static void _log(String message) {
@@ -56,10 +60,21 @@ class ReplayGainReader {
         return const ReplayGainData();
       }
 
-      final bytes = response.bodyBytes;
+      var bytes = response.bodyBytes;
       if (bytes.isNotEmpty) {
         _log(
             'Received ${bytes.length} bytes, first 16 bytes: ${bytes.take(16).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
+        final required = requiredHeaderSize(bytes);
+        if (response.statusCode == 206 && required > bytes.length) {
+          _log('Metadata extends to $required bytes, fetching the rest');
+          final rest = await http.get(
+            Uri.parse(url),
+            headers: {'Range': 'bytes=${bytes.length}-${required - 1}'},
+          );
+          if (rest.statusCode == 206) {
+            bytes = Uint8List.fromList([...bytes, ...rest.bodyBytes]);
+          }
+        }
         return _parseReplayGainFromBytes(bytes);
       } else {
         _log('Received empty response');
@@ -78,8 +93,14 @@ class ReplayGainReader {
       _log('Reading ReplayGain metadata from cached file: ${file.path}');
       final raf = await file.open();
       try {
-        final bytes = await raf.read(_maxHeaderSize);
+        var bytes = await raf.read(_maxHeaderSize);
         if (bytes.isEmpty) return const ReplayGainData();
+        final required = requiredHeaderSize(bytes);
+        if (required > bytes.length) {
+          _log('Metadata extends to $required bytes, reading the rest');
+          await raf.setPosition(0);
+          bytes = await raf.read(required);
+        }
         return _parseReplayGainFromBytes(bytes);
       } finally {
         await raf.close();
@@ -89,6 +110,57 @@ class ReplayGainReader {
       return const ReplayGainData();
     }
   }
+
+  /// Returns how many leading bytes are needed to cover the file's metadata,
+  /// based on the ID3v2 tag size or the end of the MP4 'moov' atom. Returns
+  /// [bytes.length] when the size can't be determined or is unreasonable.
+  @visibleForTesting
+  static int requiredHeaderSize(Uint8List bytes) {
+    int required = bytes.length;
+
+    if (bytes.length >= 10 &&
+        bytes[0] == 0x49 &&
+        bytes[1] == 0x44 &&
+        bytes[2] == 0x33) {
+      // ID3v2: synchsafe tag size + 10 byte header (+10 byte footer if flagged)
+      final tagSize =
+          (bytes[6] << 21) | (bytes[7] << 14) | (bytes[8] << 7) | bytes[9];
+      final hasFooter = (bytes[5] & 0x10) != 0;
+      required = tagSize + 10 + (hasFooter ? 10 : 0);
+    } else if (bytes.length >= 8 &&
+        bytes[4] == 0x66 &&
+        bytes[5] == 0x74 &&
+        bytes[6] == 0x79 &&
+        bytes[7] == 0x70) {
+      // MP4: walk top-level atoms until 'moov' (only works when moov precedes
+      // mdat, which is the case for files optimised for streaming)
+      int offset = 0;
+      while (offset + 8 <= bytes.length) {
+        final atomSize = (bytes[offset] << 24) |
+            (bytes[offset + 1] << 16) |
+            (bytes[offset + 2] << 8) |
+            bytes[offset + 3];
+        if (atomSize < 8) break;
+        final atomType =
+            String.fromCharCodes(bytes.sublist(offset + 4, offset + 8));
+        if (atomType == 'moov') {
+          required = offset + atomSize;
+          break;
+        }
+        if (atomType == 'mdat') break;
+        offset += atomSize;
+      }
+    }
+
+    if (required <= bytes.length || required > _maxMetadataSize) {
+      return bytes.length;
+    }
+    return required;
+  }
+
+  @visibleForTesting
+  static ReplayGainData parseBytes(Uint8List bytes) =>
+      _parseReplayGainFromBytes(bytes);
 
   static ReplayGainData _parseReplayGainFromBytes(Uint8List bytes) {
     _log('=== ReplayGain Parsing Started ===');
@@ -454,19 +526,24 @@ class ReplayGainReader {
     // Convert to string and search for ReplayGain comments
     final text = String.fromCharCodes(bytes);
 
+    // Gains may carry an explicit sign, e.g. "+2.50 dB" (rsgain, foobar2000)
     final trackGainMatch =
-        RegExp(r'REPLAYGAIN_TRACK_GAIN=(-?\d+\.?\d*)', caseSensitive: false)
+        RegExp(r'REPLAYGAIN_TRACK_GAIN=([+-]?\d+\.?\d*)', caseSensitive: false)
             .firstMatch(text);
     if (trackGainMatch != null) {
       trackGain = double.tryParse(trackGainMatch.group(1)!);
     }
 
     final albumGainMatch =
-        RegExp(r'REPLAYGAIN_ALBUM_GAIN=(-?\d+\.?\d*)', caseSensitive: false)
+        RegExp(r'REPLAYGAIN_ALBUM_GAIN=([+-]?\d+\.?\d*)', caseSensitive: false)
             .firstMatch(text);
     if (albumGainMatch != null) {
       albumGain = double.tryParse(albumGainMatch.group(1)!);
     }
+
+    // Opus files often carry only R128 gains (RFC 7845)
+    trackGain ??= _parseR128Gain(text, 'R128_TRACK_GAIN');
+    albumGain ??= _parseR128Gain(text, 'R128_ALBUM_GAIN');
 
     final trackPeakMatch =
         RegExp(r'REPLAYGAIN_TRACK_PEAK=(\d+\.?\d*)', caseSensitive: false)
@@ -495,6 +572,18 @@ class ReplayGainReader {
     }
 
     return const ReplayGainData();
+  }
+
+  /// Parses an R128 gain tag and converts it to a ReplayGain-equivalent dB
+  /// value. R128 gains are Q7.8 fixed-point integers (1/256 dB) relative to
+  /// -23 LUFS, while ReplayGain 2.0 targets -18 LUFS, hence the +5 dB offset.
+  static double? _parseR128Gain(String text, String key) {
+    final match =
+        RegExp('$key=([+-]?\\d+)', caseSensitive: false).firstMatch(text);
+    if (match == null) return null;
+    final q78 = int.tryParse(match.group(1)!);
+    if (q78 == null) return null;
+    return q78 / 256.0 + 5.0;
   }
 
   static ReplayGainData _parseMP4Tags(Uint8List bytes) {
@@ -784,14 +873,6 @@ class ReplayGainReader {
         RegExp(r'RG_ALBUM_GAIN[^-\d]*(-?\d+\.?\d*)', caseSensitive: false),
         RegExp(r'RG_TRACK_PEAK[^\d]*(\d+\.?\d*)', caseSensitive: false),
         RegExp(r'RG_ALBUM_PEAK[^\d]*(\d+\.?\d*)', caseSensitive: false),
-
-        // MP3Gain format
-        RegExp(r'mp3gain_track_gain[^-\d]*(-?\d+\.?\d*)', caseSensitive: false),
-        RegExp(r'mp3gain_album_gain[^-\d]*(-?\d+\.?\d*)', caseSensitive: false),
-
-        // R128 loudness (newer standard)
-        RegExp(r'r128_track_gain[^-\d]*(-?\d+\.?\d*)', caseSensitive: false),
-        RegExp(r'r128_album_gain[^-\d]*(-?\d+\.?\d*)', caseSensitive: false),
       ];
 
       for (final pattern in patterns) {
@@ -802,8 +883,7 @@ class ReplayGainReader {
 
           _log('Brute force found: ${match.group(0)} -> value: $value');
 
-          if (patternStr.contains('track_gain') ||
-              patternStr.contains('track_gain')) {
+          if (patternStr.contains('track_gain')) {
             trackGain ??= value; // Only set if not already found
           } else if (patternStr.contains('album_gain')) {
             albumGain ??= value;
@@ -811,31 +891,6 @@ class ReplayGainReader {
             trackPeak ??= value;
           } else if (patternStr.contains('album_peak')) {
             albumPeak ??= value;
-          }
-        }
-      }
-
-      // Also search for numeric patterns near "dB" that might be ReplayGain values
-      final dbPatterns = [
-        RegExp(r'(-?\d+\.?\d*)\s*db', caseSensitive: false),
-        RegExp(r'(-?\d+\.?\d*)\s*lufs', caseSensitive: false), // R128 loudness
-      ];
-
-      for (final pattern in dbPatterns) {
-        final matches = pattern.allMatches(textData);
-        for (final match in matches) {
-          final value = double.tryParse(match.group(1)!);
-          if (value != null && value >= -30 && value <= 15) {
-            // Reasonable ReplayGain range
-            _log(
-                'Found potential ReplayGain value: ${match.group(0)} -> $value');
-
-            // If we haven't found any gains yet, use this as track gain
-            if (trackGain == null && albumGain == null) {
-              trackGain = value;
-              _log('Assigned as track gain: $value');
-              break; // Only take the first reasonable value
-            }
           }
         }
       }

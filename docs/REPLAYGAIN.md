@@ -34,7 +34,7 @@ ReplayGain is a technical standard for normalizing the perceived loudness of aud
 ### Configuration Options
 
 #### Normalization Mode
-- **Off**: Disables ReplayGain processing (uses only preamp if set)
+- **Off**: Disables ReplayGain processing entirely (preamp and fallback gain are ignored)
 - **Track**: Normalizes each song individually for consistent volume
 - **Album**: Preserves album dynamics while normalizing overall level
 
@@ -81,6 +81,7 @@ All ReplayGain settings apply immediately to currently playing audio, allowing y
 - **Fields**: `REPLAYGAIN_TRACK_GAIN=`, `REPLAYGAIN_ALBUM_GAIN=`, etc.
 - **Format**: Standard Vorbis comment format
 - **Location**: Within FLAC metadata blocks or OGG comment headers
+- **R128 (Opus)**: If no `REPLAYGAIN_*` gains are present, `R128_TRACK_GAIN` / `R128_ALBUM_GAIN` are used. These are Q7.8 integers relative to -23 LUFS and are converted with `value / 256 + 5` dB
 
 #### APE Tags
 - **Fields**: Same naming convention as Vorbis comments
@@ -187,7 +188,6 @@ Voidweaver's ReplayGain implementation follows:
 Potential improvements for future versions:
 - **MP4/M4A metadata support** for iTunes-style ReplayGain tags
 - **Automatic ReplayGain calculation** for files without metadata
-- **EBU R128 loudness support** for broadcast-standard normalization
 - **Playlist-based normalization** for mixed content playback
 - **Advanced DSP options** for additional audio processing
 
