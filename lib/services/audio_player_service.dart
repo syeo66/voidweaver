@@ -120,8 +120,8 @@ class AudioPlayerService extends ChangeNotifier {
   DateTime? _sleepTimerStartTime;
   bool _isSleepTimerActive = false;
 
-  // Scrobble tracking
-  final Set<String> _scrobbledSongs = {};
+  // Whether the current play of the current song has been scrobbled
+  bool _currentSongScrobbled = false;
 
   AudioPlayerService(this._api, this._settingsService,
       {AudioPlayer? audioPlayer,
@@ -316,35 +316,36 @@ class AudioPlayerService extends ChangeNotifier {
       _playlistSource = savedState.playlistSource;
       _sourceId = savedState.sourceId;
 
-      // Clear scrobbled songs for new playlist
-      _scrobbledSongs.clear();
-
       if (savedState.hasValidIndex) {
         _currentSong = savedState.currentSong;
+        final resumeAt = savedState.currentPosition;
+        _currentPosition = resumeAt;
+        // Not set until playback actually resumes, see play()
+        _currentSongStartTime = null;
+
+        // Past the threshold the song was already scrobbled before the app
+        // closed (the scrobble queue persists it), so don't scrobble it again.
+        final songDuration = Duration(seconds: _currentSong!.duration ?? 0);
+        _currentSongScrobbled =
+            _hasReachedScrobbleThreshold(resumeAt, songDuration);
 
         // Set up audio source but don't auto-play. If that fails (e.g. the
         // server is unreachable) keep the restored queue and retry on play().
         try {
-          final cachedFile = _audioCache.getCachedFile(_currentSong!.id);
-          final streamUrl = _api.getStreamUrl(savedState.currentSong!.id);
-          if (cachedFile != null) {
-            await _audioPlayer.setFilePath(cachedFile.path);
-          } else {
-            await _audioPlayer.setUrl(streamUrl);
-          }
+          // Load at the saved position rather than seeking afterwards: a
+          // seek right after loading can be overtaken by load events still
+          // reporting position zero, leaving the playhead at 0:00.
+          final streamUrl = await _loadSource(_currentSong!, resumeAt);
 
           // Apply ReplayGain volume adjustment to ensure settings are applied after restoration
           await _readReplayGainAndApplyVolume(streamUrl,
-              cachedFile: cachedFile);
-
-          // Seek to saved position
-          await _audioPlayer.seek(savedState.currentPosition);
+              cachedFile: _audioCache.getCachedFile(_currentSong!.id));
         } catch (e) {
           debugPrint('Could not load restored song, will retry on play: $e');
           _needsSourceReload = true;
-          _pendingResumePosition = savedState.currentPosition;
-          _currentPosition = savedState.currentPosition;
+          _pendingResumePosition = resumeAt;
         }
+        _currentPosition = resumeAt;
 
         // Restore playback state (but don't auto-play)
         _playbackState = PlaybackState.paused; // User must manually resume
@@ -425,8 +426,6 @@ class AudioPlayerService extends ChangeNotifier {
         try {
           final fullAlbum = await _api.getAlbum(album.id);
           _playlist = fullAlbum.songs;
-          // Clear scrobbled songs for new playlist
-          _scrobbledSongs.clear();
         } catch (e) {
           debugPrint('Failed to fetch album details: $e');
           // If we can't get album details, we can't play it
@@ -438,8 +437,6 @@ class AudioPlayerService extends ChangeNotifier {
         }
       } else {
         _playlist = album.songs;
-        // Clear scrobbled songs for new playlist
-        _scrobbledSongs.clear();
       }
 
       if (_playlist.isEmpty) {
@@ -483,8 +480,6 @@ class AudioPlayerService extends ChangeNotifier {
       notifyListeners();
 
       _playlist = await _api.getRandomSongs(count);
-      // Clear scrobbled songs for new playlist
-      _scrobbledSongs.clear();
 
       if (_playlist.isEmpty) {
         _playbackState = PlaybackState.stopped;
@@ -525,8 +520,6 @@ class AudioPlayerService extends ChangeNotifier {
     notifyListeners();
 
     _playlist = [song];
-    // Clear scrobbled songs for new playlist
-    _scrobbledSongs.clear();
     _currentIndex = 0;
     _confirmedIndex = 0;
     _lastCompletedSongId = null;
@@ -543,7 +536,24 @@ class AudioPlayerService extends ChangeNotifier {
     }));
   }
 
-  Future<void> _playSongAtIndex(int index) async {
+  /// Sets the player's source to [song], from the disk cache when available,
+  /// starting at [initialPosition]. Returns the song's stream URL.
+  Future<String> _loadSource(Song song, Duration initialPosition) async {
+    final streamUrl = _api.getStreamUrl(song.id);
+    final cachedFile = _audioCache.getCachedFile(song.id);
+    if (cachedFile != null) {
+      debugPrint('Playing from audio cache: ${song.title}');
+      await _audioPlayer.setFilePath(cachedFile.path,
+          initialPosition: initialPosition);
+    } else {
+      debugPrint('Streaming from network: ${song.title}');
+      await _audioPlayer.setUrl(streamUrl, initialPosition: initialPosition);
+    }
+    return streamUrl;
+  }
+
+  Future<void> _playSongAtIndex(int index,
+      {Duration initialPosition = Duration.zero}) async {
     if (index < 0 || index >= _playlist.length) {
       debugPrint(
           '[play_song] Invalid index $index (playlist length: ${_playlist.length})');
@@ -563,20 +573,16 @@ class AudioPlayerService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final streamUrl = _api.getStreamUrl(_currentSong!.id);
-      final cachedFile = _audioCache.getCachedFile(_currentSong!.id);
-
       // Record when this song started playing and clear position tracking
       _currentSongStartTime = DateTime.now();
       _recentPositions.clear();
+      // A resumed song past the threshold was scrobbled in its earlier session
+      _currentSongScrobbled = initialPosition > Duration.zero &&
+          _hasReachedScrobbleThreshold(
+              initialPosition, Duration(seconds: _currentSong!.duration ?? 0));
 
-      if (cachedFile != null) {
-        debugPrint('Playing from audio cache: ${_currentSong!.title}');
-        await _audioPlayer.setFilePath(cachedFile.path);
-      } else {
-        debugPrint('Streaming from network: ${_currentSong!.title}');
-        await _audioPlayer.setUrl(streamUrl);
-      }
+      final streamUrl = await _loadSource(_currentSong!, initialPosition);
+      final cachedFile = _audioCache.getCachedFile(_currentSong!.id);
       _needsSourceReload = false;
 
       // Apply ReplayGain volume adjustment BEFORE starting playback
@@ -627,16 +633,21 @@ class AudioPlayerService extends ChangeNotifier {
     } else if (_currentSong != null && _needsSourceReload) {
       debugPrint(
           '[audio_player] Reloading restored song: ${_currentSong!.title}');
-      final resumeAt = _pendingResumePosition;
       try {
-        await _playSongAtIndex(_currentIndex);
-        if (resumeAt > Duration.zero) await _audioPlayer.seek(resumeAt);
+        await _playSongAtIndex(_currentIndex,
+            initialPosition: _pendingResumePosition);
       } catch (e) {
         debugPrint('[audio_player] Reload failed: $e');
       }
     } else if (_currentSong != null) {
       debugPrint(
           '[audio_player] Resuming current song: ${_currentSong!.title}');
+      if (_currentSongStartTime == null) {
+        // First play of a song restored from a previous session: it wasn't
+        // started through _playSongAtIndex, so mark it as playing now.
+        _currentSongStartTime = DateTime.now();
+        _scrobbleQueue.queueNowPlaying(_currentSong!.id);
+      }
       _startPlayback();
     } else {
       debugPrint(
@@ -1011,13 +1022,15 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   void _scrobbleCurrentSong() {
-    if (_currentSong != null && _currentSongStartTime != null) {
+    if (_currentSong != null &&
+        _currentSongStartTime != null &&
+        !_currentSongScrobbled) {
       // Send scrobble submission with the timestamp when the song started playing (queued for reliability)
       _scrobbleQueue.queueSubmission(_currentSong!.id,
           playedAt: _currentSongStartTime!);
 
-      // Mark this song as scrobbled to prevent duplicate scrobbles
-      _scrobbledSongs.add(_currentSong!.id);
+      // Mark this play as scrobbled to prevent duplicate scrobbles
+      _currentSongScrobbled = true;
     }
   }
 
@@ -1030,11 +1043,13 @@ class AudioPlayerService extends ChangeNotifier {
     if (_currentSong == null || _currentSongStartTime == null) return false;
 
     // Don't scrobble if already scrobbled
-    if (_scrobbledSongs.contains(_currentSong!.id)) return false;
+    if (_currentSongScrobbled) return false;
 
-    final playedDuration = _currentPosition;
-    final songDuration = _totalDuration;
+    return _hasReachedScrobbleThreshold(_currentPosition, _totalDuration);
+  }
 
+  bool _hasReachedScrobbleThreshold(
+      Duration playedDuration, Duration songDuration) {
     final minPlayTime = Duration(
         milliseconds:
             (_settingsService.scrobbleMinPlayTimeMinutes * 60000).round());

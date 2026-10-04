@@ -37,9 +37,19 @@ During a skip, `just_audio` briefly reports `playing=false`. Bluetooth devices t
 
 Don't request focus anywhere else, including native code. Android treats each focus listener as a separate client. An earlier `voidweaver/audio_focus` channel in `MainActivity` pushed `just_audio`'s listener down the stack, so when an interruption ended Android notified the wrong listener and playback never resumed.
 
+## Restoring playback
+
+`PlaybackPersistenceService` saves the queue, index and position (throttled to every 5 s while playing, and after every track change). On start, `restorePlaybackState()` loads the saved song paused.
+
+- The source is loaded with `initialPosition` instead of `setUrl()` followed by `seek()`. With a separate seek, load events reporting position 0 could arrive after the seek, so the playhead showed 0:00 while audio resumed at the saved position. `_currentPosition` is also set directly so the UI is right before the player reports anything.
+- If loading fails (e.g. offline at startup), `_needsSourceReload` is set and `play()` reloads the song at `_pendingResumePosition`.
+- A restored song has no `_currentSongStartTime` until it's played. The first `play()` sets it and sends "now playing", because the song didn't start through `_playSongAtIndex()`. Without a start time it would never be scrobbled.
+
 ## Scrobbling
 
-A song is scrobbled once it has played for the minimum play time (default 2 min) or the percentage threshold (default 50%), whichever comes first. Both are configurable in Settings. Each song is scrobbled at most once per play.
+A song is scrobbled once it has played for the minimum play time (default 2 min) or the percentage threshold (default 50%), whichever comes first. Both are configurable in Settings. If neither is reached, the song is still scrobbled when it completes.
+
+Each play is scrobbled at most once, tracked by `_currentSongScrobbled`. The flag is reset whenever a song starts in `_playSongAtIndex()`, so replaying a song (e.g. with Previous) scrobbles it again. Completion checks the flag too, so a song that passed the threshold isn't submitted a second time when it ends. A song restored at a position already past the threshold counts as scrobbled, since that happened in the previous session and the queue persisted it.
 
 Requests go through `ScrobbleQueue`, never directly to the API. The queue:
 

@@ -41,6 +41,8 @@ class MockAudioPlayer extends Mock implements AudioPlayer {
     // Simulate setting URL and getting duration
     _duration = const Duration(minutes: 3);
     _durationController.add(_duration);
+    _position = initialPosition ?? Duration.zero;
+    _positionController.add(_position);
     return _duration;
   }
 
@@ -49,8 +51,7 @@ class MockAudioPlayer extends Mock implements AudioPlayer {
     _currentPlayerState = PlayerState(true, ProcessingState.ready);
     _stateController.add(_currentPlayerState);
 
-    // Simulate position updates
-    _position = Duration.zero;
+    // Playback continues from the current position
     _positionController.add(_position);
   }
 
