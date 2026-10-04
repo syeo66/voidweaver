@@ -214,9 +214,9 @@ class AppState extends ChangeNotifier {
 
     notifyListeners();
 
-    // Reset to idle after 3 seconds
+    // Reset success to idle after 3 seconds; errors persist until the next sync
     Timer(const Duration(seconds: 3), () {
-      if (_syncStatus != SyncStatus.syncing) {
+      if (_syncStatus == SyncStatus.success) {
         _syncStatus = SyncStatus.idle;
         notifyListeners();
       }
