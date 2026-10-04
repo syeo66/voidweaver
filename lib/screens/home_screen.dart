@@ -21,8 +21,20 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const int _nowPlayingTabIndex = 2;
+
   int _currentIndex = 0;
   bool _isPlayingRandomSongs = false;
+
+  // Incremented whenever the 'Now Playing' tab is tapped so the playlist
+  // scrolls to the current track, even if the tab is already selected.
+  final ValueNotifier<int> _scrollToCurrentTrackRequest = ValueNotifier(0);
+
+  @override
+  void dispose() {
+    _scrollToCurrentTrackRequest.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -172,6 +184,9 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(() {
             _currentIndex = index;
           });
+          if (index == _nowPlayingTabIndex) {
+            _scrollToCurrentTrackRequest.value++;
+          }
         },
         items: const [
           BottomNavigationBarItem(
@@ -200,7 +215,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
         return ChangeNotifierProvider.value(
           value: appState.audioPlayerService!,
-          child: _NowPlayingContent(appState: appState),
+          child: _NowPlayingContent(
+            appState: appState,
+            scrollToCurrentTrackRequest: _scrollToCurrentTrackRequest,
+          ),
         );
       },
     );
@@ -221,11 +239,13 @@ class _StaticPlaylistInfo extends StatefulWidget {
   final AudioPlayerService playerService;
   final SubsonicApi api;
   final bool isCompact;
+  final Listenable? scrollToCurrentTrackRequest;
 
   const _StaticPlaylistInfo({
     required this.playerService,
     required this.api,
     this.isCompact = false,
+    this.scrollToCurrentTrackRequest,
   });
 
   @override
@@ -243,13 +263,31 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
     _currentPlaylist = widget.playerService.playlist;
     _currentIndex = widget.playerService.currentIndex;
     widget.playerService.addListener(_onPlayerServiceChanged);
+    widget.scrollToCurrentTrackRequest?.addListener(_onScrollRequested);
+  }
+
+  @override
+  void didUpdateWidget(_StaticPlaylistInfo oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.scrollToCurrentTrackRequest !=
+        widget.scrollToCurrentTrackRequest) {
+      oldWidget.scrollToCurrentTrackRequest?.removeListener(_onScrollRequested);
+      widget.scrollToCurrentTrackRequest?.addListener(_onScrollRequested);
+    }
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
     widget.playerService.removeListener(_onPlayerServiceChanged);
+    widget.scrollToCurrentTrackRequest?.removeListener(_onScrollRequested);
     super.dispose();
+  }
+
+  void _onScrollRequested() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scrollToCurrentTrack();
+    });
   }
 
   void _onPlayerServiceChanged() {
@@ -487,8 +525,12 @@ class _PlaylistItem extends StatelessWidget {
 
 class _NowPlayingContent extends StatelessWidget {
   final AppState appState;
+  final Listenable scrollToCurrentTrackRequest;
 
-  const _NowPlayingContent({required this.appState});
+  const _NowPlayingContent({
+    required this.appState,
+    required this.scrollToCurrentTrackRequest,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -539,7 +581,10 @@ class _NowPlayingContent extends StatelessWidget {
           ),
         ),
         _StaticPlaylistInfo(
-            playerService: appState.audioPlayerService!, api: appState.api!),
+          playerService: appState.audioPlayerService!,
+          api: appState.api!,
+          scrollToCurrentTrackRequest: scrollToCurrentTrackRequest,
+        ),
       ],
     );
   }
@@ -576,6 +621,8 @@ class _NowPlayingContent extends StatelessWidget {
                         playerService: appState.audioPlayerService!,
                         api: appState.api!,
                         isCompact: true,
+                        scrollToCurrentTrackRequest:
+                            scrollToCurrentTrackRequest,
                       ),
                     ),
                   ],
