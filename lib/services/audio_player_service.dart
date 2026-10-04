@@ -535,6 +535,14 @@ class AudioPlayerService extends ChangeNotifier {
     await _playSongAtIndex(0);
   }
 
+  /// Starts playback without waiting for it to finish. just_audio's play()
+  /// future completes only once playback is paused, stopped or completed.
+  void _startPlayback() {
+    unawaited(_audioPlayer.play().catchError((Object e) {
+      debugPrint('[audio_player] Playback error: $e');
+    }));
+  }
+
   Future<void> _playSongAtIndex(int index) async {
     if (index < 0 || index >= _playlist.length) {
       debugPrint(
@@ -576,7 +584,9 @@ class AudioPlayerService extends ChangeNotifier {
       // Otherwise, read the metadata and apply it
       await _readReplayGainAndApplyVolume(streamUrl, cachedFile: cachedFile);
 
-      await _audioPlayer.play();
+      // just_audio's play() future only completes when playback is paused,
+      // stopped or completed, so it must not be awaited here.
+      _startPlayback();
 
       // Song successfully started, reset loading state
       _audioLoadingState = AudioLoadingState.idle;
@@ -627,7 +637,7 @@ class AudioPlayerService extends ChangeNotifier {
     } else if (_currentSong != null) {
       debugPrint(
           '[audio_player] Resuming current song: ${_currentSong!.title}');
-      await _audioPlayer.play();
+      _startPlayback();
     } else {
       debugPrint(
           '[audio_player] Cannot play - no current song and empty playlist');
