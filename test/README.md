@@ -1,297 +1,34 @@
-# Voidweaver Test Suite
-
-This directory contains comprehensive tests for the Voidweaver Flutter music player application.
-
-## Test Structure
-
-### Core Test Files
-
-- **`simple_test.dart`** - Data model tests for Song, Album, Artist, and SearchResult classes
-- **`widget_test.dart`** - Basic widget instantiation tests
-- **`utils/time_formatter_test.dart`** - Utility function tests including time formatting, ReplayGain parsing, URL validation, and more
-- **`utils/validators_test.dart`** - Input validation and sanitization tests with comprehensive security coverage
-- **`services/sleep_timer_test.dart`** - Comprehensive sleep timer functionality tests
-- **`services/api_cache_test.dart`** - API caching system tests with request deduplication
-- **`services/scrobble_queue_test.dart`** - Persistent scrobble queue tests with retry logic and network failure handling
-- **`widgets/error_boundary_test.dart`** - Error boundary and error handling widget tests
-- **`services/error_handler_test.dart`** - Global error handler and error reporting tests
-- **`services/memory_leak_test.dart`** - Memory leak prevention tests with comprehensive disposal verification
-- **`services/subsonic_api_test.dart`** - HTTPS enforcement and security validation tests
-
-### Test Infrastructure
-
-- **`test_helpers/mock_audio_player.dart`** - Mock AudioPlayer implementation for testing
-- **`services/sleep_timer_test.mocks.dart`** - Generated mocks for SubsonicApi and SettingsService
-
-## Running Tests
+# Tests
 
 ```bash
-# Run all tests
-flutter test
-
-# Run specific test file
-flutter test test/services/sleep_timer_test.dart
-
-# Run tests with coverage
+flutter test                                   # everything
+flutter test test/services/scrobble_queue_test.dart
 flutter test --coverage
-
-# Run tests with verbose output
-flutter test --verbose
 ```
 
-## Test Coverage
+Tests need no device, network or platform plugins.
 
-### Current Status: 199/199 Tests Passing ✅
+## Layout
 
-#### Data Models (6 tests)
-- Song class construction and equality
-- Album class construction and equality  
-- Artist class construction and equality
-- SearchResult class construction and equality
+- `services/`: one file per service (API cache, audio cache, scrobble queue, ReplayGain parsing, skip and Bluetooth controls, timeouts, HTTPS enforcement, disposal)
+- `utils/`: validators and formatting helpers
+- `widgets/`: error boundaries
+- `fixtures/replaygain/`: sample tag data for the parser tests
+- `test_helpers/mock_audio_player.dart`: fake `just_audio` player with `simulateCompletion()`, `simulatePositionChange()` etc.
 
-#### Utility Functions (34 tests)
-- Time formatting (minutes:seconds, hours:minutes:seconds)
-- ReplayGain value parsing (dB values, malformed inputs)
-- URL validation (various formats, edge cases)
-- Filename sanitization (illegal characters, Unicode)
-- Progress calculation (percentage, edge cases)
-- Edge cases and error handling
+## Writing tests
 
-#### Input Validation (37 tests)
-- Server URL validation (protocols, hostnames, lengths)
-- Username validation (characters, lengths, sanitization)
-- Password validation (security, character limits)
-- ReplayGain parameter validation (ranges, numeric formats)
-- Input sanitization (control characters, malformed data)
-- Security edge cases and attack prevention
-
-#### API Caching (11 tests)
-- Cache storage and retrieval
-- Request deduplication
-- Cache expiration and invalidation
-- Persistent vs memory caching
-- Cache statistics and management
-- Typed data persisted across instances via `toJson`/`fromJson` codecs
-- Stale data served when a fetch fails (memory and persistent)
-- Errors rethrown when nothing is cached
-
-#### Audio File Cache (7 tests)
-- Downloading a song and serving it from disk
-- Deduplication of concurrent downloads
-- Rejection of failed responses and Subsonic error documents
-- Index restoration on startup and removal of partial downloads
-- Least-recently-used eviction over the size limit
-- Namespace isolation between servers
-- Clearing the cache
-
-Uses `MockClient` from `package:http/testing.dart` and a temporary directory, so no network or plugins are needed.
-
-#### Sleep Timer (6 tests)
-- Timer start functionality
-- Timer cancellation
-- Timer extension
-- Timer completion handling
-- Timer replacement
-- Invalid operations
-
-#### Error Handling (15 tests)
-- Error boundary widget functionality
-- Error display components
-- Global error handler behavior
-- Error reporting infrastructure
-- Extension methods for error wrapping
-- User recovery and retry mechanisms
-
-#### Memory Leak Prevention (8 tests)
-- AudioPlayerService resource disposal verification
-- AppState timer and service cleanup testing
-- SubsonicApi HTTP client disposal testing
-- VoidweaverAudioHandler cleanup verification
-- Sleep timer cancellation testing
-- Stream subscription cleanup verification
-- Service disposal safety testing
-- Null resource handling testing
-
-#### HTTPS Security Enforcement (5 tests)
-- Server URL HTTPS validation and HTTP rejection
-- SubsonicApi constructor security checks
-- Invalid URL format handling
-- Unsupported protocol rejection (FTP, etc.)
-- Proper resource disposal after HTTPS validation
-
-#### Scrobble Queue Persistence (19 tests)
-- Queue initialization and empty queue handling
-- Now playing and submission request queuing
-- Successful request processing
-- Automatic retry with exponential backoff
-- Queue persistence to SharedPreferences storage
-- Queue restoration after app restart
-- Maximum retry limit enforcement
-- Multiple request processing in order
-- Mixed request type handling (now playing + submission)
-- Concurrent processing prevention
-- Queue disposal during processing
-- Request serialization and deserialization
-- Retry count increment tracking
-- Immediate processing on enqueue
-- Periodic queue processing
-- Network failure handling
-- Request age cleanup (7-day limit)
-- Graceful error handling
-
-## Mock Infrastructure
-
-### MockAudioPlayer
-
-The `MockAudioPlayer` class provides comprehensive mocking of the AudioPlayer plugin:
+Inject fakes through the optional constructor parameters instead of touching real plugins:
 
 ```dart
-// Example usage in tests
-setUp(() {
-  mockAudioPlayer = MockAudioPlayer();
-  audioPlayerService = AudioPlayerService(mockApi, mockSettings, audioPlayer: mockAudioPlayer);
-});
-
-// Simulate playback events
-mockAudioPlayer.simulateCompletion();
-mockAudioPlayer.simulatePositionChange(Duration(seconds: 30));
+final service = AudioPlayerService(
+  mockApi,
+  mockSettings,
+  audioPlayer: MockAudioPlayer(),
+);
 ```
 
-**Features:**
-- Stream simulation for position, duration, completion, and state changes
-- Playback control mocking (play, pause, stop, seek, volume)
-- Helper methods for test scenarios including manual completion simulation
-- Proper resource cleanup
-
-### Generated Mocks
-
-Mock classes are generated using the `mockito` package:
-
-```dart
-@GenerateMocks([SubsonicApi, SettingsService])
-```
-
-**Available Mocks:**
-- `MockSubsonicApi` - API communication mocking
-- `MockSettingsService` - Settings management mocking
-- Custom mock classes in `memory_leak_test.dart` for testing disposal patterns without SharedPreferences dependencies
-
-## Architecture Changes for Testing
-
-### Dependency Injection
-
-The `AudioPlayerService` has been refactored to support dependency injection:
-
-```dart
-// Production usage (unchanged)
-AudioPlayerService(api, settings) // Uses real AudioPlayer
-
-// Test usage
-AudioPlayerService(api, settings, audioPlayer: mockAudioPlayer)
-```
-
-**Benefits:**
-- Enables reliable testing without plugin dependencies
-- Maintains backward compatibility
-- Allows comprehensive audio functionality testing
-- Eliminates `MissingPluginException` errors in CI/CD
-
-### Test-Friendly Design
-
-- **Optional dependencies** - AudioPlayer, ScrobbleQueue and AudioCache are optional parameters with defaults
-- **Stream mocking** - Complete audio stream simulation
-- **Resource management** - Proper cleanup in tearDown methods
-- **Realistic scenarios** - Tests cover real-world usage patterns
-- **Persistent storage mocking** - SharedPreferences mocked for scrobble queue tests
-
-## Adding New Tests
-
-### For New Features
-
-1. **Create test file** in appropriate directory
-2. **Set up mocks** using existing infrastructure
-3. **Follow naming conventions** - `feature_test.dart`
-4. **Use descriptive test names** - `should handle error when server unavailable`
-
-### For Audio Features
-
-```dart
-// Template for audio-related tests
-setUp(() {
-  mockAudioPlayer = MockAudioPlayer();
-  audioService = AudioPlayerService(mockApi, mockSettings, audioPlayer: mockAudioPlayer);
-});
-
-test('should handle audio feature correctly', () {
-  // Test implementation
-  mockAudioPlayer.simulateCompletion();
-  expect(audioService.someProperty, expectedValue);
-});
-```
-
-### For API Features
-
-```dart
-// Template for API-related tests
-setUp(() {
-  mockApi = MockSubsonicApi();
-  when(mockApi.someMethod()).thenAnswer((_) async => expectedResult);
-});
-
-test('should handle API feature correctly', () {
-  // Test implementation
-});
-```
-
-## Test Utilities
-
-### Time Formatting Tests
-
-Comprehensive tests for duration formatting:
-- Standard formats (MM:SS, HH:MM:SS)
-- Edge cases (zero duration, very long durations)
-- Padding behavior
-
-### ReplayGain Tests
-
-Tests for audio normalization value parsing:
-- Valid dB values (-20.5 dB, +5.0 dB)
-- Values without units
-- Malformed inputs
-- Extreme values
-
-### URL Validation Tests
-
-Tests for server URL validation:
-- **HTTPS enforcement** - HTTP URLs rejected for security
-- **API security validation** - SubsonicApi constructor HTTPS checks
-- Port numbers and hostnames
-- IP addresses and paths
-- Invalid formats and malformed URLs
-- Security error messages and user feedback
-
-## Best Practices
-
-1. **Use descriptive test names** - Clearly state what is being tested
-2. **Test edge cases** - Include boundary conditions and error scenarios
-3. **Mock external dependencies** - Use provided mock infrastructure
-4. **Clean up resources** - Dispose of mocks and services in tearDown
-5. **Group related tests** - Use `group()` for logical organization
-6. **Assert meaningful values** - Test actual behavior, not just absence of errors
-
-## CI/CD Integration
-
-The test suite is designed for automated testing:
-- **No plugin dependencies** - All tests run in any environment
-- **Fast execution** - Tests complete in ~6 seconds
-- **Comprehensive coverage** - Critical functionality fully tested
-- **Zero false positives** - Reliable pass/fail results
-
-## Future Test Additions
-
-Priority areas for additional testing:
-1. **Integration tests** - Complete user workflows
-2. **Widget tests** - UI component behavior  
-3. **Performance tests** - Memory usage, rendering performance
-4. **Audio playback tests** - Real audio functionality beyond mocking
-5. **Network failure simulation** - More complex error scenarios
+- API and settings mocks are generated by mockito (`@GenerateMocks([...])`). Regenerate the `*.mocks.dart` files with `dart run build_runner build --delete-conflicting-outputs`.
+- `AudioCache` tests use `MockClient` from `package:http/testing.dart` and a temp directory.
+- Scrobble queue tests use `SharedPreferences.setMockInitialValues`.
+- Dispose services in `tearDown`.

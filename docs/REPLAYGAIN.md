@@ -1,199 +1,32 @@
-# ReplayGain Implementation Guide
+# ReplayGain
 
-## Overview
+ReplayGain adjusts playback volume so tracks play at a similar loudness. Settings live in Settings → ReplayGain and apply to the current track immediately.
 
-Voidweaver includes a comprehensive ReplayGain implementation that provides intelligent volume normalization for consistent audio playback. This document explains how the ReplayGain system works, its features, and technical implementation details.
+| Setting | Range | Effect |
+|---------|-------|--------|
+| Mode | Off / Track / Album | Track evens out every song. Album keeps loudness differences within an album. Off ignores everything below. |
+| Preamp | -15 to +15 dB | Added to every track's gain |
+| Prevent clipping | on/off | Lowers the gain so `peak × gain` stays ≤ 1.0 |
+| Fallback gain | -15 to +15 dB | Used for tracks without ReplayGain data |
 
-## What is ReplayGain?
+Volume is `10^((gain + preamp) / 20)`, clamped by the peak when clipping prevention is on. It is applied before playback starts, so there's no audible jump.
 
-ReplayGain is a technical standard for normalizing the perceived loudness of audio files. It analyzes audio content using psychoacoustic principles and stores metadata about the appropriate volume adjustments needed to achieve consistent playback levels without altering the original audio data.
+## Where the values come from
 
-## Features
+1. **Server response**: Navidrome includes ReplayGain in song entries (OpenSubsonic `<replayGain>` element or flat attributes). If present, nothing else is fetched.
+2. **Downloaded file**: for prefetched tracks, tags are read from the cached file (`ReplayGainReader.readFromFile`), which also works offline.
+3. **Range request**: otherwise the first 256 KB of the stream are fetched, plus more if the tag header is larger (`ReplayGainReader.readFromUrl`).
 
-### Core Functionality
-- **Client-side metadata extraction**: Reads ReplayGain data directly from audio files
-- **Multiple normalization modes**: Off, Track, and Album-based normalization
-- **Real-time adjustment**: Settings changes apply immediately to currently playing audio
-- **Multi-format support**: MP3 (ID3v2), FLAC/OGG (Vorbis comments), and other formats with APE tags
+Supported tags:
 
-### Advanced Controls
-- **Preamp adjustment**: Global volume control from -15dB to +15dB
-- **Prevent clipping**: Automatic volume reduction to prevent audio distortion
-- **Fallback gain**: Volume adjustment for files without ReplayGain metadata
-- **Persistent settings**: All preferences saved automatically
+- ID3v2.3/2.4 `TXXX` frames (MP3)
+- Vorbis comments (FLAC, Ogg)
+- APE tags
+- MP4/M4A iTunes-style `ilst` tags (only when `moov` comes before the audio data)
+- Opus `R128_TRACK_GAIN` / `R128_ALBUM_GAIN`, used when no `REPLAYGAIN_*` tags exist. These are Q7.8 values relative to -23 LUFS, converted with `value / 256 + 5` dB.
 
-## Usage Guide
+## Debugging
 
-### Accessing ReplayGain Settings
+Turn on **Debug Logging** under Settings → ReplayGain Debug Log to write a log file on the device. For every track played or prefetched it records the source of the values, the parsed gains and peaks, the settings and the final multiplier. The log is capped at 5 MB and can be exported through the share sheet. Credentials are redacted from URLs, but the log still contains the server address and song titles.
 
-1. Open Voidweaver
-2. Tap the three-dot menu (⋮) in the top-right corner
-3. Select "Settings"
-4. Configure ReplayGain options in the settings page
-
-### Configuration Options
-
-#### Normalization Mode
-- **Off**: Disables ReplayGain processing entirely (preamp and fallback gain are ignored)
-- **Track**: Normalizes each song individually for consistent volume
-- **Album**: Preserves album dynamics while normalizing overall level
-
-#### Preamp Control
-- Range: -15dB to +15dB
-- Purpose: Global volume adjustment applied to all audio
-- Use case: Compensate for overall loudness preferences or equipment characteristics
-
-#### Prevent Clipping
-- **Enabled**: Automatically reduces volume if ReplayGain would cause clipping
-- **Disabled**: Applies ReplayGain values as-is (may cause distortion)
-- Recommended: Keep enabled for best audio quality
-
-#### Fallback Gain
-- Range: -15dB to +15dB
-- Purpose: Volume adjustment applied to files without ReplayGain metadata
-- Use case: Normalize older music files that lack ReplayGain tags
-
-### Real-time Testing
-
-All ReplayGain settings apply immediately to currently playing audio, allowing you to:
-- Test different modes while listening
-- Fine-tune preamp settings for your preferences
-- Verify prevent clipping functionality
-- Adjust fallback gain for optimal volume levels
-
-## Technical Implementation
-
-### Metadata Extraction Process
-
-1. **HTTP Range Request**: Fetches first 64KB of audio file for metadata
-2. **Format Detection**: Identifies audio format (MP3, M4A, FLAC, etc.)
-3. **Tag Parsing**: Extracts ReplayGain data from appropriate metadata format
-4. **Volume Calculation**: Converts ReplayGain values to linear volume multipliers
-
-### Supported Metadata Formats
-
-#### ID3v2 Tags (MP3 files)
-- **TXXX frames**: `REPLAYGAIN_TRACK_GAIN`, `REPLAYGAIN_ALBUM_GAIN`, `REPLAYGAIN_TRACK_PEAK`, `REPLAYGAIN_ALBUM_PEAK`
-- **Versions**: Supports ID3v2.3 and ID3v2.4
-- **Encoding**: Handles different text encodings
-
-#### Vorbis Comments (FLAC/OGG files)
-- **Fields**: `REPLAYGAIN_TRACK_GAIN=`, `REPLAYGAIN_ALBUM_GAIN=`, etc.
-- **Format**: Standard Vorbis comment format
-- **Location**: Within FLAC metadata blocks or OGG comment headers
-- **R128 (Opus)**: If no `REPLAYGAIN_*` gains are present, `R128_TRACK_GAIN` / `R128_ALBUM_GAIN` are used. These are Q7.8 integers relative to -23 LUFS and are converted with `value / 256 + 5` dB
-
-#### APE Tags
-- **Fields**: Same naming convention as Vorbis comments
-- **Location**: APE tag headers in various audio formats
-- **Parsing**: Basic APE tag structure recognition
-
-### Volume Calculation Algorithm
-
-```dart
-// Basic ReplayGain calculation
-double gainToUse = (mode == track) ? trackGain : albumGain;
-double totalGain = gainToUse + preamp;
-double volumeMultiplier = pow(10.0, totalGain / 20.0);
-
-// Apply clipping prevention
-if (preventClipping && peak > 0) {
-  double peakAfterGain = peak * volumeMultiplier;
-  if (peakAfterGain > 1.0) {
-    volumeMultiplier = 1.0 / peak;
-  }
-}
-```
-
-### Performance Optimizations
-
-- **Efficient requests**: Only downloads first 64KB of files for metadata
-- **Caching**: ReplayGain data attached to Song objects for reuse
-- **Instant volume application**: ReplayGain volume is applied before audio playback starts, eliminating audible volume changes
-- **Preloading integration**: When upcoming tracks are downloaded to the audio cache, ReplayGain metadata is read from the downloaded file (`ReplayGainReader.readFromFile`), so cached tracks need no extra network request and play volume-correct even offline
-- **Asynchronous processing**: Metadata extraction doesn't block audio playback
-- **Error handling**: Graceful fallback when metadata extraction fails
-- **Optimized code quality**: Zero analyzer warnings with const constructors for minimal widget rebuilds
-- **Production logging**: Uses `debugPrint()` for proper debug output management
-- **Object equality optimization**: Proper equality operators prevent unnecessary UI rebuilds during ReplayGain processing
-- **Minimal object creation**: ReplayGain processing only creates new Song objects when metadata actually changes
-
-## Troubleshooting
-
-### Common Issues
-
-#### No ReplayGain Data Found
-- **Cause**: Audio files don't contain ReplayGain metadata
-- **Solution**: Use fallback gain setting or generate ReplayGain tags with tools like mp3gain, foobar2000, or MusicBrainz Picard
-
-#### Volume Too Quiet/Loud
-- **Solution**: Adjust preamp setting
-- **Track mode**: Use for consistent volume across all songs
-- **Album mode**: Preserves artistic intent within albums
-
-#### Distortion/Clipping
-- **Cause**: ReplayGain gain values causing volume to exceed 100%
-- **Solution**: Enable "Prevent Clipping" option
-- **Alternative**: Reduce preamp setting
-
-#### Inconsistent Volume
-- **Cause**: Mix of files with and without ReplayGain metadata
-- **Solution**: Set appropriate fallback gain for files without metadata
-
-### Debug Information
-
-The app provides detailed debug output in the console showing:
-- ReplayGain metadata extraction status
-- Applied volume multipliers
-- Current settings (mode, preamp, fallback gain)
-- Whether metadata or fallback gain is being used
-
-#### Persistent Debug Log
-
-For issues that are hard to reproduce with a console attached (e.g. "ReplayGain isn't applied for some songs"), enable **Debug Logging** in the ReplayGain Debug Log section of Settings. While enabled, the app records the same diagnostics to a log file on the device for every track played or preloaded:
-- The (auth-redacted) stream URL and detected audio format
-- Where ReplayGain metadata came from: the server's API response, a nested `<replayGain>` XML element, JSON fields, or bytes read directly from the file
-- Parsed track/album gain and peak values at each stage
-- Current ReplayGain settings and the final computed volume multiplier
-- Any errors encountered while fetching or parsing metadata
-
-The log can be exported via the platform share sheet (to Files, email, AirDrop, etc.) or cleared from the same settings section. Auth parameters (username/token/salt) are redacted from logged URLs before they're written to disk, but the log still contains your server address and song titles, so only share it with people you trust. Logging is disabled by default and the log file is capped at 5MB (older entries are rotated out).
-
-## Best Practices
-
-### For Users
-1. **Start with Track mode** for consistent volume across your library
-2. **Use Album mode** for classical music or concept albums
-3. **Adjust preamp** based on your listening preferences and equipment
-4. **Keep prevent clipping enabled** unless you have specific audio equipment requirements
-5. **Set fallback gain** to match the average level of your ReplayGain-enabled tracks
-
-### For Developers
-1. **Test with various audio formats** to ensure broad compatibility
-2. **Handle parsing errors gracefully** with appropriate fallbacks
-3. **Minimize bandwidth usage** through efficient HTTP range requests
-4. **Provide clear user feedback** about ReplayGain status and functionality
-5. **Implement proper volume calculations** following ReplayGain specifications
-
-## Standards Compliance
-
-Voidweaver's ReplayGain implementation follows:
-- **ReplayGain 1.0 specification** for volume calculations
-- **ID3v2.3/2.4 standards** for MP3 metadata parsing
-- **Vorbis comment specification** for FLAC/OGG metadata
-- **APE tag standards** for additional format support
-
-## Future Enhancements
-
-Potential improvements for future versions:
-- **MP4/M4A metadata support** for iTunes-style ReplayGain tags
-- **Automatic ReplayGain calculation** for files without metadata
-- **Playlist-based normalization** for mixed content playback
-- **Advanced DSP options** for additional audio processing
-
-## References
-
-- [ReplayGain Official Specification](https://wiki.hydrogenaudio.org/index.php?title=ReplayGain_specification)
-- [ID3v2.4 Tag Specification](https://id3.org/id3v2.4.0-structure)
-- [Vorbis Comment Specification](https://www.xiph.org/vorbis/doc/v-comment.html)
-- [APE Tag Specification](https://wiki.hydrogenaudio.org/index.php?title=APE_key)
+If tracks have no ReplayGain data, tag the library with a tool such as `rsgain`, foobar2000 or MusicBrainz Picard, then rescan in Navidrome.
