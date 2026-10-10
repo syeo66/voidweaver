@@ -42,6 +42,8 @@ There is deliberately no handling for the player pausing near the end of a track
 
 When skips reloaded the source, `just_audio` briefly reported `playing=false`. Bluetooth devices took that as a user pause, so skip turned into pause. The handler masks this: while `isSkipOperationInProgress` is true it reports the last known playing state and a ready processing state. Skips now seek within the queue, which keeps `playing`, but a skip after `stop()` or an error still loads the queue again.
 
+`audio_service` ends everything when the handler reports `idle`: it removes the notification, deactivates the media session (Bluetooth controls stop working) and stops the foreground service, after which Android stops the app in the background. The player is idle after every load error, including those the service recovers from by continuing at a downloaded track. So the handler reports `idle` only once `isStopped` is set (`stop()`, or nothing loaded yet). Otherwise an idle player shows as loading while playing, or as ready while paused. A failed load pauses the player, so the system doesn't show it as loading indefinitely.
+
 ## Audio focus
 
 `just_audio` owns audio focus through `audio_session`. It pauses on interruptions and resumes after transient ones.

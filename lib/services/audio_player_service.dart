@@ -81,6 +81,10 @@ class AudioPlayerService extends ChangeNotifier {
   // old track's index would look like an advance.
   int? _awaitedIndex;
 
+  // Whether playback was stopped (or never started), as opposed to the player
+  // being idle on the way to playing again, see isStopped
+  bool _stopped = true;
+
   // Skips
   DateTime? _lastSkipTime;
   bool _skipOperationInProgress = false;
@@ -131,6 +135,11 @@ class AudioPlayerService extends ChangeNotifier {
 
   /// Whether a skip is being carried out; the UI disables the skip buttons.
   bool get isSkipOperationInProgress => _skipOperationInProgress;
+
+  /// Whether playback was stopped. The player is also idle after a load error
+  /// while the service continues elsewhere in the queue or reloads it; only
+  /// this means the media session should end. See docs/PLAYBACK.md.
+  bool get isStopped => _stopped;
 
   PlaybackState get playbackState => _playbackState;
   List<Song> get playlist => _playlist;
@@ -326,6 +335,11 @@ class AudioPlayerService extends ChangeNotifier {
 
   void _onLoadFailed(String message) {
     debugPrint(message);
+    // Otherwise the player stays idle with `playing` set, which the system
+    // controls show as still loading
+    if (_audioPlayer.playing) {
+      unawaited(_audioPlayer.pause().catchError((Object _) {}));
+    }
     _playbackState = PlaybackState.stopped;
     notifyListeners();
   }
@@ -375,6 +389,7 @@ class AudioPlayerService extends ChangeNotifier {
   Future<void> _loadQueue(int startIndex,
       {Duration position = Duration.zero, bool play = true}) async {
     final generation = ++_generation;
+    _stopped = false;
     _fileBacked.clear();
     _awaitedIndex = null;
     final sources = [
@@ -535,7 +550,6 @@ class AudioPlayerService extends ChangeNotifier {
     if (failedIndex != _currentIndex) {
       _setCurrentTrack(failedIndex, playing: false);
     }
-    unawaited(_audioPlayer.pause().catchError((Object _) {}));
     _onLoadFailed('Failed to play song: ${error.message ?? error}');
   }
 
@@ -577,6 +591,8 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   Future<void> stop() async {
+    // Before stopping the player, so the idle state it reports is final
+    _stopped = true;
     await _audioPlayer.stop();
     _currentPosition = Duration.zero;
     _totalDuration = Duration.zero;

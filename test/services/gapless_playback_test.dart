@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:audio_service/audio_service.dart' hide PlaybackState;
+import 'package:just_audio/just_audio.dart' show ProcessingState;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -8,6 +10,7 @@ import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/audio_cache.dart';
+import 'package:voidweaver/services/audio_handler.dart';
 import 'package:voidweaver/services/audio_player_service.dart';
 import 'package:voidweaver/services/settings_service.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
@@ -334,6 +337,63 @@ void main() {
 
       player.simulateTrackTransition();
       await until(() => service.currentIndex == 1, 'the service follows');
+    });
+  });
+
+  // audio_service ends the media session, notification and foreground
+  // service when the handler reports idle, see docs/PLAYBACK.md
+  group('system controls', () {
+    late VoidweaverAudioHandler handler;
+    late List<AudioProcessingState> reported;
+
+    setUp(() {
+      handler = VoidweaverAudioHandler(service, mockApi);
+      reported = [];
+      handler.playbackState.listen((s) => reported.add(s.processingState));
+    });
+
+    tearDown(() => handler.dispose());
+
+    test('stay active while playback continues after a load error', () async {
+      await download('s3');
+      serverReachable = false;
+      await service.playAlbum(albumOf(3));
+      await pumpEventQueue();
+      reported.clear();
+      player.failingUrls.add(urlFor('s2'));
+
+      player.simulateTrackTransition();
+      await until(() => service.currentIndex == 2, 'playback continues at s3');
+
+      expect(player.processingState, ProcessingState.ready);
+      expect(reported, isNot(contains(AudioProcessingState.idle)));
+      expect(handler.playbackState.value.playing, isTrue);
+    });
+
+    test('stay active, paused, when nothing ahead is playable', () async {
+      serverReachable = false;
+      await service.playAlbum(albumOf(2));
+      await pumpEventQueue();
+      reported.clear();
+      player.failingUrls.add(urlFor('s2'));
+
+      player.simulateTrackTransition();
+      await until(() => service.playbackState == PlaybackState.stopped,
+          'playback stops');
+      await pumpEventQueue();
+
+      expect(reported, isNot(contains(AudioProcessingState.idle)));
+      expect(handler.playbackState.value.playing, isFalse);
+    });
+
+    test('end the session on stop', () async {
+      await service.playAlbum(albumOf(2));
+
+      await handler.stop();
+      await pumpEventQueue();
+
+      expect(handler.playbackState.value.processingState,
+          AudioProcessingState.idle);
     });
   });
 }
