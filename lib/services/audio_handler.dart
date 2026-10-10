@@ -104,19 +104,7 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
     AudioProcessingState processingState;
     switch (playerState.processingState) {
       case ProcessingState.idle:
-        // audio_service ends the session on idle: it removes the
-        // notification, deactivates the media session (Bluetooth controls)
-        // and stops the foreground service, after which Android stops the
-        // app in the background. The player is also idle after a load error
-        // while the service continues at another track, so only report idle
-        // once playback was stopped.
-        if (_audioPlayerService.isStopped) {
-          processingState = AudioProcessingState.idle;
-        } else {
-          processingState = effectivePlaying
-              ? AudioProcessingState.loading
-              : AudioProcessingState.ready;
-        }
+        processingState = AudioProcessingState.idle;
         break;
       case ProcessingState.loading:
       case ProcessingState.buffering:

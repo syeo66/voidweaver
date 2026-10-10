@@ -25,8 +25,8 @@ Three caches keep the app fast and usable offline. All of them can be cleared fr
 
 While a song plays, `AudioPlayerService` downloads the next 3 tracks into `audio_cache/` in the app cache directory, one at a time, nearest first.
 
-- Cached tracks play from disk. Other tracks stream. When a download finishes, the track's stream in the player's queue is replaced with the file, see [PLAYBACK.md](PLAYBACK.md#downloads-in-the-queue).
-- If a track can't be loaded and isn't cached (offline), playback skips ahead to the next cached track.
+- Cached tracks play from disk (`setFilePath`). Other tracks stream.
+- If the next track can't be loaded and isn't cached (offline), playback skips ahead to the next cached track.
 - Downloads go to a `.part` file and are renamed when complete. Non-200 responses and Subsonic error documents are discarded.
 - Files are keyed by SHA-1 of server URL + song id.
 - The least recently played files are evicted once the cache exceeds 1 GB.

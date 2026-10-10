@@ -4,7 +4,7 @@
 - [ ] Download whole albums/playlists for offline listening (upcoming tracks are already cached)
 - [ ] Explicit offline mode with indicator, browsing limited to downloaded content
 - [ ] Configurable audio cache size (fixed at 1 GB)
-- [ ] Crossfade
+- [ ] Crossfade / gapless playback
 - [ ] Equalizer
 - [ ] In-app volume slider
 - [ ] Album art transitions

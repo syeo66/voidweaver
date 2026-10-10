@@ -25,7 +25,6 @@ subsoxy answers `getRandomSongs` with weighted picks based on your listening his
 - ReplayGain normalization (track or album mode, preamp, clipping prevention, fallback gain), see [docs/REPLAYGAIN.md](docs/REPLAYGAIN.md)
 - Lock screen, notification and Bluetooth media controls, with background playback
 - The next 3 tracks are downloaded while you listen, so playback survives network drops; library data and cover art stay browsable offline, see [docs/CACHING.md](docs/CACHING.md)
-- Gapless playback between tracks once the next one is downloaded
 - Scrobbles are queued and retried, so play counts aren't lost while offline
 - Configurable scrobble threshold (minimum play time or percentage, whichever comes first)
 - Queue and playback position restored on restart

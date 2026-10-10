@@ -30,7 +30,7 @@ Endpoints used: `getAlbumList2`, `getAlbum`, `getArtists`, `getArtist`, `search3
 |------|---------|
 | `lib/services/app_state.dart` | App-wide state: login, creates the API and player services, background sync every 5 minutes |
 | `lib/services/subsonic_api.dart` | Subsonic client: token auth, response parsing, API cache, HTTP/2 via `http_plus` |
-| `lib/services/audio_player_service.dart` | Hands the playlist to `just_audio` and follows it; skips, load errors, ReplayGain volume, scrobbling, prefetching |
+| `lib/services/audio_player_service.dart` | Playlist, skip and completion logic, ReplayGain volume, scrobbling, prefetching |
 | `lib/services/audio_handler.dart` | `audio_service` bridge for lock screen, notification and Bluetooth controls |
 | `lib/services/api_cache.dart`, `audio_cache.dart`, `image_cache_manager.dart` | Caching, see [CACHING.md](CACHING.md) |
 | `lib/services/scrobble_queue.dart` | Persistent scrobble queue with retries |
@@ -51,7 +51,7 @@ State is managed with Provider. Services take optional dependencies (`AudioPlaye
 
 ## Playback internals
 
-How the player's queue is followed, downloads swapped in, load errors, skips, Bluetooth state masking and audio focus are described in [PLAYBACK.md](PLAYBACK.md). Read it before changing `audio_player_service.dart` or `audio_handler.dart`.
+Skip protection, completion fallbacks, Bluetooth state masking and audio focus are described in [PLAYBACK.md](PLAYBACK.md). Read it before changing `audio_player_service.dart` or `audio_handler.dart`.
 
 ## Android
 
