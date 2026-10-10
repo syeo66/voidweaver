@@ -11,12 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@v4
     
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.47.7'
+        flutter-version: '3.47.6'
         channel: 'stable'
 
     - name: Install dependencies
@@ -32,9 +32,9 @@ jobs:
       run: flutter test --coverage
     
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v7
+      uses: codecov/codecov-action@v4
       with:
-        files: coverage/lcov.info
+        file: coverage/lcov.info
         fail_ci_if_error: false
 
   build-android:
@@ -42,12 +42,12 @@ jobs:
     needs: test
     
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@v4
     
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
-        flutter-version: '3.47.7'
+        flutter-version: '3.47.6'
         channel: 'stable'
 
     - name: Install dependencies
@@ -57,7 +57,7 @@ jobs:
       run: flutter build apk --release
     
     - name: Upload APK artifact
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@v4
       with:
         name: android-apk
         path: build/app/outputs/flutter-apk/app-release.apk

@@ -83,28 +83,16 @@ class PersistedPlaybackState {
 
 class PlaybackPersistenceService {
   static const String _playbackStateKey = 'playbackState';
-  final Duration _positionSaveInterval;
+  static const Duration _positionSaveInterval = Duration(seconds: 5);
 
   SharedPreferences? _prefs;
   Timer? _positionSaveTimer;
-  PersistedPlaybackState? _pendingPositionState;
-
-  PlaybackPersistenceService({
-    Duration positionSaveInterval = const Duration(seconds: 5),
-  }) : _positionSaveInterval = positionSaveInterval;
 
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
   }
 
   Future<void> savePlaybackState(PersistedPlaybackState state) async {
-    // An explicit save supersedes any pending position save, which would
-    // otherwise overwrite it with older state when its timer fires.
-    _cancelPendingPositionSave();
-    await _writePlaybackState(state);
-  }
-
-  Future<void> _writePlaybackState(PersistedPlaybackState state) async {
     if (_prefs == null) {
       debugPrint('SharedPreferences not initialized');
       return;
@@ -148,28 +136,14 @@ class PlaybackPersistenceService {
     }
   }
 
-  /// Saves [state] at most once per interval. Called on every position
-  /// update, so the timer must not be restarted on each call or it would
-  /// never fire during continuous playback.
   void schedulePositionSave(PersistedPlaybackState state) {
-    _pendingPositionState = state;
-    if (_positionSaveTimer?.isActive ?? false) return;
-
+    _positionSaveTimer?.cancel();
     _positionSaveTimer = Timer(_positionSaveInterval, () {
-      final pending = _pendingPositionState;
-      _pendingPositionState = null;
-      if (pending != null) _writePlaybackState(pending);
+      savePlaybackState(state);
     });
   }
 
-  void _cancelPendingPositionSave() {
-    _positionSaveTimer?.cancel();
-    _positionSaveTimer = null;
-    _pendingPositionState = null;
-  }
-
   Future<void> clearPlaybackState() async {
-    _cancelPendingPositionSave();
     if (_prefs == null) return;
 
     try {
@@ -181,6 +155,6 @@ class PlaybackPersistenceService {
   }
 
   void dispose() {
-    _cancelPendingPositionSave();
+    _positionSaveTimer?.cancel();
   }
 }
