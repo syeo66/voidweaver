@@ -2,6 +2,9 @@ import 'dart:async';
 import 'package:just_audio/just_audio.dart';
 import 'package:mockito/mockito.dart';
 
+/// A fake just_audio player holding a sequence of sources, like the real one:
+/// it moves to the next item by itself at the end of a track (see
+/// [simulateTrackTransition]) and reports load errors on [errorStream].
 class MockAudioPlayer extends Mock implements AudioPlayer {
   final StreamController<Duration> _positionController =
       StreamController<Duration>.broadcast();
@@ -11,20 +14,23 @@ class MockAudioPlayer extends Mock implements AudioPlayer {
       StreamController<PlayerState>.broadcast();
   final StreamController<int?> _indexController =
       StreamController<int?>.broadcast();
+  final StreamController<PlayerException> _errorController =
+      StreamController<PlayerException>.broadcast();
 
   PlayerState _currentPlayerState = PlayerState(false, ProcessingState.idle);
 
-  /// Every source loaded into the player, in order: the URL for streams,
-  /// `file:<path>` for cached files.
+  /// Every item the player was explicitly told to play, by setting the
+  /// sequence or seeking to an index, in order: the URL for streams,
+  /// `file:<path>` for cached files. Moving on at the end of a track isn't
+  /// recorded.
   final List<String> loadedSources = [];
 
   /// URLs that fail to load, as when the network is down.
   final Set<String> failingUrls = {};
 
   /// The player's current sequence, in the same notation as [loadedSources].
-  final List<String> sequenceSources = [];
-  // The source objects behind [sequenceSources], so [sequence] returns the
-  // same instances on every call, as just_audio does
+  List<String> get sequenceSources => [for (final s in _sequence) _describe(s)];
+
   final List<IndexedAudioSource> _sequence = [];
   int? _currentIndex;
 
@@ -33,6 +39,11 @@ class MockAudioPlayer extends Mock implements AudioPlayer {
 
   Duration? _duration;
   Duration _position = Duration.zero;
+
+  static String _describe(AudioSource source) {
+    final uri = (source as UriAudioSource).uri;
+    return uri.scheme == 'file' ? 'file:${uri.toFilePath()}' : '$uri';
+  }
 
   @override
   Stream<Duration> get positionStream => _positionController.stream;
@@ -44,7 +55,16 @@ class MockAudioPlayer extends Mock implements AudioPlayer {
   Stream<PlayerState> get playerStateStream => _stateController.stream;
 
   @override
+  Stream<PlayerException> get errorStream => _errorController.stream;
+
+  @override
   PlayerState get playerState => _currentPlayerState;
+
+  @override
+  bool get playing => _currentPlayerState.playing;
+
+  @override
+  ProcessingState get processingState => _currentPlayerState.processingState;
 
   @override
   Duration? get duration => _duration;
@@ -61,74 +81,79 @@ class MockAudioPlayer extends Mock implements AudioPlayer {
   @override
   List<IndexedAudioSource> get sequence => List.unmodifiable(_sequence);
 
-  /// Replaces the sequence with [source], as setUrl/setFilePath do.
-  void _loadSingle(String source, Duration? initialPosition) {
-    loadedSources.add(source);
-    sequenceSources
-      ..clear()
-      ..add(source);
-    _sequence
-      ..clear()
-      ..add(source.startsWith('file:')
-          ? AudioSource.file(source.substring(5))
-          : AudioSource.uri(Uri.parse(source)));
-    _currentIndex = 0;
-    _indexController.add(0);
+  void _setState(bool playing, ProcessingState processingState) {
+    _currentPlayerState = PlayerState(playing, processingState);
+    _stateController.add(_currentPlayerState);
+  }
+
+  bool _fails(int index) => failingUrls.contains(_describe(_sequence[index]));
+
+  /// Makes the item at [index] the current one, starting at [position].
+  void _moveTo(int index, Duration position) {
+    _currentIndex = index;
+    _indexController.add(index);
     _duration = const Duration(minutes: 3);
     _durationController.add(_duration);
-    _position = initialPosition ?? Duration.zero;
+    _position = position;
     _positionController.add(_position);
+  }
+
+  /// The item at the current index failed to load: the player reports the
+  /// error and goes idle.
+  void _failCurrent() {
+    _setState(playing, ProcessingState.idle);
+    _errorController.add(PlayerException(0, 'Source error', _currentIndex));
+  }
+
+  @override
+  Future<Duration?> setAudioSources(List<AudioSource> audioSources,
+      {bool preload = true,
+      int? initialIndex,
+      Duration? initialPosition,
+      ShuffleOrder? shuffleOrder}) async {
+    _sequence
+      ..clear()
+      ..addAll(audioSources.cast<IndexedAudioSource>());
+    final index = initialIndex ?? 0;
+    loadedSources.add(_describe(_sequence[index]));
+    _moveTo(index, initialPosition ?? Duration.zero);
+    if (_fails(index)) {
+      _setState(playing, ProcessingState.idle);
+      throw PlayerException(0, 'Network unreachable', index);
+    }
+    _setState(playing, ProcessingState.ready);
+    return _duration;
   }
 
   @override
   Future<void> addAudioSource(AudioSource audioSource) async {
-    final source = audioSource as UriAudioSource;
-    sequenceSources.add(source.uri.scheme == 'file'
-        ? 'file:${source.uri.toFilePath()}'
-        : '${source.uri}');
-    _sequence.add(source);
+    _sequence.add(audioSource as IndexedAudioSource);
     // just_audio broadcasts the sequence state on every change, which
     // re-emits the current index
     _indexController.add(_currentIndex);
   }
 
   @override
-  Future<void> removeAudioSourceAt(int index) async {
-    sequenceSources.removeAt(index);
-    _sequence.removeAt(index);
-    // just_audio re-emits the index it last got from the platform before the
-    // platform reports the shifted one
+  Future<void> insertAudioSource(int index, AudioSource audioSource) async {
+    _sequence.insert(index, audioSource as IndexedAudioSource);
+    if (_currentIndex != null && index <= _currentIndex!) {
+      _currentIndex = _currentIndex! + 1;
+    }
     _indexController.add(_currentIndex);
+  }
+
+  @override
+  Future<void> removeAudioSourceAt(int index) async {
+    _sequence.removeAt(index);
     if (_currentIndex != null && index < _currentIndex!) {
       _currentIndex = _currentIndex! - 1;
-      _indexController.add(_currentIndex);
     }
-  }
-
-  @override
-  Future<Duration?> setUrl(String url,
-      {Map<String, String>? headers,
-      Duration? initialPosition,
-      bool preload = true,
-      dynamic tag}) async {
-    if (failingUrls.contains(url)) {
-      throw Exception('Network unreachable: $url');
-    }
-    _loadSingle(url, initialPosition);
-    return _duration;
-  }
-
-  @override
-  Future<Duration?> setFilePath(String filePath,
-      {Duration? initialPosition, bool preload = true, dynamic tag}) async {
-    _loadSingle('file:$filePath', initialPosition);
-    return _duration;
+    _indexController.add(_currentIndex);
   }
 
   @override
   Future<void> play() async {
-    _currentPlayerState = PlayerState(true, ProcessingState.ready);
-    _stateController.add(_currentPlayerState);
+    _setState(true, ProcessingState.ready);
 
     // Playback continues from the current position
     _positionController.add(_position);
@@ -136,22 +161,27 @@ class MockAudioPlayer extends Mock implements AudioPlayer {
 
   @override
   Future<void> pause() async {
-    _currentPlayerState = PlayerState(false, ProcessingState.ready);
-    _stateController.add(_currentPlayerState);
+    _setState(false, processingState);
   }
 
   @override
   Future<void> stop() async {
-    _currentPlayerState = PlayerState(false, ProcessingState.idle);
-    _stateController.add(_currentPlayerState);
+    _setState(false, ProcessingState.idle);
     _position = Duration.zero;
     _positionController.add(_position);
   }
 
   @override
   Future<void> seek(Duration? position, {int? index}) async {
-    _position = position ?? Duration.zero;
-    _positionController.add(_position);
+    if (index == null || index == _currentIndex) {
+      _position = position ?? Duration.zero;
+      _positionController.add(_position);
+      return;
+    }
+    loadedSources.add(_describe(_sequence[index]));
+    _moveTo(index, position ?? Duration.zero);
+    // The platform reports a load error after the seek returns
+    if (_fails(index)) scheduleMicrotask(_failCurrent);
   }
 
   @override
@@ -165,26 +195,31 @@ class MockAudioPlayer extends Mock implements AudioPlayer {
     await _durationController.close();
     await _stateController.close();
     await _indexController.close();
+    await _errorController.close();
   }
 
   // Helper methods for testing
+
+  /// The current track playing to its end: the player moves on to the next
+  /// item, or completes after the last one.
   void simulateCompletion() {
-    _currentPlayerState = PlayerState(false, ProcessingState.completed);
-    _stateController.add(_currentPlayerState);
+    if (_currentIndex != null && _currentIndex! + 1 < _sequence.length) {
+      simulateTrackTransition();
+    } else {
+      _setState(playing, ProcessingState.completed);
+    }
   }
 
   /// The player reaching the end of the current item and moving on to the
-  /// next one in its sequence, as it does for gapless playback.
+  /// next one in its sequence.
   void simulateTrackTransition(
       {Duration duration = const Duration(minutes: 4)}) {
-    assert(_currentIndex! + 1 < sequenceSources.length,
-        'no next item in the sequence');
-    _currentIndex = _currentIndex! + 1;
-    _indexController.add(_currentIndex);
+    assert(
+        _currentIndex! + 1 < _sequence.length, 'no next item in the sequence');
+    _moveTo(_currentIndex! + 1, Duration.zero);
     _duration = duration;
     _durationController.add(_duration);
-    _position = Duration.zero;
-    _positionController.add(_position);
+    if (_fails(_currentIndex!)) _failCurrent();
   }
 
   /// A playback event from the platform reporting [index]. just_audio
@@ -194,6 +229,10 @@ class MockAudioPlayer extends Mock implements AudioPlayer {
     _indexController.add(index);
   }
 
+  /// A load error for the current item, e.g. the network dropping while it
+  /// streams.
+  void simulateLoadError() => _failCurrent();
+
   void simulatePositionChange(Duration position) {
     _position = position;
     _positionController.add(_position);
@@ -202,16 +241,6 @@ class MockAudioPlayer extends Mock implements AudioPlayer {
   void simulateDurationChange(Duration? duration) {
     _duration = duration;
     _durationController.add(_duration);
-  }
-
-  // Additional just_audio specific methods that might be needed
-  @override
-  Future<Duration?> setAudioSource(AudioSource source,
-      {bool preload = true,
-      int? initialIndex,
-      Duration? initialPosition}) async {
-    // Mock implementation
-    return _duration;
   }
 
   @override

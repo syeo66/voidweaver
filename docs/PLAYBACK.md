@@ -2,48 +2,45 @@
 
 Non-obvious behavior in `lib/services/audio_player_service.dart` and `lib/services/audio_handler.dart`. Most of it works around `just_audio` quirks. Keep it in mind when changing either file.
 
-## Skip protection
+## The player owns the queue
 
-Manual skips, native media controls and song completion can all try to advance at the same time, which used to cause double skips. The guards:
+`_loadQueue()` hands the whole playlist to `just_audio` with `setAudioSources()` (lazy preparation). The player moves from track to track by itself, gaplessly, and the service follows its current index. There is no completion logic of its own in the service: `ProcessingState.completed` only means the end of the playlist.
 
-- `_skipOperationInProgress` blocks concurrent skips from any source. Manual skips stop playback first so no completion event fires mid-skip.
-- `_currentIndex` is the working index. `_confirmedIndex` is the last track that actually started. Auto-advance uses the confirmed index.
-- `_lastCompletedSongId` and `_lastManualCompletedSongId` stop the same song from completing twice.
-- `_autoAdvanceToNext()` resets `_skipOperationInProgress` and calls `notifyListeners()` in a `finally` block. Without that, a failed advance left the skip buttons stuck loading.
-- Skips are debounced (200 ms, `_skipDebounceMs`) in the service, so UI and system controls share the debounce.
-- `_indexChangeLog` keeps the last 20 index changes with their source, for debugging.
+Earlier versions loaded one track at a time and advanced on `completed`. That event sometimes didn't fire, which needed fallbacks (near the end, stuck playhead, paused near the end), which in turn caused double skips and skips on pause. Don't bring them back: within a sequence the player advances without them.
 
-## Completion fallbacks
+- Every source is tagged with a `_QueueEntry` (generation and playlist index). `_followPlayer()` maps the player's current index to its entry, so a sequence position always resolves to the right song. Entries of an older generation (a replaced sequence) are ignored.
+- Only an advance by one counts as the player moving on (`_followPlayer()`): it scrobbles the finished track, then sends "now playing", applies ReplayGain and starts the next downloads. `just_audio` re-emits the current index with every playback event, so repeated and backwards events are ignored.
+- Changes to the player's index or sequence go through `_playerOp()`, one at a time. Index events are ignored while one runs, and the service catches up with the player afterwards.
+- After a skip, `_awaitedIndex` holds the target until the player reports it. Until then an event can still be from before the seek; after Previous, the old track's index would look like an advance.
+- The player's volume applies to the whole sequence, so ReplayGain for the next track is applied just after the player moves on. In track mode the change can be audible right at the boundary; album mode keeps the same gain within an album. Skips apply it before seeking.
 
-`just_audio`'s `ProcessingState.completed` sometimes never fires (buffering, VBR duration mismatch). Two fallbacks call the same `_onSongComplete()`:
+## Downloads in the queue
 
-| Fallback | Condition | Log tag |
-|----------|-----------|---------|
-| Position | Playing and within 500 ms of the end | `[manual_completion]` |
-| Stuck playhead | In the last 2 s, position hasn't moved for ~1 s | `[stuck_playback]` |
+Tracks already in the audio cache go into the sequence as files, the rest as streams. While a track plays, the next 3 are downloaded (see [CACHING.md](CACHING.md)), and `_useCachedFile()` replaces each one's stream with the file. The track then plays without the network and isn't downloaded a second time.
 
-There is deliberately no fallback for the player pausing near the end. `just_audio` keeps `playing` true while buffering and on completion, so ready and not playing only happens after `pause()`. An earlier fallback treated that as completion, so pausing in the last 2 s of a track, or restoring a position there, skipped to the next track.
+- The file is inserted before the stream is removed, and only after the current track, so positions up to the current track never shift.
+- The next track is left alone in the last 10 s of the current one (`_swapCutoff`), when the player may already be moving on to the stream. Removing the item the player just moved to would skip it.
+- `_fileBacked` records which positions are files, so nothing is swapped twice.
 
-Both are skipped during a skip operation and respect the completion IDs above. The IDs are reset in `playAlbum()`, `playRandomSongs()` and `playSong()`.
+## Load errors
 
-The position fallback is also skipped while a next track is queued for gapless playback (below). Otherwise it would reload the next track 500 ms before the player switches to it on its own.
+A track that can't load (offline and not downloaded, or a stream breaking off) is reported on `errorStream`. `_onPlayerError()` continues at the next downloaded track; if there is none, playback stops on the failing track and the next `play()` loads the queue again from there. Errors while a `_playerOp()` runs are handled once it finishes. `setAudioSources()` throws its own errors, and `_loadQueue()` handles them the same way.
 
-## Gapless playback
+After `stop()` or an error the player is idle, so `play()` and skips load the queue again (`_loadQueue()`) instead of seeking.
 
-Once the next track is in the audio cache, `_queueNextTrack()` appends it to the player's sequence, and the player moves on to it without a gap. At most one track is queued after the current one:
+## Skips
 
-- `_loadSource()` replaces the whole sequence, so `playAlbum()`, skips, Previous and restoring all reset it. Manual skips still go through the regular reload.
-- When `currentIndexStream` reports the queued track's position in the sequence, and the source there is the one that was queued, `_onGaplessTransition()` does what `_onSongComplete()` and `_playSongAtIndex()` would do: scrobbles the finished track, updates the index, applies ReplayGain, sends "now playing" and starts the next preloads. Then it queues the following track.
-- Finished tracks stay in the sequence until the next `_loadSource()`, so positions in it never shift. just_audio re-emits the current index with every playback event and sequence change, and an event can carry an index from before the latest change. When the finished track was removed after each transition, such an event pointed at the newly queued track, which was taken for another transition: the service skipped ahead and removed the track that was actually playing.
-- Only cached files are queued, never streams. If the network dropped, the player would fail at the transition, while the regular advance can skip ahead to a cached track. If the next track isn't cached by the end of the current one, playback advances as before, with a short gap.
-- Changes to the sequence go through `_changeSources()`, which runs them one at a time. Without it, a queue operation that started before a skip could append the old next track after the skip's new source. `_loadSource()` also clears `_queuedNextIndex` as soon as it's called, and nothing is queued while a load is pending, so a transition that happens while a skip is loading is ignored.
-- The player's volume applies to the whole sequence, so ReplayGain for the new track is applied just after the transition. In track mode the volume change can be audible right at the boundary; album mode keeps the same gain within an album, so gapless albums play without a jump.
+- `next()` and `previous()` seek within the sequence (`_jumpTo()`). Nothing is reloaded, and a downloaded target plays from its file.
+- Skips are debounced (200 ms, `_skipDebounceMs`) in the service, so UI and system controls share the debounce. `_skipOperationInProgress` blocks a skip while another runs, and is reset in a `finally` block so the skip buttons can't get stuck.
+- A skip scrobbles the current track if it passed the threshold.
+
+There is deliberately no handling for the player pausing near the end of a track: `just_audio` keeps `playing` true while buffering and on completion, so ready and not playing only happens after `pause()`.
 
 ## Bluetooth and system controls
 
 `VoidweaverAudioHandler` listens to `AudioPlayerService` and also directly to `just_audio`'s `playerStateStream`.
 
-During a skip, `just_audio` briefly reports `playing=false`. Bluetooth devices took that as a user pause, so skip turned into pause. The handler masks this: while `isSkipOperationInProgress` is true it reports the last known playing state and a ready processing state.
+When skips reloaded the source, `just_audio` briefly reported `playing=false`. Bluetooth devices took that as a user pause, so skip turned into pause. The handler masks this: while `isSkipOperationInProgress` is true it reports the last known playing state and a ready processing state. Skips now seek within the queue, which keeps `playing`, but a skip after `stop()` or an error still loads the queue again.
 
 ## Audio focus
 
@@ -55,15 +52,15 @@ Don't request focus anywhere else, including native code. Android treats each fo
 
 `PlaybackPersistenceService` saves the queue, index and position (throttled to every 5 s while playing, and after every track change). On start, `restorePlaybackState()` loads the saved song paused.
 
-- The source is loaded with `initialPosition` instead of `setUrl()` followed by `seek()`. With a separate seek, load events reporting position 0 could arrive after the seek, so the playhead showed 0:00 while audio resumed at the saved position. `_currentPosition` is also set directly so the UI is right before the player reports anything.
-- If loading fails (e.g. offline at startup), `_needsSourceReload` is set and `play()` reloads the song at `_pendingResumePosition`.
-- A restored song has no `_currentSongStartTime` until it's played. The first `play()` sets it and sends "now playing", because the song didn't start through `_playSongAtIndex()`. Without a start time it would never be scrobbled.
+- The queue is loaded with `initialIndex` and `initialPosition` instead of a `seek()` afterwards. With a separate seek, load events reporting position 0 could arrive after the seek, so the playhead showed 0:00 while audio resumed at the saved position. `_currentPosition` is also set directly so the UI is right before the player reports anything.
+- If loading fails (e.g. offline at startup), `_needsSourceReload` is set and `play()` loads the queue again at `_pendingResumePosition`. Restoring never skips ahead to a downloaded track.
+- A restored song has no `_currentSongStartTime` until it's played. The first `play()` sets it, sends "now playing" and starts the downloads. Without a start time it would never be scrobbled.
 
 ## Scrobbling
 
 A song is scrobbled once it has played for the minimum play time (default 2 min) or the percentage threshold (default 50%), whichever comes first. Both are configurable in Settings. If neither is reached, the song is still scrobbled when it completes.
 
-Each play is scrobbled at most once, tracked by `_currentSongScrobbled`. The flag is reset whenever a song starts in `_playSongAtIndex()`, so replaying a song (e.g. with Previous) scrobbles it again. Completion checks the flag too, so a song that passed the threshold isn't submitted a second time when it ends. A song restored at a position already past the threshold counts as scrobbled, since that happened in the previous session and the queue persisted it.
+Each play is scrobbled at most once, tracked by `_currentSongScrobbled`. The flag is reset whenever a song starts (`_setCurrentTrack()`), so replaying a song (e.g. with Previous) scrobbles it again. Completion checks the flag too, so a song that passed the threshold isn't submitted a second time when it ends. A song restored at a position already past the threshold counts as scrobbled, since that happened in the previous session and the queue persisted it.
 
 Requests go through `ScrobbleQueue`, never directly to the API. The queue:
 

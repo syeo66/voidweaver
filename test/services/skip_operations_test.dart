@@ -155,21 +155,25 @@ void main() {
       player.failingUrls.add(urlFor('s2'));
 
       await service.next();
+      // The player reports the load error after the seek
+      await settle();
 
       expect(service.currentIndex, 2);
       expect(service.currentSong?.id, 's3');
       expect(player.loadedSources.last, startsWith('file:'));
     });
 
-    test('stays on the current track when nothing later can load', () async {
+    test('stops on a track that can\'t load when nothing later can', () async {
       await service.playAlbum(album(2));
       await Future.delayed(pastSkipDebounce);
       player.failingUrls.add(urlFor('s2'));
 
       await service.next();
+      await settle();
 
       expect(service.isSkipOperationInProgress, isFalse);
-      expect(player.loadedSources, [urlFor('s1')]);
+      expect(service.currentSong?.id, 's2');
+      expect(service.playbackState, PlaybackState.stopped);
     });
   });
 
@@ -210,15 +214,28 @@ void main() {
       expect(service.isSkipOperationInProgress, isFalse);
     });
 
-    test('advances only once for duplicate completion events', () async {
+    test('advances once per index event, however often it repeats', () async {
       await service.playAlbum(album(3));
 
       player.simulateCompletion();
-      player.simulateCompletion();
+      player.simulateIndexEvent(1);
+      player.simulateIndexEvent(1);
       await settle();
 
       expect(service.currentIndex, 1);
-      expect(player.loadedSources, [urlFor('s1'), urlFor('s2')]);
+      // The player moved on by itself; nothing was loaded
+      expect(player.loadedSources, [urlFor('s1')]);
+    });
+
+    test('handles repeated end-of-playlist events once', () async {
+      await service.playAlbum(album(1));
+
+      player.simulateCompletion();
+      player.simulateCompletion();
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      verify(mockApi.scrobbleSubmission('s1', playedAt: anyNamed('playedAt')))
+          .called(1);
     });
 
     test('stops at the end of the playlist', () async {
