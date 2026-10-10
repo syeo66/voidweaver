@@ -103,9 +103,13 @@ class AudioPlayerService extends ChangeNotifier {
   StreamSubscription? _currentIndexSubscription;
 
   // Gapless playback: once the next track is cached on disk it's appended to
-  // the player's sequence, so the player moves on to it without a gap. The
-  // sequence holds at most [current track, next track].
+  // the player's sequence, so the player moves on to it without a gap.
+  // Finished tracks stay in the sequence until the next _loadSource(), so
+  // indices in it never shift.
   int? _queuedNextIndex;
+  // Where the queued track is in the player's sequence, and its source
+  int? _queuedSequenceIndex;
+  IndexedAudioSource? _queuedSource;
   // Sources requested through _loadSource() that haven't finished loading
   int _pendingLoads = 0;
   // Serializes changes to the player's sequence
@@ -254,8 +258,11 @@ class AudioPlayerService extends ChangeNotifier {
       }
     });
 
+    // just_audio re-emits the current index with every playback event and
+    // sequence change, and an event can report an index from before the
+    // latest change, so only the queued track's own position counts.
     _currentIndexSubscription = _audioPlayer.currentIndexStream.listen((index) {
-      if (index == 1 && _queuedNextIndex != null) {
+      if (index != null && _isQueuedTrackAt(index)) {
         _onGaplessTransition();
       }
     });
@@ -570,7 +577,7 @@ class AudioPlayerService extends ChangeNotifier {
     // Replacing the sequence drops a queued next track. Cleared right away,
     // not once the load runs, so a transition to the old queued track in the
     // meantime isn't taken for the next track of the new position.
-    _queuedNextIndex = null;
+    _clearQueuedTrack();
     _pendingLoads++;
     return _changeSources(() async {
       final streamUrl = _api.getStreamUrl(song.id);
@@ -595,7 +602,12 @@ class AudioPlayerService extends ChangeNotifier {
         if (_disposed || _pendingLoads > 0 || _queuedNextIndex != null) {
           return;
         }
-        if (_audioPlayer.sequence.length != 1) return;
+        // The current track must be the last one in the sequence
+        final sequenceLength = _audioPlayer.sequence.length;
+        if (sequenceLength == 0 ||
+            _audioPlayer.currentIndex != sequenceLength - 1) {
+          return;
+        }
         final nextIndex = _currentIndex + 1;
         if (nextIndex >= _playlist.length) return;
         final file = _audioCache.getCachedFile(_playlist[nextIndex].id);
@@ -603,21 +615,40 @@ class AudioPlayerService extends ChangeNotifier {
 
         // Set before adding, in case the player reaches the end of the
         // current track while the source is being added
+        final source = AudioSource.file(file.path);
         _queuedNextIndex = nextIndex;
+        _queuedSequenceIndex = sequenceLength;
+        _queuedSource = source;
         try {
-          await _audioPlayer.addAudioSource(AudioSource.file(file.path));
+          await _audioPlayer.addAudioSource(source);
           debugPrint(
               '[gapless] Queued index $nextIndex: ${_playlist[nextIndex].title}');
         } catch (e) {
           debugPrint('[gapless] Could not queue index $nextIndex: $e');
-          _queuedNextIndex = null;
+          if (identical(_queuedSource, source)) _clearQueuedTrack();
         }
       });
+
+  /// Whether the player's item at [sequenceIndex] is the queued next track.
+  bool _isQueuedTrackAt(int sequenceIndex) {
+    if (_queuedNextIndex == null || sequenceIndex != _queuedSequenceIndex) {
+      return false;
+    }
+    final sequence = _audioPlayer.sequence;
+    return sequenceIndex < sequence.length &&
+        identical(sequence[sequenceIndex], _queuedSource);
+  }
+
+  void _clearQueuedTrack() {
+    _queuedNextIndex = null;
+    _queuedSequenceIndex = null;
+    _queuedSource = null;
+  }
 
   /// The player moved on to the queued next track by itself.
   Future<void> _onGaplessTransition() async {
     final nextIndex = _queuedNextIndex!;
-    _queuedNextIndex = null;
+    _clearQueuedTrack();
     _logIndexChange('gapless', _currentIndex, nextIndex, 'player advanced');
 
     // The previous track played to the end
@@ -639,13 +670,9 @@ class AudioPlayerService extends ChangeNotifier {
           cachedFile: _audioCache.getCachedFile(_currentSong!.id));
       _scrobbleQueue.queueNowPlaying(_currentSong!.id);
 
-      // Drop the finished track so the sequence is [current] again
-      await _changeSources(() async {
-        if (_audioPlayer.currentIndex == 1 &&
-            _audioPlayer.sequence.length == 2) {
-          await _audioPlayer.removeAudioSourceAt(0);
-        }
-      });
+      // The finished track stays in the sequence: removing it would shift
+      // the indices, and a late index event could then be taken for a
+      // transition to the next queued track.
       _preloadUpcomingSongs();
       unawaited(_queueNextTrack());
       await _saveCurrentState();

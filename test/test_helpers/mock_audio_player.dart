@@ -23,6 +23,9 @@ class MockAudioPlayer extends Mock implements AudioPlayer {
 
   /// The player's current sequence, in the same notation as [loadedSources].
   final List<String> sequenceSources = [];
+  // The source objects behind [sequenceSources], so [sequence] returns the
+  // same instances on every call, as just_audio does
+  final List<IndexedAudioSource> _sequence = [];
   int? _currentIndex;
 
   /// Every volume set on the player, in order.
@@ -56,12 +59,7 @@ class MockAudioPlayer extends Mock implements AudioPlayer {
   int? get currentIndex => _currentIndex;
 
   @override
-  List<IndexedAudioSource> get sequence => [
-        for (final source in sequenceSources)
-          source.startsWith('file:')
-              ? AudioSource.file(source.substring(5))
-              : AudioSource.uri(Uri.parse(source))
-      ];
+  List<IndexedAudioSource> get sequence => List.unmodifiable(_sequence);
 
   /// Replaces the sequence with [source], as setUrl/setFilePath do.
   void _loadSingle(String source, Duration? initialPosition) {
@@ -69,6 +67,11 @@ class MockAudioPlayer extends Mock implements AudioPlayer {
     sequenceSources
       ..clear()
       ..add(source);
+    _sequence
+      ..clear()
+      ..add(source.startsWith('file:')
+          ? AudioSource.file(source.substring(5))
+          : AudioSource.uri(Uri.parse(source)));
     _currentIndex = 0;
     _indexController.add(0);
     _duration = const Duration(minutes: 3);
@@ -83,11 +86,19 @@ class MockAudioPlayer extends Mock implements AudioPlayer {
     sequenceSources.add(source.uri.scheme == 'file'
         ? 'file:${source.uri.toFilePath()}'
         : '${source.uri}');
+    _sequence.add(source);
+    // just_audio broadcasts the sequence state on every change, which
+    // re-emits the current index
+    _indexController.add(_currentIndex);
   }
 
   @override
   Future<void> removeAudioSourceAt(int index) async {
     sequenceSources.removeAt(index);
+    _sequence.removeAt(index);
+    // just_audio re-emits the index it last got from the platform before the
+    // platform reports the shifted one
+    _indexController.add(_currentIndex);
     if (_currentIndex != null && index < _currentIndex!) {
       _currentIndex = _currentIndex! - 1;
       _indexController.add(_currentIndex);
@@ -174,6 +185,13 @@ class MockAudioPlayer extends Mock implements AudioPlayer {
     _durationController.add(_duration);
     _position = Duration.zero;
     _positionController.add(_position);
+  }
+
+  /// A playback event from the platform reporting [index]. just_audio
+  /// re-emits the current index with every playback event, and an event can
+  /// arrive after the sequence already changed.
+  void simulateIndexEvent(int? index) {
+    _indexController.add(index);
   }
 
   void simulatePositionChange(Duration position) {

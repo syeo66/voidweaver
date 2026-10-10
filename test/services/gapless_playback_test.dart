@@ -51,7 +51,8 @@ void main() {
     fail('Timed out waiting until $description');
   }
 
-  bool nextQueued() => player.sequenceSources.length == 2;
+  /// Whether a track is queued after the one the player is on.
+  bool nextQueued() => player.currentIndex == player.sequenceSources.length - 2;
 
   setUpAll(() {
     TestWidgetsFlutterBinding.ensureInitialized();
@@ -136,10 +137,8 @@ void main() {
       await service.playAlbum(albumOf(3));
       await until(nextQueued, 'the next track is queued');
 
-      final s2File = 'file:${cache.getCachedFile('s2')!.path}';
       player.simulateTrackTransition();
-      await until(() => player.sequenceSources.first == s2File,
-          'the finished track is dropped');
+      await until(() => service.currentSong?.id == 's2', 'the service follows');
 
       expect(service.currentIndex, 1);
       expect(service.currentSong?.id, 's2');
@@ -160,7 +159,36 @@ void main() {
                   'file:${cache.getCachedFile('s3')?.path}',
           's3 is queued after s2');
 
-      expect(player.currentIndex, 0);
+      // The finished track stays, so indices in the sequence don't shift
+      expect(player.sequenceSources.first, urlFor('s1'));
+      expect(player.currentIndex, 1);
+
+      player.simulateTrackTransition();
+      await until(() => service.currentSong?.id == 's3', 'the player moves on');
+      expect(player.loadedSources, [urlFor('s1')]);
+    });
+
+    test('ignores repeated and late index events', () async {
+      await service.playAlbum(albumOf(4));
+      await until(nextQueued, 'the next track is queued');
+      player.simulateTrackTransition();
+      await until(
+          () =>
+              nextQueued() &&
+              player.sequenceSources.last ==
+                  'file:${cache.getCachedFile('s3')?.path}',
+          's3 is queued after s2');
+      final sequence = List.of(player.sequenceSources);
+
+      // Events from before the transition, and ones repeating its index
+      for (final index in [1, 0, 1, 1]) {
+        player.simulateIndexEvent(index);
+        await Future.delayed(const Duration(milliseconds: 20));
+      }
+
+      expect(service.currentSong?.id, 's2');
+      expect(player.sequenceSources, sequence);
+      expect(player.loadedSources, [urlFor('s1')]);
     });
 
     test('scrobbles the finished track and reports the new one', () async {
@@ -189,8 +217,7 @@ void main() {
       await service.playAlbum(albumOf(2));
       await until(nextQueued, 'the next track is queued');
       player.simulateTrackTransition();
-      await until(() => player.sequenceSources.length == 1,
-          'the finished track is dropped');
+      await until(() => service.currentSong?.id == 's2', 'the service follows');
 
       player.simulateCompletion();
       await Future.delayed(const Duration(milliseconds: 20));
