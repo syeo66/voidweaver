@@ -8,6 +8,7 @@ import 'api_cache.dart';
 import 'network_config.dart';
 import 'network_retry.dart';
 import 'replaygain_debug_logger.dart';
+import '../utils/redact.dart';
 
 class SubsonicApi {
   final String serverUrl;
@@ -117,21 +118,21 @@ class SubsonicApi {
       }
     } on NetworkTimeoutException catch (e) {
       if (kDebugMode) {
-        debugPrint('Request timeout: $uri - $e');
+        debugPrint(redactCredentials('Request timeout: $uri - $e'));
       }
       throw Exception(
           'Request timed out after ${e.attemptsMade} attempts: ${e.message}');
     } on NetworkConnectionException catch (e) {
       if (kDebugMode) {
-        debugPrint('Connection error: $uri - $e');
+        debugPrint(redactCredentials('Connection error: $uri - $e'));
       }
       throw Exception(
           'Connection failed after ${e.attemptsMade} attempts: ${e.message}');
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('Network request failed: $uri - $e');
+        debugPrint(redactCredentials('Network request failed: $uri - $e'));
       }
-      throw Exception('Network error: $e');
+      throw Exception(redactCredentials('Network error: $e'));
     }
   }
 
