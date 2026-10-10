@@ -232,6 +232,19 @@ void main() {
       expect(player.loadedSources, [urlFor('s1')]);
     });
 
+    test('pausing just before the end does not advance', () async {
+      await service.playAlbum(album(3));
+      player.simulatePositionChange(const Duration(minutes: 2, seconds: 59));
+      await settle();
+
+      await service.pause();
+      await settle();
+
+      expect(service.currentIndex, 0);
+      expect(service.playbackState, PlaybackState.paused);
+      expect(player.loadedSources, [urlFor('s1')]);
+    });
+
     test('scrobbles the completed track', () async {
       await service.playAlbum(album(2));
 

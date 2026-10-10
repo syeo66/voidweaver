@@ -38,11 +38,10 @@ class _PositionUpdate {
 }
 
 class AudioPlayerService extends ChangeNotifier {
-  // End-of-song detection configuration constants
-  // These constants configure the enhanced triple-detection mechanism for song completion:
-  // 1. Traditional detection: triggers when within 500ms of song end (see _checkManualCompletion)
+  // End-of-song detection configuration constants, used by the fallbacks in
+  // _checkManualCompletion for when just_audio's completion event doesn't fire:
+  // 1. Traditional detection: triggers when within 500ms of song end
   // 2. Stuck playhead detection: identifies when position stops moving in near-end zone
-  // 3. Stop-based detection: triggers when playback stops within 2s of end (see _checkCompletionOnStop)
 
   /// Time window (ms) to analyze recent position updates for stuck playhead detection
   static const int _stuckPositionTimeoutMs = 2000;
@@ -295,14 +294,10 @@ class AudioPlayerService extends ChangeNotifier {
             debugPrint('[audio_player] Set state to LOADING');
             break;
           case ProcessingState.ready:
-            // This is the key fix: ready + not playing = paused
+            // just_audio keeps `playing` true while buffering and on
+            // completion, so ready + not playing is always a pause
             _playbackState = PlaybackState.paused;
             debugPrint('[audio_player] Set state to PAUSED');
-
-            // Additional completion detection: if we're paused/stopped very close to the end,
-            // check if this should trigger completion (handles cases where position stream
-            // stops updating before completion event fires)
-            _checkCompletionOnStop();
             break;
           case ProcessingState.completed:
             // Don't handle completion here - handled in separate subscription
@@ -331,9 +326,6 @@ class AudioPlayerService extends ChangeNotifier {
 
       debugPrint(
           'Attempting to restore playlist with ${savedState.playlist.length} songs');
-
-      // Validate playlist integrity first
-      await _validatePlaylist(savedState.playlist);
 
       // Restore state
       _playlist = savedState.playlist;
@@ -389,23 +381,6 @@ class AudioPlayerService extends ChangeNotifier {
     }
 
     return false;
-  }
-
-  Future<void> _validatePlaylist(List<Song> playlist) async {
-    // Quick validation: check if first few songs still exist on server
-    const maxChecks = 3;
-    final checksToPerform =
-        playlist.length < maxChecks ? playlist.length : maxChecks;
-
-    for (int i = 0; i < checksToPerform; i++) {
-      final song = playlist[i];
-      try {
-        // Simple check: try to get stream URL (this validates song exists)
-        _api.getStreamUrl(song.id);
-      } catch (e) {
-        throw Exception('Saved playlist contains invalid songs');
-      }
-    }
   }
 
   Future<void> _saveCurrentState() async {
@@ -977,47 +952,6 @@ class AudioPlayerService extends ChangeNotifier {
     }
 
     return isStuck;
-  }
-
-  /// Checks if we should trigger completion when playback stops near the end.
-  /// This handles cases where the position stream stops updating before the
-  /// completion event fires, causing playback to get stuck.
-  void _checkCompletionOnStop() {
-    // Only check if we have a current song, valid duration, and aren't already handling a skip
-    if (_currentSong == null ||
-        _totalDuration == Duration.zero ||
-        _skipOperationInProgress) {
-      return;
-    }
-
-    // Prevent duplicate completions for the same song
-    if (_lastManualCompletedSongId == _currentSong!.id) {
-      return;
-    }
-
-    // Get current position from the player
-    final currentPosition = _currentPosition;
-    final remainingTime = _totalDuration - currentPosition;
-
-    // If we're within 2 seconds of the end, consider this a completion
-    // (generous threshold to catch cases where playback stopped slightly before the actual end)
-    const stoppedNearEndThreshold = Duration(seconds: 2);
-
-    if (remainingTime <= stoppedNearEndThreshold &&
-        remainingTime >= Duration.zero) {
-      debugPrint(
-          '[stop_completion] Playback stopped near end - position: ${currentPosition.inSeconds}s, duration: ${_totalDuration.inSeconds}s, remaining: ${remainingTime.inSeconds}s');
-
-      // Verify the completion event hasn't fired
-      if (_audioPlayer.playerState.processingState !=
-              ProcessingState.completed &&
-          _lastCompletedSongId != _currentSong!.id) {
-        debugPrint(
-            '[stop_completion] Triggering completion - playback stopped ${remainingTime.inMilliseconds}ms from end');
-        _lastManualCompletedSongId = _currentSong!.id;
-        _onSongComplete();
-      }
-    }
   }
 
   /// Manual completion detection as fallback for when just_audio doesn't fire completion

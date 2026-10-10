@@ -15,15 +15,16 @@ Manual skips, native media controls and song completion can all try to advance a
 
 ## Completion fallbacks
 
-`just_audio`'s `ProcessingState.completed` sometimes never fires (buffering, VBR duration mismatch). Three fallbacks call the same `_onSongComplete()`:
+`just_audio`'s `ProcessingState.completed` sometimes never fires (buffering, VBR duration mismatch). Two fallbacks call the same `_onSongComplete()`:
 
 | Fallback | Condition | Log tag |
 |----------|-----------|---------|
 | Position | Playing and within 500 ms of the end | `[manual_completion]` |
 | Stuck playhead | In the last 2 s, position hasn't moved for ~1 s | `[stuck_playback]` |
-| Stop | Player paused or stopped within 2 s of the end | `[stop_completion]` |
 
-All three are skipped during a skip operation and respect the completion IDs above. The IDs are reset in `playAlbum()`, `playRandomSongs()` and `playSong()`.
+There is deliberately no fallback for the player pausing near the end. `just_audio` keeps `playing` true while buffering and on completion, so ready and not playing only happens after `pause()`. An earlier fallback treated that as completion, so pausing in the last 2 s of a track, or restoring a position there, skipped to the next track.
+
+Both are skipped during a skip operation and respect the completion IDs above. The IDs are reset in `playAlbum()`, `playRandomSongs()` and `playSong()`.
 
 The position fallback is also skipped while a next track is queued for gapless playback (below). Otherwise it would reload the next track 500 ms before the player switches to it on its own.
 
