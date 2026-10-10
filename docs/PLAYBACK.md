@@ -25,6 +25,18 @@ Manual skips, native media controls and song completion can all try to advance a
 
 All three are skipped during a skip operation and respect the completion IDs above. The IDs are reset in `playAlbum()`, `playRandomSongs()` and `playSong()`.
 
+The position fallback is also skipped while a next track is queued for gapless playback (below). Otherwise it would reload the next track 500 ms before the player switches to it on its own.
+
+## Gapless playback
+
+Once the next track is in the audio cache, `_queueNextTrack()` appends it to the player's sequence, and the player moves on to it without a gap. The sequence holds at most `[current, next]`:
+
+- `_loadSource()` replaces the whole sequence, so `playAlbum()`, skips, Previous and restoring all reset it. Manual skips still go through the regular reload.
+- When `currentIndexStream` reports index 1, `_onGaplessTransition()` does what `_onSongComplete()` and `_playSongAtIndex()` would do: scrobbles the finished track, updates the index, applies ReplayGain, sends "now playing" and starts the next preloads. Then it removes the finished track, so the sequence is back to `[current]`, and queues the following track.
+- Only cached files are queued, never streams. If the network dropped, the player would fail at the transition, while the regular advance can skip ahead to a cached track. If the next track isn't cached by the end of the current one, playback advances as before, with a short gap.
+- Changes to the sequence go through `_changeSources()`, which runs them one at a time. Without it, a queue operation that started before a skip could append the old next track after the skip's new source. `_loadSource()` also clears `_queuedNextIndex` as soon as it's called, and nothing is queued while a load is pending, so a transition that happens while a skip is loading is ignored.
+- The player's volume applies to the whole sequence, so ReplayGain for the new track is applied just after the transition. In track mode the volume change can be audible right at the boundary; album mode keeps the same gain within an album, so gapless albums play without a jump.
+
 ## Bluetooth and system controls
 
 `VoidweaverAudioHandler` listens to `AudioPlayerService` and also directly to `just_audio`'s `playerStateStream`.

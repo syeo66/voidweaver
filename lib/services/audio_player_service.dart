@@ -100,6 +100,16 @@ class AudioPlayerService extends ChangeNotifier {
   StreamSubscription? _durationSubscription;
   StreamSubscription? _playerCompleteSubscription;
   StreamSubscription? _playerStateSubscription;
+  StreamSubscription? _currentIndexSubscription;
+
+  // Gapless playback: once the next track is cached on disk it's appended to
+  // the player's sequence, so the player moves on to it without a gap. The
+  // sequence holds at most [current track, next track].
+  int? _queuedNextIndex;
+  // Sources requested through _loadSource() that haven't finished loading
+  int _pendingLoads = 0;
+  // Serializes changes to the player's sequence
+  Future<void> _sourceChange = Future.value();
 
   // Enhanced loading states
   AudioLoadingState _audioLoadingState = AudioLoadingState.idle;
@@ -122,6 +132,9 @@ class AudioPlayerService extends ChangeNotifier {
 
   // Whether the current play of the current song has been scrobbled
   bool _currentSongScrobbled = false;
+
+  // Async work (preloads, ReplayGain reads) can finish after dispose()
+  bool _disposed = false;
 
   AudioPlayerService(this._api, this._settingsService,
       {AudioPlayer? audioPlayer,
@@ -241,6 +254,12 @@ class AudioPlayerService extends ChangeNotifier {
       }
     });
 
+    _currentIndexSubscription = _audioPlayer.currentIndexStream.listen((index) {
+      if (index == 1 && _queuedNextIndex != null) {
+        _onGaplessTransition();
+      }
+    });
+
     _playerStateSubscription = _audioPlayer.playerStateStream.listen((state) {
       debugPrint(
           '[audio_player] State changed to: $state (skipInProgress: $_skipOperationInProgress)');
@@ -340,6 +359,7 @@ class AudioPlayerService extends ChangeNotifier {
           // Apply ReplayGain volume adjustment to ensure settings are applied after restoration
           await _readReplayGainAndApplyVolume(streamUrl,
               cachedFile: _audioCache.getCachedFile(_currentSong!.id));
+          unawaited(_queueNextTrack());
         } catch (e) {
           debugPrint('Could not load restored song, will retry on play: $e');
           _needsSourceReload = true;
@@ -536,20 +556,102 @@ class AudioPlayerService extends ChangeNotifier {
     }));
   }
 
+  /// Runs [change] to the player's sequence after earlier changes finished,
+  /// so a queued next track can't land in a sequence that was just replaced.
+  Future<T> _changeSources<T>(Future<T> Function() change) {
+    final result = _sourceChange.then((_) => change());
+    _sourceChange = result.then<void>((_) {}, onError: (_) {});
+    return result;
+  }
+
   /// Sets the player's source to [song], from the disk cache when available,
   /// starting at [initialPosition]. Returns the song's stream URL.
-  Future<String> _loadSource(Song song, Duration initialPosition) async {
-    final streamUrl = _api.getStreamUrl(song.id);
-    final cachedFile = _audioCache.getCachedFile(song.id);
-    if (cachedFile != null) {
-      debugPrint('Playing from audio cache: ${song.title}');
-      await _audioPlayer.setFilePath(cachedFile.path,
-          initialPosition: initialPosition);
-    } else {
-      debugPrint('Streaming from network: ${song.title}');
-      await _audioPlayer.setUrl(streamUrl, initialPosition: initialPosition);
+  Future<String> _loadSource(Song song, Duration initialPosition) {
+    // Replacing the sequence drops a queued next track. Cleared right away,
+    // not once the load runs, so a transition to the old queued track in the
+    // meantime isn't taken for the next track of the new position.
+    _queuedNextIndex = null;
+    _pendingLoads++;
+    return _changeSources(() async {
+      final streamUrl = _api.getStreamUrl(song.id);
+      final cachedFile = _audioCache.getCachedFile(song.id);
+      if (cachedFile != null) {
+        debugPrint('Playing from audio cache: ${song.title}');
+        await _audioPlayer.setFilePath(cachedFile.path,
+            initialPosition: initialPosition);
+      } else {
+        debugPrint('Streaming from network: ${song.title}');
+        await _audioPlayer.setUrl(streamUrl, initialPosition: initialPosition);
+      }
+      return streamUrl;
+    }).whenComplete(() => _pendingLoads--);
+  }
+
+  /// Appends the next track to the player's sequence if it's cached, so the
+  /// player moves on to it without a gap. Streams aren't queued: if the
+  /// network dropped, the player would fail at the transition, while the
+  /// regular advance in [_onSongComplete] can skip ahead to a cached track.
+  Future<void> _queueNextTrack() => _changeSources(() async {
+        if (_disposed || _pendingLoads > 0 || _queuedNextIndex != null) {
+          return;
+        }
+        if (_audioPlayer.sequence.length != 1) return;
+        final nextIndex = _currentIndex + 1;
+        if (nextIndex >= _playlist.length) return;
+        final file = _audioCache.getCachedFile(_playlist[nextIndex].id);
+        if (file == null) return;
+
+        // Set before adding, in case the player reaches the end of the
+        // current track while the source is being added
+        _queuedNextIndex = nextIndex;
+        try {
+          await _audioPlayer.addAudioSource(AudioSource.file(file.path));
+          debugPrint(
+              '[gapless] Queued index $nextIndex: ${_playlist[nextIndex].title}');
+        } catch (e) {
+          debugPrint('[gapless] Could not queue index $nextIndex: $e');
+          _queuedNextIndex = null;
+        }
+      });
+
+  /// The player moved on to the queued next track by itself.
+  Future<void> _onGaplessTransition() async {
+    final nextIndex = _queuedNextIndex!;
+    _queuedNextIndex = null;
+    _logIndexChange('gapless', _currentIndex, nextIndex, 'player advanced');
+
+    // The previous track played to the end
+    _scrobbleCurrentSong();
+    _lastCompletedSongId = _currentSong?.id;
+
+    _currentIndex = nextIndex;
+    _confirmedIndex = nextIndex;
+    _currentSong = _playlist[nextIndex];
+    _currentSongStartTime = DateTime.now();
+    _currentSongScrobbled = false;
+    _recentPositions.clear();
+    notifyListeners();
+
+    try {
+      // The player's volume applies to the whole sequence, so the new track's
+      // gain takes effect just after the transition
+      await _readReplayGainAndApplyVolume(_api.getStreamUrl(_currentSong!.id),
+          cachedFile: _audioCache.getCachedFile(_currentSong!.id));
+      _scrobbleQueue.queueNowPlaying(_currentSong!.id);
+
+      // Drop the finished track so the sequence is [current] again
+      await _changeSources(() async {
+        if (_audioPlayer.currentIndex == 1 &&
+            _audioPlayer.sequence.length == 2) {
+          await _audioPlayer.removeAudioSourceAt(0);
+        }
+      });
+      _preloadUpcomingSongs();
+      unawaited(_queueNextTrack());
+      await _saveCurrentState();
+    } catch (e) {
+      debugPrint('[gapless] Error after transition to index $nextIndex: $e');
     }
-    return streamUrl;
   }
 
   Future<void> _playSongAtIndex(int index,
@@ -603,6 +705,7 @@ class AudioPlayerService extends ChangeNotifier {
 
       // Download upcoming songs to the disk cache (up to 3 tracks ahead)
       _preloadUpcomingSongs();
+      unawaited(_queueNextTrack());
 
       // Mark this index as confirmed now that the song actually started
       _confirmedIndex = _currentIndex;
@@ -921,8 +1024,10 @@ class AudioPlayerService extends ChangeNotifier {
     bool shouldTriggerCompletion = false;
     String completionReason = '';
 
-    // Method 1: Traditional close-to-end detection
-    if (remainingTime <= completionTolerance &&
+    // Method 1: Traditional close-to-end detection. Skipped when the next
+    // track is queued in the player, which then moves on by itself.
+    if (_queuedNextIndex == null &&
+        remainingTime <= completionTolerance &&
         remainingTime >= Duration.zero) {
       shouldTriggerCompletion = true;
       completionReason =
@@ -1269,8 +1374,9 @@ class AudioPlayerService extends ChangeNotifier {
     try {
       for (var index = start; index < end; index++) {
         // Stop if the playlist was replaced while downloading
-        if (!identical(playlist, _playlist)) break;
+        if (_disposed || !identical(playlist, _playlist)) break;
         await _preloadSingleTrack(playlist, index);
+        if (index == _currentIndex + 1) unawaited(_queueNextTrack());
       }
     } finally {
       _activePreloads--;
@@ -1413,11 +1519,18 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
+  @override
   void dispose() {
+    _disposed = true;
     _positionSubscription?.cancel();
     _durationSubscription?.cancel();
     _playerCompleteSubscription?.cancel();
     _playerStateSubscription?.cancel();
+    _currentIndexSubscription?.cancel();
     _sleepTimer?.cancel();
     if (_ownsAudioCache) _audioCache.dispose();
     _persistence?.dispose();
