@@ -184,7 +184,8 @@ class AudioCache {
   Future<void> _evictIfNeeded({Set<String> protect = const {}}) async {
     final entries = <MapEntry<String, FileStat>>[];
     var total = 0;
-    for (final entry in _index.entries) {
+    // Snapshot: downloads finishing during the awaits below add to _index
+    for (final entry in _index.entries.toList()) {
       final stat = await entry.value.stat();
       if (stat.type == FileSystemEntityType.notFound) continue;
       total += stat.size;
@@ -210,7 +211,7 @@ class AudioCache {
   Future<int> sizeInBytes() async {
     await initialize();
     var total = 0;
-    for (final file in _index.values) {
+    for (final file in _index.values.toList()) {
       try {
         total += await file.length();
       } catch (_) {}
@@ -221,10 +222,11 @@ class AudioCache {
   /// Removes all cached audio.
   Future<void> clear() async {
     await initialize();
-    for (final file in _index.values) {
+    final files = _index.values.toList();
+    _index.clear();
+    for (final file in files) {
       await file.delete().catchError((_) => file);
     }
-    _index.clear();
   }
 
   void dispose() {

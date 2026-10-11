@@ -63,9 +63,12 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
         },
       );
 
-      // Only update media item if it's actually different
+      // Only update media item if it's actually different. The duration is
+      // compared too: after the player moves on to the next track by itself,
+      // the new duration arrives after the track change.
       if (mediaItem.value?.id != newMediaItem.id ||
-          mediaItem.value?.title != newMediaItem.title) {
+          mediaItem.value?.title != newMediaItem.title ||
+          mediaItem.value?.duration != newMediaItem.duration) {
         mediaItem.add(newMediaItem);
         debugPrint(
             '[native_controls] Media item updated: ${song.title} by ${song.artist}');
@@ -104,7 +107,19 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
     AudioProcessingState processingState;
     switch (playerState.processingState) {
       case ProcessingState.idle:
-        processingState = AudioProcessingState.idle;
+        // audio_service ends the session on idle: it removes the
+        // notification, deactivates the media session (Bluetooth controls)
+        // and stops the foreground service, after which Android stops the
+        // app in the background. The player is also idle after a load error
+        // while the service continues at another track, so only report idle
+        // once playback was stopped.
+        if (_audioPlayerService.isStopped) {
+          processingState = AudioProcessingState.idle;
+        } else {
+          processingState = effectivePlaying
+              ? AudioProcessingState.loading
+              : AudioProcessingState.ready;
+        }
         break;
       case ProcessingState.loading:
       case ProcessingState.buffering:

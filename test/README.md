@@ -14,7 +14,7 @@ Tests need no device, network or platform plugins.
 - `utils/`: validators and formatting helpers
 - `widgets/`: error boundaries
 - `fixtures/replaygain/`: sample tag data for the parser tests
-- `test_helpers/mock_audio_player.dart`: fake `just_audio` player with `simulateCompletion()`, `simulatePositionChange()` etc.
+- `test_helpers/mock_audio_player.dart`: fake `just_audio` player holding a sequence, like the real one; `simulateTrackTransition()`, `simulateCompletion()`, `simulateLoadError()`, `failingUrls` etc. Like the real player on Android, a `seek()` to an item in `failingUrls` reports the error and never completes.
 
 ## Writing tests
 

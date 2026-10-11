@@ -57,6 +57,18 @@ void main() {
       expect(requestCount, 1);
     });
 
+    test('caches different songs downloaded at the same time', () async {
+      final cache = createCache(audioClient());
+
+      final files = await Future.wait([
+        for (var i = 0; i < 5; i++)
+          cache.prefetch('song$i', 'https://x/stream?id=song$i'),
+      ]);
+
+      expect(files, everyElement(isNotNull));
+      expect(await cache.sizeInBytes(), 5 * 4);
+    });
+
     test('deduplicates concurrent downloads of the same song', () async {
       final cache = createCache(audioClient());
 
