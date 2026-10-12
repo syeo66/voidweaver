@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
@@ -32,6 +33,8 @@ void main() {
     });
 
     test('should queue now playing notification', () async {
+      when(mockApi.scrobbleNowPlaying(any))
+          .thenAnswer((_) => Future.delayed(const Duration(milliseconds: 100)));
       await scrobbleQueue.initialize();
 
       await scrobbleQueue.queueNowPlaying('song1');
@@ -40,6 +43,8 @@ void main() {
     });
 
     test('should queue scrobble submission', () async {
+      when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
+          .thenAnswer((_) => Future.delayed(const Duration(milliseconds: 100)));
       await scrobbleQueue.initialize();
 
       await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
@@ -76,9 +81,10 @@ void main() {
       expect(scrobbleQueue.queueSize, 0);
     });
 
-    test('should retry failed requests', () async {
+    test('should retry failed submissions', () async {
       var callCount = 0;
-      when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {
+      when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
+          .thenAnswer((_) async {
         callCount++;
         if (callCount <= 2) {
           throw Exception('Network error');
@@ -86,21 +92,132 @@ void main() {
       });
 
       await scrobbleQueue.initialize();
-      await scrobbleQueue.queueNowPlaying('song1');
-
-      // Wait for first processing attempt and automatic retry
+      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
       await Future.delayed(const Duration(milliseconds: 300));
-
-      // Queue should still have the failed request after 2 failed attempts
       expect(scrobbleQueue.queueSize, 1);
 
-      // Process again (third attempt should succeed)
       await scrobbleQueue.processQueue();
+      expect(scrobbleQueue.queueSize, 1);
+
+      await scrobbleQueue.processQueue();
+      verify(mockApi.scrobbleSubmission('song1',
+              playedAt: anyNamed('playedAt')))
+          .called(3);
+      expect(scrobbleQueue.queueSize, 0);
+    });
+
+    test('should not retry right away after a failure', () async {
+      when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
+          .thenThrow(Exception('Network error'));
+
+      await scrobbleQueue.initialize();
+      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
+      await Future.delayed(const Duration(seconds: 1));
+
+      // Retried by the 30 s timer, not in a loop
+      verify(mockApi.scrobbleSubmission('song1',
+              playedAt: anyNamed('playedAt')))
+          .called(1);
+      expect(scrobbleQueue.queueSize, 1);
+    });
+
+    test('should keep a submission through repeated network failures',
+        () async {
+      when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
+          .thenThrow(Exception('Network error'));
+
+      await scrobbleQueue.initialize();
+      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
+      for (var i = 0; i < 10; i++) {
+        await scrobbleQueue.processQueue();
+      }
+
+      // Only dropped once it's older than 7 days
+      expect(scrobbleQueue.queueSize, 1);
+    });
+
+    test('should keep later requests behind a failed submission', () async {
+      final sent = <String>[];
+      var online = false;
+      when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
+          .thenAnswer((invocation) async {
+        if (!online) throw Exception('Network error');
+        sent.add(invocation.positionalArguments[0] as String);
+      });
+
+      await scrobbleQueue.initialize();
+      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
+      await scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now());
       await Future.delayed(const Duration(milliseconds: 300));
 
-      // Should have retried multiple times
-      verify(mockApi.scrobbleNowPlaying('song1'))
-          .called(greaterThanOrEqualTo(3));
+      // song2 wasn't tried while song1 was failing
+      verifyNever(
+          mockApi.scrobbleSubmission('song2', playedAt: anyNamed('playedAt')));
+      expect(scrobbleQueue.queueSize, 2);
+
+      online = true;
+      await scrobbleQueue.processQueue();
+      expect(sent, ['song1', 'song2']);
+      expect(scrobbleQueue.queueSize, 0);
+    });
+
+    test('should drop a now playing notification that fails', () async {
+      when(mockApi.scrobbleNowPlaying(any))
+          .thenThrow(Exception('Network error'));
+
+      await scrobbleQueue.initialize();
+      await scrobbleQueue.queueNowPlaying('song1');
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      expect(scrobbleQueue.queueSize, 0);
+    });
+
+    test('should drop a submission the server rejects', () async {
+      when(mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')))
+          .thenThrow(const SubsonicException(70, 'Song not found'));
+      when(mockApi.scrobbleSubmission('song2', playedAt: anyNamed('playedAt')))
+          .thenAnswer((_) async {});
+
+      await scrobbleQueue.initialize();
+      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
+      await scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now());
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      verify(mockApi.scrobbleSubmission('song2',
+              playedAt: anyNamed('playedAt')))
+          .called(1);
+      expect(scrobbleQueue.queueSize, 0);
+    });
+
+    test('should keep a submission refused because of the credentials',
+        () async {
+      when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
+          .thenThrow(const SubsonicException(40, 'Wrong username or password'));
+
+      await scrobbleQueue.initialize();
+      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      expect(scrobbleQueue.queueSize, 1);
+    });
+
+    test('should drop requests older than 7 days', () async {
+      SharedPreferences.setMockInitialValues({
+        'scrobble_queue': jsonEncode([
+          ScrobbleRequest(
+            songId: 'old',
+            type: ScrobbleType.submission,
+            playedAt: DateTime.now().subtract(const Duration(days: 8)),
+            queuedAt: DateTime.now().subtract(const Duration(days: 8)),
+          ).toJson(),
+        ]),
+      });
+
+      await scrobbleQueue.initialize();
+      await scrobbleQueue.processQueue();
+
+      verifyNever(
+          mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')));
       expect(scrobbleQueue.queueSize, 0);
     });
 
@@ -117,7 +234,7 @@ void main() {
       });
 
       await scrobbleQueue.initialize();
-      await scrobbleQueue.queueNowPlaying('song1');
+      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
       await scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now());
 
       // Wait for processing attempt
@@ -145,7 +262,7 @@ void main() {
 
       // Create and queue requests
       await scrobbleQueue.initialize();
-      await scrobbleQueue.queueNowPlaying('song1');
+      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
       await scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now());
 
       // Wait for processing attempt (will fail)
@@ -164,23 +281,6 @@ void main() {
       expect(newQueue.queueSize, originalQueueSize);
 
       newQueue.dispose();
-    });
-
-    test('should drop requests exceeding max retries', () async {
-      when(mockApi.scrobbleNowPlaying(any))
-          .thenAnswer((_) => throw Exception('Network error'));
-
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueNowPlaying('song1');
-
-      // Process multiple times to exceed retry limit
-      for (int i = 0; i < 6; i++) {
-        await scrobbleQueue.processQueue();
-        await Future.delayed(const Duration(milliseconds: 200));
-      }
-
-      // Request should be dropped after max retries
-      expect(scrobbleQueue.queueSize, 0);
     });
 
     test('should process multiple requests in order', () async {
@@ -299,7 +399,6 @@ void main() {
         type: ScrobbleType.submission,
         playedAt: timestamp,
         queuedAt: timestamp,
-        retryCount: 2,
       );
 
       final json = request.toJson();
@@ -311,22 +410,6 @@ void main() {
           request.playedAt?.millisecondsSinceEpoch);
       expect(restored.queuedAt.millisecondsSinceEpoch,
           request.queuedAt.millisecondsSinceEpoch);
-      expect(restored.retryCount, request.retryCount);
-    });
-
-    test('ScrobbleRequest copyWithRetry increments retry count', () {
-      final request = ScrobbleRequest(
-        songId: 'test-song',
-        type: ScrobbleType.nowPlaying,
-        queuedAt: DateTime.now(),
-        retryCount: 1,
-      );
-
-      final retried = request.copyWithRetry();
-
-      expect(retried.retryCount, 2);
-      expect(retried.songId, request.songId);
-      expect(retried.type, request.type);
     });
 
     test('should immediately try to process on enqueue', () async {
@@ -345,24 +428,27 @@ void main() {
     });
 
     test('should process queue periodically', () async {
-      when(mockApi.scrobbleNowPlaying(any))
+      when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) => throw Exception('Network error'));
 
       await scrobbleQueue.initialize();
-      await scrobbleQueue.queueNowPlaying('song1');
+      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
 
       // Wait for initial processing attempt (will fail)
       await Future.delayed(const Duration(milliseconds: 300));
 
       // Now make the API succeed
-      when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {});
+      when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
+          .thenAnswer((_) async {});
 
       // Wait for periodic processing (up to 30 seconds interval, but we'll manually trigger)
       await scrobbleQueue.processQueue();
       await Future.delayed(const Duration(milliseconds: 300));
 
       // Should have been processed
-      verify(mockApi.scrobbleNowPlaying('song1')).called(greaterThan(1));
+      verify(mockApi.scrobbleSubmission('song1',
+              playedAt: anyNamed('playedAt')))
+          .called(2);
       expect(scrobbleQueue.queueSize, 0);
     });
   });

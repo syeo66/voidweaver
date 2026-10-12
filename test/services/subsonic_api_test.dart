@@ -90,4 +90,41 @@ void main() {
       expect(() => api.dispose(), returnsNormally);
     });
   });
+
+  group('SubsonicApi.parseResponse', () {
+    test('returns the document for an ok response', () {
+      final doc = SubsonicApi.parseResponse(
+          '<subsonic-response xmlns="http://subsonic.org/restapi" '
+          'status="ok" version="1.16.1"/>');
+      expect(doc.rootElement.getAttribute('status'), 'ok');
+    });
+
+    test('throws the server error for a failed response', () {
+      expect(
+        () => SubsonicApi.parseResponse(
+            '<subsonic-response xmlns="http://subsonic.org/restapi" '
+            'status="failed" version="1.16.1">'
+            '<error code="40" message="Wrong username or password"/>'
+            '</subsonic-response>'),
+        throwsA(isA<SubsonicException>()
+            .having((e) => e.code, 'code', 40)
+            .having((e) => e.isAuthError, 'isAuthError', isTrue)
+            .having(
+                (e) => e.toString(), 'message', 'Wrong username or password')),
+      );
+    });
+
+    test('throws for a failed response without an error element', () {
+      expect(
+        () => SubsonicApi.parseResponse(
+            '<subsonic-response status="failed" version="1.16.1"/>'),
+        throwsA(isA<SubsonicException>().having((e) => e.code, 'code', null)),
+      );
+    });
+
+    test('does not treat other errors as auth errors', () {
+      expect(const SubsonicException(70, 'Not found').isAuthError, isFalse);
+      expect(const SubsonicException(null, 'Unknown').isAuthError, isFalse);
+    });
+  });
 }

@@ -82,18 +82,31 @@ class AppState extends ChangeNotifier {
     await _loadServerConfig();
   }
 
-  Future<void> configure(
-      String serverUrl, String username, String password) async {
+  /// Sets up the services for a server. With [verifyCredentials] (a new
+  /// login) the server is pinged first, so an unreachable server or wrong
+  /// credentials fail here. Saved credentials aren't checked, so the app
+  /// still starts offline.
+  Future<void> configure(String serverUrl, String username, String password,
+      {bool verifyCredentials = false}) async {
     _configurationLoadingState = LoadingState.loading;
     _configurationError = null;
     notifyListeners();
 
     try {
-      _api = SubsonicApi(
+      final api = SubsonicApi(
         serverUrl: serverUrl,
         username: username,
         password: password,
       );
+      if (verifyCredentials) {
+        try {
+          await api.ping();
+        } catch (_) {
+          api.dispose();
+          rethrow;
+        }
+      }
+      _api = api;
 
       _audioPlayerService = AudioPlayerService(
         _api!,

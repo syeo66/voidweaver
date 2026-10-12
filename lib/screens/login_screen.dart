@@ -203,6 +203,7 @@ class _LoginScreenState extends State<LoginScreen> {
             Validators.sanitizeInput(_serverUrlController.text),
             Validators.sanitizeInput(_usernameController.text),
             _passwordController.text.trim(),
+            verifyCredentials: true,
           );
     } catch (e) {
       // Error is already handled by AppState loading states

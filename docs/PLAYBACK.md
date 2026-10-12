@@ -73,7 +73,9 @@ Each play is scrobbled at most once, tracked by `_currentSongScrobbled`. The fla
 Requests go through `ScrobbleQueue`, never directly to the API. The queue:
 
 - is stored in SharedPreferences (`scrobble_queue`) and restored on start
-- sends immediately, then retries every 30 s, 100 ms apart
-- drops a request after 5 failed attempts or after 7 days
+- sends oldest first, 100 ms apart, as soon as a request is queued and every 30 s
+- keeps a submission that can't be sent (network error, HTTP error, or the server refusing the credentials) at the front and stops there, so later requests never overtake it. It's retried on the next timer tick or the next queued request, and dropped only after 7 days.
+- drops a submission the server rejects for itself (a `status="failed"` response that isn't an auth error, e.g. unknown song)
+- drops a "now playing" that fails, since it would be stale by the time it's retried
 
-subsoxy uses these scrobbles to tell plays from skips, so the queue's ordering and `playedAt` timestamps matter.
+subsoxy uses these scrobbles to tell plays from skips, so the queue's ordering and `playedAt` timestamps matter. That's also why `scrobbleNowPlaying()` and `scrobbleSubmission()` throw on failure: the queue has to know.

@@ -20,9 +20,9 @@ dart run build_runner build --delete-conflicting-outputs
 
 ## Server setup for development
 
-The app is meant to run against Navidrome behind [subsoxy](https://github.com/syeo66/subsoxy), see the [README](../README.md#setup). The app only accepts `https://` URLs (checked in `Validators` and the `SubsonicApi` constructor), so even locally you need a TLS-terminating proxy in front of subsoxy.
+The app is meant to run against Navidrome behind [subsoxy](https://github.com/syeo66/subsoxy), see the [README](../README.md#setup). Subsonic servers report errors (wrong password, unknown id) as HTTP 200 with `status="failed"`; `SubsonicApi.parseResponse()` turns those into a `SubsonicException`. The app only accepts `https://` URLs (checked in `Validators` and the `SubsonicApi` constructor), so even locally you need a TLS-terminating proxy in front of subsoxy.
 
-Endpoints used: `getAlbumList2`, `getAlbum`, `getArtists`, `getArtist`, `search3`, `getRandomSongs`, `scrobble`, `stream`, `getCoverArt`. subsoxy changes the behavior of `getRandomSongs` and `scrobble`. Everything else passes through to Navidrome.
+Endpoints used: `ping` (checks the credentials on login), `getAlbumList2`, `getAlbum`, `getArtists`, `getArtist`, `search3`, `getRandomSongs`, `scrobble`, `stream`, `getCoverArt`. subsoxy changes the behavior of `getRandomSongs` and `scrobble`. Everything else passes through to Navidrome.
 
 ## Layout
 

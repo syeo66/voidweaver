@@ -10,6 +10,24 @@ import 'network_retry.dart';
 import 'replaygain_debug_logger.dart';
 import '../utils/redact.dart';
 
+/// An error the server reported in a `status="failed"` response. Subsonic
+/// servers answer with HTTP 200 even then (wrong password, unknown id).
+class SubsonicException implements Exception {
+  /// Subsonic error code, e.g. 40 for a wrong username or password
+  final int? code;
+  final String message;
+
+  const SubsonicException(this.code, this.message);
+
+  /// Whether the request was refused because of the credentials (wrong
+  /// password, unsupported or conflicting auth), not because of the request
+  /// itself.
+  bool get isAuthError => code != null && code! >= 40 && code! <= 44;
+
+  @override
+  String toString() => message;
+}
+
 class SubsonicApi {
   final String serverUrl;
   final String username;
@@ -112,10 +130,12 @@ class SubsonicApi {
           // Fallback to response.body if utf8.decode fails
           responseBody = response.body;
         }
-        return XmlDocument.parse(responseBody);
+        return parseResponse(responseBody);
       } else {
         throw Exception('HTTP ${response.statusCode}: ${response.body}');
       }
+    } on SubsonicException {
+      rethrow;
     } on NetworkTimeoutException catch (e) {
       if (kDebugMode) {
         debugPrint(redactCredentials('Request timeout: $uri - $e'));
@@ -134,6 +154,27 @@ class SubsonicApi {
       }
       throw Exception(redactCredentials('Network error: $e'));
     }
+  }
+
+  /// Parses a response body, throwing [SubsonicException] if the server
+  /// reported an error.
+  @visibleForTesting
+  static XmlDocument parseResponse(String body) {
+    final doc = XmlDocument.parse(body);
+    final root = doc.rootElement;
+    if (root.getAttribute('status') == 'failed') {
+      final error = root.getElement('error');
+      throw SubsonicException(
+        int.tryParse(error?.getAttribute('code') ?? ''),
+        error?.getAttribute('message') ?? 'The server reported an error',
+      );
+    }
+    return doc;
+  }
+
+  /// Checks that the server is reachable and accepts the credentials.
+  Future<void> ping() async {
+    await _makeRequest('ping', null, NetworkRequestType.connection);
   }
 
   static Object? _albumsToJson(List<Album> albums) =>
@@ -236,41 +277,33 @@ class SubsonicApi {
 
   /// Notifies the server that a song is now playing.
   /// This updates the "now playing" status but doesn't affect play counts.
+  /// Throws on failure; use [ScrobbleQueue] rather than calling this directly.
   Future<void> scrobbleNowPlaying(String songId) async {
-    try {
-      final params = {
-        'id': songId,
-        'submission': 'false',
-      };
+    final params = {
+      'id': songId,
+      'submission': 'false',
+    };
 
-      await _makeRequest('scrobble', params);
-      debugPrint('Now playing notification sent for song: $songId');
-    } catch (e) {
-      debugPrint('Failed to send now playing notification: $e');
-      // Don't throw - we don't want to interrupt playback for scrobble failures
-    }
+    await _makeRequest('scrobble', params);
+    debugPrint('Now playing notification sent for song: $songId');
   }
 
   /// Submits a scrobble for a played song.
   /// This updates play counts and last played timestamp.
+  /// Throws on failure, so [ScrobbleQueue] can keep the request and retry.
   Future<void> scrobbleSubmission(String songId, {DateTime? playedAt}) async {
-    try {
-      final params = {
-        'id': songId,
-        'submission': 'true',
-      };
+    final params = {
+      'id': songId,
+      'submission': 'true',
+    };
 
-      // Add timestamp if provided (milliseconds since epoch)
-      if (playedAt != null) {
-        params['time'] = playedAt.millisecondsSinceEpoch.toString();
-      }
-
-      await _makeRequest('scrobble', params);
-      debugPrint('Scrobble submission sent for song: $songId');
-    } catch (e) {
-      debugPrint('Failed to send scrobble submission: $e');
-      // Don't throw - we don't want to interrupt playback for scrobble failures
+    // Add timestamp if provided (milliseconds since epoch)
+    if (playedAt != null) {
+      params['time'] = playedAt.millisecondsSinceEpoch.toString();
     }
+
+    await _makeRequest('scrobble', params);
+    debugPrint('Scrobble submission sent for song: $songId');
   }
 
   /// Searches for artists, albums, and songs.

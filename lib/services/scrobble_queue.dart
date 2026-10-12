@@ -16,14 +16,12 @@ class ScrobbleRequest {
   final ScrobbleType type;
   final DateTime? playedAt;
   final DateTime queuedAt;
-  final int retryCount;
 
   const ScrobbleRequest({
     required this.songId,
     required this.type,
     this.playedAt,
     required this.queuedAt,
-    this.retryCount = 0,
   });
 
   Map<String, dynamic> toJson() => {
@@ -31,7 +29,6 @@ class ScrobbleRequest {
         'type': type.name,
         'playedAt': playedAt?.millisecondsSinceEpoch,
         'queuedAt': queuedAt.millisecondsSinceEpoch,
-        'retryCount': retryCount,
       };
 
   factory ScrobbleRequest.fromJson(Map<String, dynamic> json) {
@@ -42,24 +39,21 @@ class ScrobbleRequest {
           ? DateTime.fromMillisecondsSinceEpoch(json['playedAt'] as int)
           : null,
       queuedAt: DateTime.fromMillisecondsSinceEpoch(json['queuedAt'] as int),
-      retryCount: json['retryCount'] as int? ?? 0,
     );
   }
-
-  ScrobbleRequest copyWithRetry() => ScrobbleRequest(
-        songId: songId,
-        type: type,
-        playedAt: playedAt,
-        queuedAt: queuedAt,
-        retryCount: retryCount + 1,
-      );
 }
 
-/// Service for managing a persistent queue of scrobble requests
-/// Handles network failures gracefully by queuing and retrying scrobbles
+/// Persistent queue of scrobble requests, sent oldest first.
+///
+/// subsoxy tells plays from skips by the order and timestamps of scrobbles,
+/// so a submission that can't be sent (offline, server down, credentials
+/// refused) stays at the front and blocks the ones behind it until it goes
+/// through or expires after [_maxAge]. It's retried every
+/// [_processingInterval] and whenever a new request is queued. A submission
+/// the server rejects for itself (e.g. unknown song) is dropped, and so is a
+/// "now playing" that fails: it would be stale by the time it's retried.
 class ScrobbleQueue {
   static const String _storageKey = 'scrobble_queue';
-  static const int _maxRetries = 5;
   static const Duration _processingInterval = Duration(seconds: 30);
   static const Duration _maxAge = Duration(days: 7); // Drop old requests
 
@@ -113,74 +107,65 @@ class ScrobbleQueue {
     }
   }
 
-  /// Process all pending scrobble requests
+  /// Sends queued requests in order until the queue is empty or a
+  /// submission can't be sent.
   Future<void> _processQueue() async {
     if (_isProcessing || _queue.isEmpty || _disposed) return;
 
     _isProcessing = true;
     debugPrint('Processing scrobble queue (${_queue.length} requests)');
 
-    final requestsToProcess = List<ScrobbleRequest>.from(_queue);
-    final successfulRequests = <ScrobbleRequest>[];
-    final failedRequests = <ScrobbleRequest>[];
+    var blocked = false;
+    try {
+      // Requests queued meanwhile are sent in the same pass
+      while (_queue.isNotEmpty && !_disposed) {
+        final request = _queue.first;
 
-    for (final request in requestsToProcess) {
-      if (_disposed) break;
+        if (DateTime.now().difference(request.queuedAt) > _maxAge) {
+          debugPrint(
+              'Dropping old scrobble request for song ${request.songId} (age: ${DateTime.now().difference(request.queuedAt).inDays} days)');
+          _queue.remove(request);
+          continue;
+        }
 
-      // Skip requests that are too old
-      if (DateTime.now().difference(request.queuedAt) > _maxAge) {
-        debugPrint(
-            'Dropping old scrobble request for song ${request.songId} (age: ${DateTime.now().difference(request.queuedAt).inDays} days)');
-        successfulRequests.add(request);
-        continue;
+        try {
+          await _sendScrobble(request);
+          debugPrint(
+              'Successfully sent ${request.type.name} for song ${request.songId}');
+        } catch (e) {
+          final rejected = e is SubsonicException && !e.isAuthError;
+          if (request.type == ScrobbleType.submission && !rejected) {
+            debugPrint(
+                'Failed to send submission for song ${request.songId}, will retry: $e');
+            blocked = true;
+            break;
+          }
+          debugPrint(
+              'Failed to send ${request.type.name} for song ${request.songId}, dropping it: $e');
+        }
+        _queue.remove(request);
+
+        // Small delay between requests to avoid overwhelming the server
+        if (_queue.isNotEmpty && !_disposed) {
+          await Future.delayed(const Duration(milliseconds: 100));
+        }
       }
 
-      // Skip requests that have exceeded retry limit
-      if (request.retryCount >= _maxRetries) {
+      if (_queue.isNotEmpty) {
         debugPrint(
-            'Dropping scrobble request for song ${request.songId} (max retries exceeded)');
-        successfulRequests.add(request);
-        continue;
+            'Scrobble queue processing stopped (${_queue.length} requests remaining)');
+        await _saveQueue();
+      } else {
+        debugPrint('Scrobble queue empty');
+        await _clearQueue();
       }
-
-      try {
-        await _sendScrobble(request);
-        successfulRequests.add(request);
-        debugPrint(
-            'Successfully sent ${request.type.name} for song ${request.songId}');
-      } catch (e) {
-        debugPrint(
-            'Failed to send ${request.type.name} for song ${request.songId}: $e');
-        // Re-queue with incremented retry count
-        failedRequests.add(request.copyWithRetry());
-      }
-
-      // Small delay between requests to avoid overwhelming the server
-      if (!_disposed) {
-        await Future.delayed(const Duration(milliseconds: 100));
-      }
+    } finally {
+      _isProcessing = false;
     }
 
-    // Update queue: remove only the processed requests, keep items added during processing
-    // and failed ones with updated retry counts
-    for (final request in requestsToProcess) {
-      _queue.remove(request);
-    }
-    _queue.addAll(failedRequests);
-
-    if (_queue.isNotEmpty) {
-      debugPrint(
-          'Scrobble queue processing complete (${_queue.length} requests remaining)');
-      await _saveQueue();
-    } else {
-      debugPrint('Scrobble queue empty');
-      await _clearQueue();
-    }
-
-    _isProcessing = false;
-
-    // If there are still items in the queue, process them
-    if (_queue.isNotEmpty && !_disposed) {
+    // Requests queued while the queue was being saved. After a failure the
+    // timer retries instead, so a failing request isn't sent in a loop.
+    if (!blocked && _queue.isNotEmpty && !_disposed) {
       unawaited(_processQueue());
     }
   }
