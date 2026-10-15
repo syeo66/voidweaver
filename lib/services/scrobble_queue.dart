@@ -245,6 +245,16 @@ class ScrobbleQueue {
     await _processQueue();
   }
 
+  /// Disposes the queue and drops all pending requests, also from storage.
+  /// Used on logout: the requests belong to the old server.
+  Future<void> clear() async {
+    dispose();
+    // A pass still in progress sees the empty queue and clears storage too,
+    // instead of saving the requests again.
+    _queue.clear();
+    await _clearQueue();
+  }
+
   /// Dispose and cleanup resources
   void dispose() {
     _disposed = true;

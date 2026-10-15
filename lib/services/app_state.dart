@@ -11,6 +11,7 @@ import 'audio_handler.dart';
 import 'settings_service.dart';
 import 'playback_persistence.dart';
 import 'replaygain_debug_logger.dart';
+import 'scrobble_queue.dart';
 
 enum SyncStatus {
   idle,
@@ -34,8 +35,13 @@ class AppState extends ChangeNotifier {
     ),
   );
 
+  // Legacy credential keys in SharedPreferences, see _migrateFromSharedPreferences
+  static const _legacyCredentialKeys = ['server_url', 'username', 'password'];
+
   SubsonicApi? _api;
   AudioPlayerService? _audioPlayerService;
+  AudioCache? _audioCache;
+  ScrobbleQueue? _scrobbleQueue;
   SettingsService? _settingsService;
   PlaybackPersistenceService? _persistenceService;
   VoidweaverAudioHandler? _audioHandler;
@@ -43,9 +49,9 @@ class AppState extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   bool _isConfigured = false;
-  bool _audioServiceInitialized = false;
   SyncStatus _syncStatus = SyncStatus.idle;
   Timer? _syncTimer;
+  Timer? _syncStatusResetTimer;
   DateTime? _lastSyncTime;
 
   // Enhanced loading states
@@ -92,6 +98,9 @@ class AppState extends ChangeNotifier {
     _configurationError = null;
     notifyListeners();
 
+    // In case an earlier attempt failed after creating its services
+    _disposeServices();
+
     try {
       final api = SubsonicApi(
         serverUrl: serverUrl,
@@ -108,11 +117,14 @@ class AppState extends ChangeNotifier {
       }
       _api = api;
 
+      _audioCache = AudioCache(namespace: serverUrl);
+      _scrobbleQueue = ScrobbleQueue(api);
       _audioPlayerService = AudioPlayerService(
-        _api!,
+        api,
         _settingsService!,
         persistence: _persistenceService,
-        audioCache: AudioCache(namespace: serverUrl),
+        audioCache: _audioCache,
+        scrobbleQueue: _scrobbleQueue,
       );
 
       // Initialize audio service for native controls
@@ -148,13 +160,23 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Connects the player to the lock screen, notification and Bluetooth
+  /// controls. `AudioService.init()` may only run once per process, so after
+  /// a logout the existing handler is attached to the new player instead.
   Future<void> _initializeAudioService() async {
-    if (_audioPlayerService == null || _audioServiceInitialized) return;
+    final player = _audioPlayerService;
+    final api = _api;
+    if (player == null || api == null) return;
+
+    final handler = _audioHandler;
+    if (handler != null) {
+      handler.attach(player, api);
+      return;
+    }
 
     try {
-      _audioHandler = VoidweaverAudioHandler(_audioPlayerService!, _api!);
-      await AudioService.init(
-        builder: () => _audioHandler!,
+      _audioHandler = await AudioService.init(
+        builder: () => VoidweaverAudioHandler(player, api),
         config: const AudioServiceConfig(
           androidNotificationChannelId: 'com.voidweaver.audio',
           androidNotificationChannelName: 'Voidweaver Audio',
@@ -169,7 +191,6 @@ class AppState extends ChangeNotifier {
           rewindInterval: Duration(seconds: 30),
         ),
       );
-      _audioServiceInitialized = true;
       debugPrint('Audio service initialized successfully');
     } catch (e) {
       debugPrint('Error initializing audio service: $e');
@@ -228,7 +249,8 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     // Reset success to idle after 3 seconds; errors persist until the next sync
-    Timer(const Duration(seconds: 3), () {
+    _syncStatusResetTimer?.cancel();
+    _syncStatusResetTimer = Timer(const Duration(seconds: 3), () {
       if (_syncStatus == SyncStatus.success) {
         _syncStatus = SyncStatus.idle;
         notifyListeners();
@@ -246,6 +268,23 @@ class AppState extends ChangeNotifier {
   void _stopBackgroundSync() {
     _syncTimer?.cancel();
     _syncTimer = null;
+    _syncStatusResetTimer?.cancel();
+    _syncStatusResetTimer = null;
+  }
+
+  /// Releases the services of the current login. The audio handler is only
+  /// detached, as it lives as long as the process.
+  void _disposeServices() {
+    _stopBackgroundSync();
+    _audioHandler?.detach();
+    _audioPlayerService?.dispose();
+    _audioPlayerService = null;
+    // Already disposed by the player; kept to clear it on logout
+    _scrobbleQueue = null;
+    _audioCache?.dispose();
+    _audioCache = null;
+    _api?.dispose();
+    _api = null;
   }
 
   Future<void> _saveServerConfig(
@@ -276,25 +315,32 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Logs out: releases the services and removes the credentials and the
+  /// data that belongs to the server (library cache, pending scrobbles, saved
+  /// queue). Settings are kept.
   Future<void> clearConfiguration() async {
+    final api = _api;
+    final scrobbleQueue = _scrobbleQueue;
+    // Dispose first, so nothing writes the server's data again afterwards
+    _disposeServices();
+
     try {
       await _secureStorage.deleteAll();
+      await Future.wait([
+        if (api != null) api.clearCache(),
+        if (scrobbleQueue != null) scrobbleQueue.clear(),
+        if (_persistenceService != null)
+          _persistenceService!.clearPlaybackState(),
+      ]);
 
-      // Also clear old SharedPreferences for complete cleanup
       final prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
+      for (final key in _legacyCredentialKeys) {
+        await prefs.remove(key);
+      }
     } catch (e) {
-      debugPrint('Error clearing secure credentials: $e');
+      debugPrint('Error clearing configuration: $e');
     }
 
-    _stopBackgroundSync();
-    _api?.dispose();
-    _api = null;
-    _audioPlayerService?.dispose();
-    _audioPlayerService = null;
-    _audioHandler?.dispose();
-    _audioHandler = null;
-    _audioServiceInitialized = false;
     _albums.clear();
     _isConfigured = false;
     _error = null;
@@ -326,9 +372,9 @@ class AppState extends ChangeNotifier {
         await _saveServerConfig(serverUrl, username, password);
 
         // Remove from SharedPreferences
-        await prefs.remove('server_url');
-        await prefs.remove('username');
-        await prefs.remove('password');
+        for (final key in _legacyCredentialKeys) {
+          await prefs.remove(key);
+        }
 
         // Configure with migrated credentials
         await configure(serverUrl, username, password);
@@ -342,8 +388,7 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
-    _stopBackgroundSync();
-    _api?.dispose();
+    _disposeServices();
     _persistenceService?.dispose();
     super.dispose();
   }

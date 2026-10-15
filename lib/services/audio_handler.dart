@@ -5,32 +5,48 @@ import 'package:just_audio/just_audio.dart';
 import 'audio_player_service.dart' as aps;
 import 'subsonic_api.dart';
 
+/// Bridges an [aps.AudioPlayerService] to `audio_service`.
+///
+/// `AudioService.init()` may only run once per process, so the handler
+/// outlives a login: [attach] binds it to the player of a new login and
+/// [detach] releases the old one on logout.
 class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
-  final aps.AudioPlayerService _audioPlayerService;
-  final SubsonicApi _api;
-  late StreamSubscription _positionSubscription;
-  late StreamSubscription _directPlayerStateSubscription;
+  aps.AudioPlayerService? _service;
+  SubsonicApi? _api;
+  StreamSubscription? _positionSubscription;
+  StreamSubscription? _directPlayerStateSubscription;
 
   // State masking for skip operations
   bool _lastKnownPlayingState = false;
 
-  VoidweaverAudioHandler(this._audioPlayerService, this._api) {
-    _init();
+  VoidweaverAudioHandler(
+      aps.AudioPlayerService audioPlayerService, SubsonicApi api) {
+    attach(audioPlayerService, api);
   }
 
-  void _init() {
+  // Only used by the update methods, which run from subscriptions that
+  // detach() cancels.
+  aps.AudioPlayerService get _audioPlayerService => _service!;
+
+  /// Follows [audioPlayerService] from now on, replacing any previous one.
+  void attach(aps.AudioPlayerService audioPlayerService, SubsonicApi api) {
+    detach();
+    _service = audioPlayerService;
+    _api = api;
+    _lastKnownPlayingState = false;
+
     // Listen to MediaItem changes from AudioPlayerService (track info, loading states)
-    _audioPlayerService.addListener(_updateMediaItem);
+    audioPlayerService.addListener(_updateMediaItem);
 
     // Listen directly to just_audio PlayerState for real-time system state updates
     _directPlayerStateSubscription =
-        _audioPlayerService.audioPlayer.playerStateStream.listen((playerState) {
+        audioPlayerService.audioPlayer.playerStateStream.listen((playerState) {
       _updateSystemPlaybackState(playerState);
     });
 
     // Listen directly to the audio player's position stream for real-time updates
     _positionSubscription =
-        _audioPlayerService.onPositionChanged.listen((position) {
+        audioPlayerService.onPositionChanged.listen((position) {
       _updatePosition();
     });
 
@@ -38,6 +54,26 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
     _updateMediaItem();
 
     // Initialize with inactive media session that will be activated on play
+    playbackState.add(playbackState.value.copyWith(
+      processingState: AudioProcessingState.idle,
+      playing: false,
+    ));
+  }
+
+  /// Stops following the current player and ends the media session, which
+  /// removes the notification.
+  void detach() {
+    final service = _service;
+    if (service == null) return;
+    service.removeListener(_updateMediaItem);
+    _positionSubscription?.cancel();
+    _positionSubscription = null;
+    _directPlayerStateSubscription?.cancel();
+    _directPlayerStateSubscription = null;
+    _service = null;
+    _api = null;
+
+    mediaItem.add(null);
     playbackState.add(playbackState.value.copyWith(
       processingState: AudioProcessingState.idle,
       playing: false,
@@ -56,7 +92,7 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
         artist: song.artist,
         duration: _audioPlayerService.totalDuration,
         artUri: song.coverArt != null
-            ? Uri.parse(_api.getCoverArtUrl(song.coverArt!))
+            ? Uri.parse(_api!.getCoverArtUrl(song.coverArt!))
             : null,
         extras: {
           'isActive': true,
@@ -196,79 +232,67 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
     // just_audio through audio_session. Don't request focus separately here:
     // a second focus listener in the same app competes with just_audio's and
     // prevents it from being told when an interruption ends.
-    await _audioPlayerService.play();
+    await _service?.play();
   }
 
   @override
   Future<void> pause() async {
     debugPrint('[native_controls] Pause requested from native controls');
-    await _audioPlayerService.pause();
+    await _service?.pause();
   }
 
   @override
   Future<void> stop() async {
-    await _audioPlayerService.stop();
+    await _service?.stop();
   }
 
   @override
   Future<void> skipToNext() async {
     debugPrint('[native_controls] Skip next requested from native controls');
-    await _audioPlayerService.next();
+    await _service?.next();
   }
 
   @override
   Future<void> skipToPrevious() async {
     debugPrint(
         '[native_controls] Skip previous requested from native controls');
-    await _audioPlayerService.previous();
+    await _service?.previous();
   }
 
   @override
   Future<void> seek(Duration position) async {
-    await _audioPlayerService.seekTo(position);
+    await _service?.seekTo(position);
   }
 
   @override
   Future<void> seekForward(bool begin) async {
-    if (begin) {
-      final newPosition =
-          _audioPlayerService.currentPosition + const Duration(seconds: 10);
-      await _audioPlayerService.seekTo(newPosition);
-    }
+    if (begin) await _seekBy(const Duration(seconds: 10));
   }
 
   @override
   Future<void> seekBackward(bool begin) async {
-    if (begin) {
-      final newPosition =
-          _audioPlayerService.currentPosition - const Duration(seconds: 10);
-      final clampedPosition =
-          newPosition < Duration.zero ? Duration.zero : newPosition;
-      await _audioPlayerService.seekTo(clampedPosition);
-    }
+    if (begin) await _seekBy(const Duration(seconds: -10));
   }
 
   @override
   Future<void> fastForward() async {
     debugPrint('[native_controls] Fast forward requested from native controls');
-    final newPosition =
-        _audioPlayerService.currentPosition + const Duration(seconds: 30);
-    await _audioPlayerService.seekTo(newPosition);
+    await _seekBy(const Duration(seconds: 30));
   }
 
   @override
   Future<void> rewind() async {
     debugPrint('[native_controls] Rewind requested from native controls');
-    final newPosition =
-        _audioPlayerService.currentPosition - const Duration(seconds: 30);
-    final clampedPosition =
-        newPosition < Duration.zero ? Duration.zero : newPosition;
-    await _audioPlayerService.seekTo(clampedPosition);
+    await _seekBy(const Duration(seconds: -30));
   }
 
-  void dispose() {
-    _audioPlayerService.removeListener(_updateMediaItem);
-    _positionSubscription.cancel();
-    _directPlayerStateSubscription.cancel();
+  Future<void> _seekBy(Duration offset) async {
+    final service = _service;
+    if (service == null) return;
+    final newPosition = service.currentPosition + offset;
+    await service
+        .seekTo(newPosition < Duration.zero ? Duration.zero : newPosition);
   }
+
+  void dispose() => detach();
 }

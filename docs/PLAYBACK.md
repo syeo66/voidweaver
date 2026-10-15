@@ -44,6 +44,8 @@ There is deliberately no handling for the player pausing near the end of a track
 
 `VoidweaverAudioHandler` listens to `AudioPlayerService` and also directly to `just_audio`'s `playerStateStream`.
 
+`AudioService.init()` may only run once per process, so the handler outlives a login. `AppState` creates it on the first login. On logout it calls `detach()`, which ends the media session. The next login calls `attach()` with the new player instead of initializing again. Controls that arrive while nothing is attached are ignored.
+
 The media item is updated when the song or its duration changes. When the player moves on by itself, the new track's duration arrives after the index change, so comparing only the song would leave the previous track's duration in the notification.
 
 When skips reloaded the source, `just_audio` briefly reported `playing=false`. Bluetooth devices took that as a user pause, so skip turned into pause. The handler masks this: while `isSkipOperationInProgress` is true it reports the last known playing state and a ready processing state. Skips now seek within the queue, which keeps `playing`, but a skip after `stop()` or an error still loads the queue again.

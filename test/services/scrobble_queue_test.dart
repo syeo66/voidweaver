@@ -451,5 +451,38 @@ void main() {
           .called(2);
       expect(scrobbleQueue.queueSize, 0);
     });
+
+    test('clear drops pending requests, also from storage', () async {
+      when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
+          .thenThrow(Exception('offline'));
+      await scrobbleQueue.initialize();
+      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      await scrobbleQueue.clear();
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      expect(scrobbleQueue.queueSize, 0);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('scrobble_queue'), isNull);
+    });
+
+    test('clear wins over a pass still in progress', () async {
+      final sending = Completer<void>();
+      when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
+          .thenAnswer((_) => sending.future);
+      await scrobbleQueue.initialize();
+      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
+      await scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now());
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      await scrobbleQueue.clear();
+      sending.complete();
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      final prefs = await SharedPreferences.getInstance();
+      final stored = prefs.getString('scrobble_queue');
+      expect(stored == null || (jsonDecode(stored) as List).isEmpty, isTrue);
+    });
   });
 }
