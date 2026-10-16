@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- audio_service looks up its notification icons by name at runtime
-     (Resources.getIdentifier), which the resource shrinker can't see.
-     Without this, AGP 9's optimized shrinking strips them and every
-     playback state update fails, killing the media notification and
-     Bluetooth/media button controls. -->
-<resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@drawable/audio_service_*" />

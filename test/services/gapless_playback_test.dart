@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:audio_service/audio_service.dart' hide PlaybackState;
-import 'package:voidweaver_player/voidweaver_player.dart' show ProcessingState;
+import 'package:voidweaver_player/voidweaver_player.dart'
+    show ProcessingState, SystemCommandType;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -10,7 +10,6 @@ import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/audio_cache.dart';
-import 'package:voidweaver/services/audio_handler.dart';
 import 'package:voidweaver/services/audio_player_service.dart';
 import 'package:voidweaver/services/settings_service.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
@@ -397,60 +396,64 @@ void main() {
     });
   });
 
-  // audio_service ends the media session, notification and foreground
-  // service when the handler reports idle, see docs/PLAYBACK.md
+  // Commands from the notification, lock screen, Bluetooth and media buttons
   group('system controls', () {
-    late VoidweaverAudioHandler handler;
-    late List<AudioProcessingState> reported;
+    test('play and pause go through the service', () async {
+      await service.playAlbum(albumOf(2));
 
-    setUp(() {
-      handler = VoidweaverAudioHandler(service, mockApi);
-      reported = [];
-      handler.playbackState.listen((s) => reported.add(s.processingState));
+      player.simulateSystemCommand(SystemCommandType.pause);
+      await until(() => service.playbackState == PlaybackState.paused,
+          'playback pauses');
+
+      player.simulateSystemCommand(SystemCommandType.play);
+      await until(() => service.playbackState == PlaybackState.playing,
+          'playback resumes');
     });
 
-    tearDown(() => handler.dispose());
-
-    test('stay active while playback continues after a load error', () async {
-      await download('s3');
-      serverReachable = false;
+    test('next skips within the queue', () async {
       await service.playAlbum(albumOf(3));
-      await pumpEventQueue();
-      reported.clear();
-      player.failingUrls.add(urlFor('s2'));
+      await Future.delayed(pastSkipDebounce);
 
-      player.simulateTrackTransition();
-      await until(() => service.currentIndex == 2, 'playback continues at s3');
+      player.simulateSystemCommand(SystemCommandType.next);
+      await until(() => service.currentIndex == 1, 'the service skips');
 
-      expect(player.processingState, ProcessingState.ready);
-      expect(reported, isNot(contains(AudioProcessingState.idle)));
-      expect(handler.playbackState.value.playing, isTrue);
+      expect(player.currentIndex, 1);
+      expect(player.loadedSources.first, urlFor('s1'));
     });
 
-    test('stay active, paused, when nothing ahead is playable', () async {
+    test('seek moves the playhead', () async {
+      await service.playAlbum(albumOf(2));
+
+      player.simulateSystemCommand(
+          SystemCommandType.seek, const Duration(seconds: 42));
+      await until(() => service.currentPosition == const Duration(seconds: 42),
+          'the playhead moves');
+    });
+
+    test('play after a load error loads the track again', () async {
       serverReachable = false;
       await service.playAlbum(albumOf(2));
-      await pumpEventQueue();
-      reported.clear();
       player.failingUrls.add(urlFor('s2'));
-
       player.simulateTrackTransition();
       await until(() => service.playbackState == PlaybackState.stopped,
           'playback stops');
-      await pumpEventQueue();
 
-      expect(reported, isNot(contains(AudioProcessingState.idle)));
-      expect(handler.playbackState.value.playing, isFalse);
+      player.failingUrls.clear();
+      player.simulateSystemCommand(SystemCommandType.play);
+      await until(() => service.playbackState == PlaybackState.playing,
+          'playback resumes');
+
+      expect(player.loadedSources.last, urlFor('s2'));
     });
 
-    test('end the session on stop', () async {
+    test('stop stops playback', () async {
       await service.playAlbum(albumOf(2));
 
-      await handler.stop();
-      await pumpEventQueue();
+      player.simulateSystemCommand(SystemCommandType.stop);
+      await until(() => service.playbackState == PlaybackState.stopped,
+          'playback stops');
 
-      expect(handler.playbackState.value.processingState,
-          AudioProcessingState.idle);
+      expect(player.processingState, ProcessingState.idle);
     });
   });
 }

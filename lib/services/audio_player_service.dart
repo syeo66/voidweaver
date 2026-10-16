@@ -82,10 +82,6 @@ class AudioPlayerService extends ChangeNotifier {
   // old track's index would look like an advance.
   int? _awaitedIndex;
 
-  // Whether playback was stopped (or never started), as opposed to the player
-  // being idle on the way to playing again, see isStopped
-  bool _stopped = true;
-
   // Skips
   DateTime? _lastSkipTime;
   bool _skipOperationInProgress = false;
@@ -112,6 +108,7 @@ class AudioPlayerService extends ChangeNotifier {
   StreamSubscription? _playerStateSubscription;
   StreamSubscription? _currentIndexSubscription;
   StreamSubscription? _errorSubscription;
+  StreamSubscription? _commandSubscription;
 
   // Async work (preloads, ReplayGain reads) can finish after dispose()
   bool _disposed = false;
@@ -131,16 +128,8 @@ class AudioPlayerService extends ChangeNotifier {
     _audioCache.initialize();
   }
 
-  // Expose the player for direct state access by VoidweaverAudioHandler
-  VoidweaverPlayer get audioPlayer => _audioPlayer;
-
   /// Whether a skip is being carried out; the UI disables the skip buttons.
   bool get isSkipOperationInProgress => _skipOperationInProgress;
-
-  /// Whether playback was stopped. The player is also idle after a load error
-  /// while the service continues elsewhere in the queue or reloads it; only
-  /// this means the media session should end. See docs/PLAYBACK.md.
-  bool get isStopped => _stopped;
 
   PlaybackState get playbackState => _playbackState;
   List<Song> get playlist => _playlist;
@@ -188,6 +177,8 @@ class AudioPlayerService extends ChangeNotifier {
 
     _errorSubscription = _audioPlayer.errorStream.listen(_onPlayerError);
 
+    _commandSubscription = _audioPlayer.commandStream.listen(_onSystemCommand);
+
     _playerStateSubscription = _audioPlayer.playerStateStream.listen((state) {
       debugPrint('[audio_player] State changed to: $state');
       switch (state.processingState) {
@@ -211,6 +202,23 @@ class AudioPlayerService extends ChangeNotifier {
       }
       notifyListeners();
     });
+  }
+
+  /// A command from the notification, lock screen, Bluetooth or media
+  /// buttons. They go through the same methods as the app's own controls.
+  void _onSystemCommand(SystemCommand command) {
+    debugPrint('[native_controls] $command');
+    final Future<void> result = switch (command.type) {
+      SystemCommandType.play => play(),
+      SystemCommandType.pause => pause(),
+      SystemCommandType.stop => stop(),
+      SystemCommandType.next => next(),
+      SystemCommandType.previous => previous(),
+      SystemCommandType.seek => seekTo(command.position ?? Duration.zero),
+    };
+    unawaited(result.catchError((Object e) {
+      debugPrint('[native_controls] $command failed: $e');
+    }));
   }
 
   // Persistence methods
@@ -378,11 +386,20 @@ class AudioPlayerService extends ChangeNotifier {
     final song = _playlist[index];
     final tag = _QueueEntry(generation, index);
     final gain = _gainFor(song);
+    final artUri = song.coverArt != null
+        ? Uri.parse(_api.getCoverArtUrl(song.coverArt!))
+        : null;
     file ??= _audioCache.getCachedFile(song.id);
-    return file != null
-        ? AudioSource.file(file.path, tag: tag, gain: gain)
-        : AudioSource.uri(Uri.parse(_api.getStreamUrl(song.id)),
-            tag: tag, gain: gain);
+    return AudioSource.uri(
+        file != null
+            ? Uri.file(file.path)
+            : Uri.parse(_api.getStreamUrl(song.id)),
+        tag: tag,
+        gain: gain,
+        title: song.title,
+        artist: song.artist,
+        album: song.album,
+        artUri: artUri);
   }
 
   /// Hands the whole playlist to the player, starting at [startIndex] and
@@ -392,7 +409,6 @@ class AudioPlayerService extends ChangeNotifier {
   Future<void> _loadQueue(int startIndex,
       {Duration position = Duration.zero, bool play = true}) async {
     final generation = ++_generation;
-    _stopped = false;
     _fileBacked.clear();
     _awaitedIndex = null;
 
@@ -633,8 +649,6 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   Future<void> stop() async {
-    // Before stopping the player, so the idle state it reports is final
-    _stopped = true;
     await _audioPlayer.stop();
     _currentPosition = Duration.zero;
     _totalDuration = Duration.zero;
@@ -1059,6 +1073,7 @@ class AudioPlayerService extends ChangeNotifier {
     _playerStateSubscription?.cancel();
     _currentIndexSubscription?.cancel();
     _errorSubscription?.cancel();
+    _commandSubscription?.cancel();
     _sleepTimer?.cancel();
     if (_ownsAudioCache) _audioCache.dispose();
     _persistence?.dispose();

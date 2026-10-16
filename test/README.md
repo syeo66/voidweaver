@@ -10,11 +10,11 @@ Tests need no device, network or platform plugins.
 
 ## Layout
 
-- `services/`: one file per service (API cache, audio cache, scrobble queue, playback restore, ReplayGain parsing, skip and Bluetooth controls, timeouts, HTTPS enforcement, disposal)
+- `services/`: one file per service (API cache, audio cache, scrobble queue, playback restore, ReplayGain parsing, skips, gapless playback and system controls, timeouts, HTTPS enforcement, disposal)
 - `utils/`: validators and formatting helpers
 - `widgets/`: error boundaries
 - `fixtures/replaygain/`: sample tag data for the parser tests
-- `test_helpers/mock_audio_player.dart`: fake `VoidweaverPlayer` holding a sequence, like the real one; `simulateTrackTransition()`, `simulateCompletion()`, `simulateLoadError()`, `failingUrls`, `gainOfSource()` etc. Like the real player, a `seek()` to an item in `failingUrls` reports the error, then completes.
+- `test_helpers/mock_audio_player.dart`: fake `VoidweaverPlayer` holding a sequence, like the real one; `simulateTrackTransition()`, `simulateCompletion()`, `simulateLoadError()`, `simulateSystemCommand()`, `failingUrls`, `gainOfSource()` etc. Like the real player, a `seek()` to an item in `failingUrls` reports the error, then completes.
 
 ## Writing tests
 

@@ -16,6 +16,8 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
       StreamController<int?>.broadcast();
   final StreamController<PlayerException> _errorController =
       StreamController<PlayerException>.broadcast();
+  final StreamController<SystemCommand> _commandController =
+      StreamController<SystemCommand>.broadcast();
 
   PlayerState _currentPlayerState = PlayerState(false, ProcessingState.idle);
 
@@ -66,6 +68,9 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
 
   @override
   Stream<PlayerException> get errorStream => _errorController.stream;
+
+  @override
+  Stream<SystemCommand> get commandStream => _commandController.stream;
 
   @override
   PlayerState get playerState => _currentPlayerState;
@@ -202,6 +207,7 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
     await _stateController.close();
     await _indexController.close();
     await _errorController.close();
+    await _commandController.close();
   }
 
   // Helper methods for testing
@@ -233,6 +239,11 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
   void simulateIndexEvent(int? index) {
     _indexController.add(index);
   }
+
+  /// A command from the notification, lock screen, Bluetooth or media
+  /// buttons.
+  void simulateSystemCommand(SystemCommandType type, [Duration? position]) =>
+      _commandController.add(SystemCommand(type, position));
 
   /// A load error for the current item, e.g. the network dropping while it
   /// streams.

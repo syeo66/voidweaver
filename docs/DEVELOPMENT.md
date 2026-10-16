@@ -31,8 +31,7 @@ Endpoints used: `ping` (checks the credentials on login), `getAlbumList2`, `getA
 | `lib/services/app_state.dart` | App-wide state: login, creates the API and player services, background sync every 5 minutes |
 | `lib/services/subsonic_api.dart` | Subsonic client: token auth, response parsing, API cache, HTTP/2 via `http_plus` |
 | `lib/services/audio_player_service.dart` | Hands the playlist to the player and follows it; skips, load errors, ReplayGain gains, scrobbling, prefetching |
-| `packages/voidweaver_player/` | Local plugin: playlist player on Media3 ExoPlayer with a gain stage per item (Java on the Android side) |
-| `lib/services/audio_handler.dart` | `audio_service` bridge for lock screen, notification and Bluetooth controls |
+| `packages/voidweaver_player/` | Local plugin: playlist player on Media3 ExoPlayer with a gain stage per item, and the Media3 media session for notification, lock screen and Bluetooth controls (Java on the Android side) |
 | `lib/services/api_cache.dart`, `audio_cache.dart`, `image_cache_manager.dart` | Caching, see [CACHING.md](CACHING.md) |
 | `lib/services/scrobble_queue.dart` | Persistent scrobble queue with retries |
 | `lib/services/replaygain_reader.dart` | ReplayGain tag parsing, see [REPLAYGAIN.md](REPLAYGAIN.md) |
@@ -52,12 +51,12 @@ State is managed with Provider. Services take optional dependencies (`Voidweaver
 
 ## Playback internals
 
-How the player's queue is followed, downloads swapped in, load errors, skips, Bluetooth state masking and audio focus are described in [PLAYBACK.md](PLAYBACK.md). Read it before changing `audio_player_service.dart` or `audio_handler.dart`.
+How the player's queue is followed, downloads swapped in, load errors, skips, system controls and audio focus are described in [PLAYBACK.md](PLAYBACK.md). Read it before changing `audio_player_service.dart` or the plugin.
 
 ## Android
 
-- `MainActivity` extends `AudioServiceActivity` and creates the `com.voidweaver.audio` notification channel. It must not request audio focus (see [PLAYBACK.md](PLAYBACK.md#audio-focus)).
-- `AndroidManifest.xml` declares the `audio_service` `AudioService` (`foregroundServiceType="mediaPlayback"`) and `MediaButtonReceiver`, plus the foreground service, wake lock and Bluetooth permissions.
+- `MainActivity` keeps its `FlutterEngine` cached so Dart keeps running without the activity (see [PLAYBACK.md](PLAYBACK.md#bluetooth-and-system-controls)). It must not request audio focus (see [PLAYBACK.md](PLAYBACK.md#audio-focus)).
+- The plugin's manifest declares `PlaybackService` (`foregroundServiceType="mediaPlayback"`) and its permissions; it's merged into the app's.
 
 ## Tests
 

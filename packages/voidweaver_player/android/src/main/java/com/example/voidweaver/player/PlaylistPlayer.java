@@ -1,6 +1,8 @@
 package com.example.voidweaver.player;
 
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -9,6 +11,7 @@ import androidx.annotation.Nullable;
 import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
+import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.Timeline;
@@ -22,6 +25,9 @@ import androidx.media3.exoplayer.audio.AudioSink;
 import androidx.media3.exoplayer.audio.DefaultAudioSink;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.extractor.DefaultExtractorsFactory;
+import androidx.media3.session.MediaSession;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
 import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.EventChannel;
 import io.flutter.plugin.common.MethodCall;
@@ -33,7 +39,9 @@ import java.util.Map;
 
 /**
  * One ExoPlayer with a playlist, controlled from Dart over {@code voidweaver_player/<id>} and
- * reporting its state on {@code voidweaver_player/<id>/events}.
+ * reporting its state on {@code voidweaver_player/<id>/events}. Its media session (notification,
+ * lock screen, Bluetooth and media buttons) passes the system's commands to Dart as events, see
+ * {@link SessionPlayer}.
  *
  * <p>Every method replies with a state snapshot, which Dart applies before the call completes, so
  * the Dart side never sees a state from before its own call. {@code setAudioSources} replies once
@@ -53,6 +61,9 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
   private final EventChannel eventChannel;
   private final GainAudioProcessor gainProcessor = new GainAudioProcessor();
   private final ExoPlayer player;
+  private final SessionPlayer sessionPlayer;
+  private final MediaSession session;
+  private final Context context;
   private final Handler handler = new Handler(Looper.getMainLooper());
   private final Runnable positionUpdate = this::onPositionUpdate;
 
@@ -61,6 +72,7 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
   @Nullable private MethodChannel.Result pendingSeek;
 
   PlaylistPlayer(Context context, BinaryMessenger messenger, String id) {
+    this.context = context;
     DefaultRenderersFactory renderersFactory =
         new DefaultRenderersFactory(context) {
           @Override
@@ -96,6 +108,24 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build();
     player.addListener(this);
+    sessionPlayer = new SessionPlayer(player, this::onSessionCommand);
+    MediaSession.Builder sessionBuilder =
+        new MediaSession.Builder(context, sessionPlayer)
+            .setId(id)
+            .setCallback(new FullControlCallback());
+    Intent launchIntent =
+        context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
+    if (launchIntent != null) {
+      // Tapping the notification opens the app
+      sessionBuilder.setSessionActivity(
+          PendingIntent.getActivity(
+              context,
+              0,
+              launchIntent,
+              PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+    }
+    session = sessionBuilder.build();
+    PlaybackService.register(context, session);
 
     methodChannel = new MethodChannel(messenger, "voidweaver_player/" + id);
     methodChannel.setMethodCallHandler(this);
@@ -134,6 +164,7 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
           gainProcessor.setGain(call.argument("id"), ((Number) call.argument("gain")).floatValue());
           break;
         case "play":
+          PlaybackService.ensureStarted(context);
           player.play();
           break;
         case "pause":
@@ -144,6 +175,7 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
           completeSeek();
           player.pause();
           player.stop();
+          sessionPlayer.setStopped(true);
           break;
         case "seek":
           seek(call, result);
@@ -165,7 +197,18 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
   private MediaItem mediaItem(Map<?, ?> source) {
     String id = (String) source.get("id");
     gainProcessor.setGain(id, ((Number) source.get("gain")).floatValue());
-    return new MediaItem.Builder().setMediaId(id).setUri(Uri.parse((String) source.get("uri"))).build();
+    MediaMetadata.Builder metadata =
+        new MediaMetadata.Builder()
+            .setTitle((String) source.get("title"))
+            .setArtist((String) source.get("artist"))
+            .setAlbumTitle((String) source.get("album"));
+    String artUri = (String) source.get("artUri");
+    if (artUri != null) metadata.setArtworkUri(Uri.parse(artUri));
+    return new MediaItem.Builder()
+        .setMediaId(id)
+        .setUri(Uri.parse((String) source.get("uri")))
+        .setMediaMetadata(metadata.build())
+        .build();
   }
 
   private void setAudioSources(MethodCall call, MethodChannel.Result result) {
@@ -181,6 +224,8 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
     player.setMediaItems(
         items, intArg(call, "initialIndex"), position != null ? position.longValue() : 0);
     player.prepare();
+    sessionPlayer.setStopped(false);
+    PlaybackService.ensureStarted(context);
     pendingLoad = result;
   }
 
@@ -215,6 +260,33 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
       pendingSeek.success(snapshot());
       pendingSeek = null;
     }
+  }
+
+  /**
+   * Gives every controller full control. Media3 only does that for controllers it trusts, and to
+   * check, it looks the controller's package up, which fails for apps this one can't see (package
+   * visibility). Launchers with media widgets (e.g. Niagara) then only get read access: they show
+   * the track, but their buttons do nothing. SessionPlayer only offers transport controls, which
+   * are passed to Dart, so no controller can do more than a Bluetooth button.
+   */
+  private static final class FullControlCallback implements MediaSession.Callback {
+    @Override
+    public ListenableFuture<MediaSession.ConnectionResult> onConnectAsync(
+        MediaSession session, MediaSession.ControllerInfo controller) {
+      return Futures.immediateFuture(
+          new MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+              .setAvailablePlayerCommands(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS)
+              .setAvailableSessionCommands(MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS)
+              .build());
+    }
+  }
+
+  private void onSessionCommand(String command, @Nullable Long positionMs) {
+    Map<String, Object> event = new HashMap<>();
+    event.put("type", "command");
+    event.put("command", command);
+    event.put("position", positionMs);
+    send(event);
   }
 
   @Override
@@ -319,6 +391,8 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
     methodChannel.setMethodCallHandler(null);
     eventChannel.setStreamHandler(null);
     eventSink = null;
+    PlaybackService.unregister(session);
+    session.release();
     player.removeListener(this);
     player.release();
   }

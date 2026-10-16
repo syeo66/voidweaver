@@ -2,12 +2,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:audio_service/audio_service.dart';
 import 'subsonic_api.dart';
 import 'audio_player_service.dart';
 import 'audio_cache.dart';
 import 'image_cache_manager.dart';
-import 'audio_handler.dart';
 import 'settings_service.dart';
 import 'playback_persistence.dart';
 import 'replaygain_debug_logger.dart';
@@ -44,7 +42,6 @@ class AppState extends ChangeNotifier {
   ScrobbleQueue? _scrobbleQueue;
   SettingsService? _settingsService;
   PlaybackPersistenceService? _persistenceService;
-  VoidweaverAudioHandler? _audioHandler;
   List<Album> _albums = [];
   bool _isLoading = false;
   String? _error;
@@ -127,9 +124,6 @@ class AppState extends ChangeNotifier {
         scrobbleQueue: _scrobbleQueue,
       );
 
-      // Initialize audio service for native controls
-      await _initializeAudioService();
-
       _isConfigured = true;
       _configurationLoadingState = LoadingState.success;
 
@@ -157,44 +151,6 @@ class AppState extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       rethrow;
-    }
-  }
-
-  /// Connects the player to the lock screen, notification and Bluetooth
-  /// controls. `AudioService.init()` may only run once per process, so after
-  /// a logout the existing handler is attached to the new player instead.
-  Future<void> _initializeAudioService() async {
-    final player = _audioPlayerService;
-    final api = _api;
-    if (player == null || api == null) return;
-
-    final handler = _audioHandler;
-    if (handler != null) {
-      handler.attach(player, api);
-      return;
-    }
-
-    try {
-      _audioHandler = await AudioService.init(
-        builder: () => VoidweaverAudioHandler(player, api),
-        config: const AudioServiceConfig(
-          androidNotificationChannelId: 'com.voidweaver.audio',
-          androidNotificationChannelName: 'Voidweaver Audio',
-          androidNotificationOngoing: true,
-          androidStopForegroundOnPause: true,
-          androidNotificationChannelDescription:
-              'Voidweaver music playback controls',
-          androidShowNotificationBadge: true,
-          androidNotificationClickStartsActivity: true,
-          androidNotificationIcon: 'mipmap/launcher_icon',
-          fastForwardInterval: Duration(seconds: 30),
-          rewindInterval: Duration(seconds: 30),
-        ),
-      );
-      debugPrint('Audio service initialized successfully');
-    } catch (e) {
-      debugPrint('Error initializing audio service: $e');
-      // Don't throw - app should still work without native controls
     }
   }
 
@@ -272,11 +228,10 @@ class AppState extends ChangeNotifier {
     _syncStatusResetTimer = null;
   }
 
-  /// Releases the services of the current login. The audio handler is only
-  /// detached, as it lives as long as the process.
+  /// Releases the services of the current login. Disposing the player ends
+  /// its media session, which removes the notification.
   void _disposeServices() {
     _stopBackgroundSync();
-    _audioHandler?.detach();
     _audioPlayerService?.dispose();
     _audioPlayerService = null;
     // Already disposed by the player; kept to clear it on logout

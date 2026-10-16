@@ -1,8 +1,8 @@
 # Playback internals
 
-Non-obvious behavior in `lib/services/audio_player_service.dart` and `lib/services/audio_handler.dart`. Keep it in mind when changing either file.
+Non-obvious behavior in `lib/services/audio_player_service.dart` and `packages/voidweaver_player`. Keep it in mind when changing either.
 
-The player is `VoidweaverPlayer` from the local plugin `packages/voidweaver_player`: a thin layer over Media3 ExoPlayer (`PlaylistPlayer.java`) with a gain stage per item (`GainAudioProcessor.java`). It replaced `just_audio`, which had no way to apply a gain per track.
+The player is `VoidweaverPlayer` from the local plugin `packages/voidweaver_player`: a thin layer over Media3 ExoPlayer (`PlaylistPlayer.java`) with a gain stage per item (`GainAudioProcessor.java`) and a Media3 media session for the system controls. It replaced `just_audio`, which had no way to apply a gain per track, and `audio_service`.
 
 ## The player owns the queue
 
@@ -53,15 +53,15 @@ There is deliberately no handling for the player pausing near the end of a track
 
 ## Bluetooth and system controls
 
-`VoidweaverAudioHandler` listens to `AudioPlayerService` and also directly to the player's `playerStateStream`.
+The plugin's Media3 `MediaSession` drives the notification, the lock screen player and Bluetooth/media button controls (`PlaybackService`, a `MediaSessionService`, hosts it; Media3 builds the notification and keeps the service in the foreground while playing). The session shows the ExoPlayer's real state and the metadata of the current queue item (`AudioSource.title` etc.), so it follows gapless transitions by itself.
 
-`AudioService.init()` may only run once per process, so the handler outlives a login. `AppState` creates it on the first login. On logout it calls `detach()`, which ends the media session. The next login calls `attach()` with the new player instead of initializing again. Controls that arrive while nothing is attached are ignored.
-
-The media item is updated when the song or its duration changes. When the player moves on by itself, the new track's duration arrives after the index change, so comparing only the song would leave the previous track's duration in the notification.
-
-When skips reloaded the source, the player (`just_audio` at the time) briefly reported `playing=false`. Bluetooth devices took that as a user pause, so skip turned into pause. The handler masks this: while `isSkipOperationInProgress` is true it reports the last known playing state and a ready processing state. Skips now seek within the queue, which keeps `playing`, but a skip after `stop()` or an error still loads the queue again.
-
-`audio_service` ends everything when the handler reports `idle`: it removes the notification, deactivates the media session (Bluetooth controls stop working) and stops the foreground service, after which Android stops the app in the background. The player is idle after every load error, including those the service recovers from by continuing at a downloaded track. So the handler reports `idle` only once `isStopped` is set (`stop()`, or nothing loaded yet). Otherwise an idle player shows as loading while playing, or as ready while paused. A failed load pauses the player, so the system doesn't show it as loading indefinitely.
+- **Commands go to Dart.** The session talks to `SessionPlayer`, which forwards every command (play, pause, stop, next, previous, seek) to Dart instead of acting on the ExoPlayer. `AudioPlayerService` handles them (`_onSystemCommand()`) with the same methods as the app's own buttons, so skips are debounced, scrobbled and reload the queue after an error like any other. Only these commands are available to controllers; nobody else can change the queue.
+- **Every controller gets full control** (`FullControlCallback` in `PlaylistPlayer`). By default Media3 gives untrusted controllers read access only, and it can't verify apps that package visibility hides from this one, such as launchers with a media widget (Niagara): they showed the track but their buttons did nothing. With only transport controls on offer, a controller can't do more than a Bluetooth button.
+- **Load errors don't end the session.** The ExoPlayer is idle after every load error, also when the service recovers by continuing at a downloaded track or waits for Play to load again. An idle session would remove the notification and stop the foreground service. So `SessionPlayer` reports an idle player as ready (paused, without the error) unless playback was stopped. Only `stop()` ends the notification (`SHOW_NOTIFICATION_FOR_IDLE_PLAYER_NEVER`), and the next play brings it back.
+- **One session per player.** Each `VoidweaverPlayer` (one per login) has its own session; disposing it on logout releases the session and removes the notification. `PlaybackService` stops once no session is left.
+- **The Dart engine outlives the activity.** Playlist logic, scrobbling and downloads run in Dart, so `MainActivity` keeps its `FlutterEngine` in `FlutterEngineCache`. Closing the activity (Back, swiping it from the recents) leaves the engine running; a new activity attaches to it.
+- **Swiped away while paused**, Media3 stops `PlaybackService`. The session stays, so media buttons still reach it, and the next play starts the service again (`PlaybackService.ensureStarted()`).
+- There is no playback resumption after the process has died (no `MediaButtonReceiver`): a media button then does nothing until the app is opened.
 
 ## Audio focus
 

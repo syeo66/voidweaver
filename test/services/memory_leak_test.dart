@@ -68,7 +68,7 @@ void main() {
       expect(() => mockApi.dispose(), returnsNormally);
     });
 
-    test('VoidweaverAudioHandler disposal should not throw', () {
+    test('AudioPlayerService disposal without playback should not throw', () {
       final mockAudioPlayer = MockAudioPlayer();
       final mockSettingsService = MockSettingsService();
       final mockApi = MockSubsonicApi();
@@ -79,7 +79,6 @@ void main() {
         audioPlayer: mockAudioPlayer,
       );
 
-      // Dispose should not throw even without creating handler
       expect(() => audioPlayerService.dispose(), returnsNormally);
     });
 

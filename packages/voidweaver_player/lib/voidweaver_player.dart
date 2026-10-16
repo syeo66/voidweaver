@@ -1,6 +1,8 @@
 /// Gapless playlist player on Media3 ExoPlayer (Android), with a gain stage
 /// per item: each item plays at its own gain from its first sample to its
-/// last, also across a gapless transition.
+/// last, also across a gapless transition. Its media session drives the
+/// notification, lock screen and Bluetooth/media button controls, whose
+/// commands arrive on [VoidweaverPlayer.commandStream].
 library;
 
 import 'dart:async';
@@ -57,7 +59,24 @@ class PlayerInterruptedException implements Exception {
   String toString() => 'PlayerInterruptedException($message)';
 }
 
-/// A playlist item: a stream URL or a local file.
+enum SystemCommandType { play, pause, stop, next, previous, seek }
+
+/// A command from the notification, lock screen, Bluetooth or media buttons.
+/// The player doesn't act on these itself; the app decides what they do.
+class SystemCommand {
+  final SystemCommandType type;
+
+  /// The target of a [SystemCommandType.seek]
+  final Duration? position;
+
+  const SystemCommand(this.type, [this.position]);
+
+  @override
+  String toString() => 'SystemCommand($type, $position)';
+}
+
+/// A playlist item: a stream URL or a local file, with the metadata the
+/// system controls show while it plays.
 class AudioSource {
   static int _lastId = 0;
 
@@ -69,15 +88,46 @@ class AudioSource {
   /// Linear gain the item plays at, see [VoidweaverPlayer.setGain]
   final double gain;
 
-  AudioSource.uri(this.uri, {this.tag, this.gain = 1.0}) : id = '${++_lastId}';
+  final String? title;
+  final String? artist;
+  final String? album;
+  final Uri? artUri;
 
-  AudioSource.file(String path, {Object? tag, double gain = 1.0})
-      : this.uri(Uri.file(path), tag: tag, gain: gain);
+  AudioSource.uri(this.uri,
+      {this.tag,
+      this.gain = 1.0,
+      this.title,
+      this.artist,
+      this.album,
+      this.artUri})
+      : id = '${++_lastId}';
+
+  AudioSource.file(String path,
+      {Object? tag,
+      double gain = 1.0,
+      String? title,
+      String? artist,
+      String? album,
+      Uri? artUri})
+      : this.uri(Uri.file(path),
+            tag: tag,
+            gain: gain,
+            title: title,
+            artist: artist,
+            album: album,
+            artUri: artUri);
 
   bool get isFile => uri.isScheme('file');
 
-  Map<String, Object> _toMap() =>
-      {'id': id, 'uri': uri.toString(), 'gain': gain};
+  Map<String, Object?> _toMap() => {
+        'id': id,
+        'uri': uri.toString(),
+        'gain': gain,
+        'title': title,
+        'artist': artist,
+        'album': album,
+        'artUri': artUri?.toString(),
+      };
 }
 
 class VoidweaverPlayer {
@@ -103,6 +153,7 @@ class VoidweaverPlayer {
   final _playerStateController = StreamController<PlayerState>.broadcast();
   final _indexController = StreamController<int?>.broadcast();
   final _errorController = StreamController<PlayerException>.broadcast();
+  final _commandController = StreamController<SystemCommand>.broadcast();
 
   Future<void> _create() async {
     await _plugin.invokeMethod('create', {'id': _id});
@@ -120,6 +171,10 @@ class VoidweaverPlayer {
   Stream<int?> get currentIndexStream => _indexController.stream;
   Stream<PlayerException> get errorStream => _errorController.stream;
 
+  /// Commands from the notification, lock screen, Bluetooth and media
+  /// buttons.
+  Stream<SystemCommand> get commandStream => _commandController.stream;
+
   PlayerState get playerState => _playerState;
   bool get playing => _playerState.playing;
   ProcessingState get processingState => _playerState.processingState;
@@ -133,6 +188,11 @@ class VoidweaverPlayer {
     final map = event as Map;
     if (map['type'] == 'error') {
       _errorController.add(_exception(map));
+    } else if (map['type'] == 'command') {
+      final position = map['position'] as int?;
+      _commandController.add(SystemCommand(
+          SystemCommandType.values.byName(map['command'] as String),
+          position == null ? null : Duration(milliseconds: position)));
     } else {
       _applyState(map);
     }
@@ -258,6 +318,7 @@ class VoidweaverPlayer {
       await _playerStateController.close();
       await _indexController.close();
       await _errorController.close();
+      await _commandController.close();
     }
   }
 }
