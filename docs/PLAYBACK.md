@@ -1,20 +1,31 @@
 # Playback internals
 
-Non-obvious behavior in `lib/services/audio_player_service.dart` and `lib/services/audio_handler.dart`. Most of it works around `just_audio` quirks. Keep it in mind when changing either file.
+Non-obvious behavior in `lib/services/audio_player_service.dart` and `lib/services/audio_handler.dart`. Keep it in mind when changing either file.
+
+The player is `VoidweaverPlayer` from the local plugin `packages/voidweaver_player`: a thin layer over Media3 ExoPlayer (`PlaylistPlayer.java`) with a gain stage per item (`GainAudioProcessor.java`). It replaced `just_audio`, which had no way to apply a gain per track.
 
 ## The player owns the queue
 
-`_loadQueue()` hands the whole playlist to `just_audio` with `setAudioSources()` (lazy preparation). The player moves from track to track by itself, gaplessly, and the service follows its current index. There is no completion logic of its own in the service: `ProcessingState.completed` only means the end of the playlist.
+`_loadQueue()` hands the whole playlist to the player with `setAudioSources()`. The player moves from track to track by itself, gaplessly, and the service follows its current index. There is no completion logic of its own in the service: `ProcessingState.completed` only means the end of the playlist.
 
-At the end of the playlist `just_audio` stays `completed` with `playing` still set. The system controls show that as playing, and `play()` does nothing in that state. `_onQueueCompleted()` therefore pauses the player at the start of the last track. Play replays it as a new play: it gets a start time and "now playing" on `play()`, like a restored song, and is scrobbled again. The completed event that follows the pause has `playing` false and is ignored.
+At the end of the playlist the player stays `completed` with `playing` still set. The system controls show that as playing, and `play()` does nothing in that state. `_onQueueCompleted()` therefore pauses the player at the start of the last track. Play replays it as a new play: it gets a start time and "now playing" on `play()`, like a restored song, and is scrobbled again. The completed event that follows the pause has `playing` false and is ignored.
 
 Earlier versions loaded one track at a time and advanced on `completed`. That event sometimes didn't fire, which needed fallbacks (near the end, stuck playhead, paused near the end), which in turn caused double skips and skips on pause. Don't bring them back: within a sequence the player advances without them.
 
 - Every source is tagged with a `_QueueEntry` (generation and playlist index). `_followPlayer()` maps the player's current index to its entry, so a sequence position always resolves to the right song. Entries of an older generation (a replaced sequence) are ignored.
-- Only an advance by one counts as the player moving on (`_followPlayer()`): it scrobbles the finished track, then sends "now playing", applies ReplayGain and starts the next downloads. `just_audio` re-emits the current index with every playback event, so repeated and backwards events are ignored.
+- Only an advance by one counts as the player moving on (`_followPlayer()`): it scrobbles the finished track, then sends "now playing", and starts the next downloads. Index events can repeat or arrive late, so repeated and backwards events are ignored.
 - Changes to the player's index or sequence go through `_playerOp()`, one at a time. Index events are ignored while one runs, and the service catches up with the player afterwards.
 - After a skip, `_awaitedIndex` holds the target until the player reports it. Until then an event can still be from before the seek; after Previous, the old track's index would look like an advance.
-- The player's volume applies to the whole sequence, so ReplayGain for the next track is applied just after the player moves on. In track mode the change can be audible right at the boundary; album mode keeps the same gain within an album. Skips apply it before seeking.
+
+## ReplayGain per track
+
+Every item in the sequence carries its own gain (`AudioSource.gain`, from `_gainFor()`). On the native side, `GainAudioProcessor` sits in ExoPlayer's audio sink and multiplies the decoded samples by the gain of the item they belong to. The sink drains its processors and flushes them with the next item's `StreamMetadata` exactly where one item's samples end, so the gain changes at the sample where the track changes, also during a gapless transition. Nothing is applied when the player reports the new index; that event arrives a few hundred ms later, after the new track is already audible.
+
+- Gains can be above 1 (quiet tracks, positive preamp); samples are clipped at full scale. With clipping prevention on, the peak keeps them below that.
+- A gain read later (from a downloaded file, or by a range request) is set on the song's items with `_updateGains()`. The start track's gain is read before the queue is loaded, and a skip's target before seeking.
+- Changed settings apply to every item at once (`refreshReplayGainVolume()`).
+- Each switch to a new item is logged with the tag `VoidweaverGain` (`adb logcat -s VoidweaverGain`).
+- Track mode still changes the level between songs that run into each other (live albums, mixes), since each has its own gain. Album mode keeps one gain within an album.
 
 ## Downloads in the queue
 
@@ -28,7 +39,7 @@ Tracks already in the audio cache go into the sequence as files, the rest as str
 
 A track that can't load (offline and not downloaded, or a stream breaking off) is reported on `errorStream`. `_onPlayerError()` continues at the next downloaded track; if there is none, playback stops on the failing track and the next `play()` loads the queue again from there. Errors while a `_playerOp()` runs are handled once it finishes. If `_jumpTo()`'s target failed, it then leaves playback to `_onPlayerError()` instead of starting it.
 
-On Android, `just_audio`'s `seek()` completes only once the target is ready, so it never completes when the target fails to load. Awaited inside a `_playerOp()`, that blocked every later operation: the skip never finished, the error was never handled and the system showed the track as loading indefinitely. `_seekToItem()` stops waiting once the player reports an error or goes idle. The fake player in the tests behaves the same way. `setAudioSources()` throws its own errors, and `_loadQueue()` handles them the same way.
+The player's `seek()` completes once the target is ready or has failed (the error arrives on `errorStream` first). With `just_audio`, a seek to a target that failed never completed; awaited inside a `_playerOp()`, that blocked every later operation. `_seekToItem()` still stops waiting once the player reports an error or goes idle, so a seek that never completes can't block playback again. `setAudioSources()` completes once the start item is ready and throws its own errors, and `_loadQueue()` handles them the same way.
 
 After `stop()` or an error the player is idle, so `play()` and skips load the queue again (`_loadQueue()`) instead of seeking.
 
@@ -38,25 +49,25 @@ After `stop()` or an error the player is idle, so `play()` and skips load the qu
 - Skips are debounced (200 ms, `_skipDebounceMs`) in the service, so UI and system controls share the debounce. `_skipOperationInProgress` blocks a skip while another runs, and is reset in a `finally` block so the skip buttons can't get stuck.
 - A skip scrobbles the current track if it passed the threshold.
 
-There is deliberately no handling for the player pausing near the end of a track: `just_audio` keeps `playing` true while buffering and on completion, so ready and not playing only happens after `pause()`.
+There is deliberately no handling for the player pausing near the end of a track: the player keeps `playing` true while buffering and on completion, so ready and not playing only happens after `pause()`.
 
 ## Bluetooth and system controls
 
-`VoidweaverAudioHandler` listens to `AudioPlayerService` and also directly to `just_audio`'s `playerStateStream`.
+`VoidweaverAudioHandler` listens to `AudioPlayerService` and also directly to the player's `playerStateStream`.
 
 `AudioService.init()` may only run once per process, so the handler outlives a login. `AppState` creates it on the first login. On logout it calls `detach()`, which ends the media session. The next login calls `attach()` with the new player instead of initializing again. Controls that arrive while nothing is attached are ignored.
 
 The media item is updated when the song or its duration changes. When the player moves on by itself, the new track's duration arrives after the index change, so comparing only the song would leave the previous track's duration in the notification.
 
-When skips reloaded the source, `just_audio` briefly reported `playing=false`. Bluetooth devices took that as a user pause, so skip turned into pause. The handler masks this: while `isSkipOperationInProgress` is true it reports the last known playing state and a ready processing state. Skips now seek within the queue, which keeps `playing`, but a skip after `stop()` or an error still loads the queue again.
+When skips reloaded the source, the player (`just_audio` at the time) briefly reported `playing=false`. Bluetooth devices took that as a user pause, so skip turned into pause. The handler masks this: while `isSkipOperationInProgress` is true it reports the last known playing state and a ready processing state. Skips now seek within the queue, which keeps `playing`, but a skip after `stop()` or an error still loads the queue again.
 
 `audio_service` ends everything when the handler reports `idle`: it removes the notification, deactivates the media session (Bluetooth controls stop working) and stops the foreground service, after which Android stops the app in the background. The player is idle after every load error, including those the service recovers from by continuing at a downloaded track. So the handler reports `idle` only once `isStopped` is set (`stop()`, or nothing loaded yet). Otherwise an idle player shows as loading while playing, or as ready while paused. A failed load pauses the player, so the system doesn't show it as loading indefinitely.
 
 ## Audio focus
 
-`just_audio` owns audio focus through `audio_session`. It pauses on interruptions and resumes after transient ones.
+ExoPlayer owns audio focus (`setAudioAttributes(..., handleAudioFocus = true)` in `PlaylistPlayer`). It pauses on interruptions and resumes after transient ones; while focus is lost for a moment the player reports `playing` false. It also pauses when headphones are unplugged (`setHandleAudioBecomingNoisy`).
 
-Don't request focus anywhere else, including native code. Android treats each focus listener as a separate client. An earlier `voidweaver/audio_focus` channel in `MainActivity` pushed `just_audio`'s listener down the stack, so when an interruption ended Android notified the wrong listener and playback never resumed.
+Don't request focus anywhere else, including native code. Android treats each focus listener as a separate client. An earlier `voidweaver/audio_focus` channel in `MainActivity` pushed the player's listener down the stack, so when an interruption ended Android notified the wrong listener and playback never resumed.
 
 ## Restoring playback
 

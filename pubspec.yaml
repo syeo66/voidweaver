@@ -1,5 +1,6 @@
 name: voidweaver
 description: A Flutter audioplayer app connecting to Subsonic API with advanced caching
+publish_to: none
 version: 1.1.0+2
 
 environment:
@@ -10,7 +11,8 @@ dependencies:
     sdk: flutter
   http: ^1.6.0
   http_plus: ^0.2.3
-  just_audio: ^0.10.6
+  voidweaver_player:
+    path: packages/voidweaver_player
   crypto: ^3.0.7
   xml: ^7.1.0
   shared_preferences: ^2.5.6

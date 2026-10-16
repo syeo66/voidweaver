@@ -30,7 +30,8 @@ Endpoints used: `ping` (checks the credentials on login), `getAlbumList2`, `getA
 |------|---------|
 | `lib/services/app_state.dart` | App-wide state: login, creates the API and player services, background sync every 5 minutes |
 | `lib/services/subsonic_api.dart` | Subsonic client: token auth, response parsing, API cache, HTTP/2 via `http_plus` |
-| `lib/services/audio_player_service.dart` | Hands the playlist to `just_audio` and follows it; skips, load errors, ReplayGain volume, scrobbling, prefetching |
+| `lib/services/audio_player_service.dart` | Hands the playlist to the player and follows it; skips, load errors, ReplayGain gains, scrobbling, prefetching |
+| `packages/voidweaver_player/` | Local plugin: playlist player on Media3 ExoPlayer with a gain stage per item (Java on the Android side) |
 | `lib/services/audio_handler.dart` | `audio_service` bridge for lock screen, notification and Bluetooth controls |
 | `lib/services/api_cache.dart`, `audio_cache.dart`, `image_cache_manager.dart` | Caching, see [CACHING.md](CACHING.md) |
 | `lib/services/scrobble_queue.dart` | Persistent scrobble queue with retries |
@@ -39,7 +40,7 @@ Endpoints used: `ping` (checks the credentials on login), `getAlbumList2`, `getA
 | `lib/services/network_*.dart` | Timeout presets, retry with backoff, user-facing error messages |
 | `lib/services/error_handler.dart`, `lib/widgets/error_boundary.dart` | Global error handler and `ErrorBoundary` / `.withErrorBoundary()` widgets |
 
-State is managed with Provider. Services take optional dependencies (`AudioPlayer`, `ScrobbleQueue`, `AudioCache`) so tests can inject fakes.
+State is managed with Provider. Services take optional dependencies (`VoidweaverPlayer`, `ScrobbleQueue`, `AudioCache`) so tests can inject fakes.
 
 ## Conventions
 

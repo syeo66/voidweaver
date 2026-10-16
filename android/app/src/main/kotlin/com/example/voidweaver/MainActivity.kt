@@ -7,9 +7,9 @@ import android.os.Build
 import io.flutter.embedding.engine.FlutterEngine
 import com.ryanheise.audioservice.AudioServiceActivity
 
-// Audio focus is handled by just_audio/audio_session on the Dart side.
+// Audio focus is handled by the player's ExoPlayer (packages/voidweaver_player).
 // Requesting it here as well would register a second focus listener that
-// competes with just_audio's and breaks resuming after interruptions.
+// competes with the player's and breaks resuming after interruptions.
 class MainActivity : AudioServiceActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

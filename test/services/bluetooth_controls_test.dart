@@ -43,7 +43,7 @@ void main() {
 
     test('play from native controls starts playback', () async {
       await audioHandler.play();
-      // Audio focus is left to just_audio/audio_session; the handler must not
+      // Audio focus is left to the player (ExoPlayer); the handler must not
       // request it separately (that broke resuming after interruptions).
     });
 

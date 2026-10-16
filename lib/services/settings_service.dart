@@ -145,7 +145,9 @@ class SettingsService extends ChangeNotifier {
       }
     }
 
-    return volumeMultiplier.clamp(0.0, 1.0);
+    // Applied to the samples, so it can go above 1; with clipping prevention
+    // the peak keeps it at full scale
+    return math.max(0.0, volumeMultiplier);
   }
 
   double _dbToLinear(double db) {

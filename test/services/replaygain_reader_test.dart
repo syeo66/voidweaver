@@ -250,6 +250,18 @@ void main() {
       );
     });
 
+    test('quiet tracks are raised above unity, up to their peak', () async {
+      await settings.setReplayGainMode(ReplayGainMode.track);
+
+      expect(
+          settings.calculateVolumeAdjustment(trackGain: 6.0, trackPeak: 0.25),
+          closeTo(dbToLinear(6.0), 1e-9));
+      // +12 dB would push a 0.5 peak past full scale
+      expect(
+          settings.calculateVolumeAdjustment(trackGain: 12.0, trackPeak: 0.5),
+          closeTo(2.0, 1e-9));
+    });
+
     test('R128-only Opus tags produce an audible volume', () async {
       final data = ReplayGainReader.parseBytes(
           ascii('OggS....OpusTags....R128_TRACK_GAIN=-2304'));

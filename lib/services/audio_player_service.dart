@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:just_audio/just_audio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:voidweaver_player/voidweaver_player.dart';
 import 'subsonic_api.dart';
 import 'settings_service.dart';
 import 'replaygain_reader.dart';
@@ -28,9 +28,10 @@ class _QueueEntry {
   const _QueueEntry(this.generation, this.index);
 }
 
-/// Plays a playlist through just_audio. The whole playlist is handed to the
-/// player as its sequence, so the player moves from track to track by itself
-/// (gaplessly); the service follows its current index. See docs/PLAYBACK.md.
+/// Plays a playlist through [VoidweaverPlayer]. The whole playlist is handed
+/// to the player as its sequence, so the player moves from track to track by
+/// itself (gaplessly); the service follows its current index. Each item
+/// carries its own ReplayGain gain. See docs/PLAYBACK.md.
 class AudioPlayerService extends ChangeNotifier {
   /// Upcoming tracks downloaded to the disk cache while playing
   static const int _maxPreloadTracks = 3;
@@ -42,7 +43,7 @@ class AudioPlayerService extends ChangeNotifier {
 
   static const _skipDebounceMs = 200;
 
-  final AudioPlayer _audioPlayer;
+  final VoidweaverPlayer _audioPlayer;
   final SubsonicApi _api;
   final SettingsService _settingsService;
   final PlaybackPersistenceService? _persistence;
@@ -116,11 +117,11 @@ class AudioPlayerService extends ChangeNotifier {
   bool _disposed = false;
 
   AudioPlayerService(this._api, this._settingsService,
-      {AudioPlayer? audioPlayer,
+      {VoidweaverPlayer? audioPlayer,
       PlaybackPersistenceService? persistence,
       ScrobbleQueue? scrobbleQueue,
       AudioCache? audioCache})
-      : _audioPlayer = audioPlayer ?? AudioPlayer(),
+      : _audioPlayer = audioPlayer ?? VoidweaverPlayer(),
         _persistence = persistence,
         _scrobbleQueue = scrobbleQueue ?? ScrobbleQueue(_api),
         _audioCache = audioCache ?? AudioCache(),
@@ -130,8 +131,8 @@ class AudioPlayerService extends ChangeNotifier {
     _audioCache.initialize();
   }
 
-  // Expose AudioPlayer for direct state access by VoidweaverAudioHandler
-  AudioPlayer get audioPlayer => _audioPlayer;
+  // Expose the player for direct state access by VoidweaverAudioHandler
+  VoidweaverPlayer get audioPlayer => _audioPlayer;
 
   /// Whether a skip is being carried out; the UI disables the skip buttons.
   bool get isSkipOperationInProgress => _skipOperationInProgress;
@@ -202,7 +203,7 @@ class AudioPlayerService extends ChangeNotifier {
           _playbackState = PlaybackState.loading;
           break;
         case ProcessingState.ready:
-          // just_audio keeps `playing` true while buffering and on
+          // The player keeps `playing` true while buffering and on
           // completion, so ready + not playing is always a pause
           _playbackState =
               state.playing ? PlaybackState.playing : PlaybackState.paused;
@@ -345,8 +346,7 @@ class AudioPlayerService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Starts playback without waiting for it to finish. just_audio's play()
-  /// future completes only once playback is paused, stopped or completed.
+  /// Starts playback; errors show up on the player's error stream.
   void _startPlayback() {
     unawaited(_audioPlayer.play().catchError((Object e) {
       debugPrint('[audio_player] Playback error: $e');
@@ -377,10 +377,12 @@ class AudioPlayerService extends ChangeNotifier {
   AudioSource _sourceFor(int generation, int index, {File? file}) {
     final song = _playlist[index];
     final tag = _QueueEntry(generation, index);
+    final gain = _gainFor(song);
     file ??= _audioCache.getCachedFile(song.id);
     return file != null
-        ? AudioSource.file(file.path, tag: tag)
-        : AudioSource.uri(Uri.parse(_api.getStreamUrl(song.id)), tag: tag);
+        ? AudioSource.file(file.path, tag: tag, gain: gain)
+        : AudioSource.uri(Uri.parse(_api.getStreamUrl(song.id)),
+            tag: tag, gain: gain);
   }
 
   /// Hands the whole playlist to the player, starting at [startIndex] and
@@ -393,22 +395,20 @@ class AudioPlayerService extends ChangeNotifier {
     _stopped = false;
     _fileBacked.clear();
     _awaitedIndex = null;
-    final sources = [
-      for (var i = 0; i < _playlist.length; i++) _sourceFor(generation, i)
-    ];
-    for (var i = 0; i < sources.length; i++) {
-      if (sources[i] is UriAudioSource &&
-          (sources[i] as UriAudioSource).uri.scheme == 'file') {
-        _fileBacked.add(i);
-      }
-    }
 
     _setCurrentTrack(startIndex, position: position, playing: play);
     _playbackState = PlaybackState.loading;
     notifyListeners();
-    // Before loading, so playback doesn't start at the previous track's gain
+    // Before creating the sources, so the start track gets its own gain
     await _loadReplayGain(startIndex);
     if (generation != _generation) return;
+
+    final sources = [
+      for (var i = 0; i < _playlist.length; i++) _sourceFor(generation, i)
+    ];
+    for (var i = 0; i < sources.length; i++) {
+      if (sources[i].isFile) _fileBacked.add(i);
+    }
 
     try {
       await _playerOp(() async {
@@ -455,7 +455,7 @@ class AudioPlayerService extends ChangeNotifier {
     await _playerOp(() async {
       if (generation != _generation) return;
       _setCurrentTrack(index, playing: true);
-      // Before seeking, so the track doesn't start at the previous one's gain
+      // Before seeking, so the track starts at its own gain
       await _loadReplayGain(index);
       if (generation != _generation) return;
       _awaitedIndex = index;
@@ -473,11 +473,11 @@ class AudioPlayerService extends ChangeNotifier {
     _onTrackStarted();
   }
 
-  /// Seeks to the start of the item at [index]. just_audio's seek() completes
-  /// once the item is ready; on Android it never completes if the item fails
-  /// to load, which would block all later player operations. So this also
-  /// returns once the player reports an error or goes idle; the error is
-  /// handled after the operation, see _playerOp().
+  /// Seeks to the start of the item at [index]. The player's seek() completes
+  /// once the item is ready or has failed; a seek that never completed would
+  /// block all later player operations, so this also returns once the player
+  /// reports an error or goes idle. The error is handled after the operation,
+  /// see _playerOp().
   Future<void> _seekToItem(int index) async {
     final failed = Completer<void>();
     void fail(Object _) {
@@ -549,7 +549,7 @@ class AudioPlayerService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The last track played to its end. just_audio stays completed with
+  /// The last track played to its end. The player stays completed with
   /// `playing` set, which the system controls show as playing, and play()
   /// does nothing in that state. So pause at the start of the last track: Play
   /// replays it, as a new play (like a restored song, see play()).
@@ -750,8 +750,8 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   /// Makes sure the song at [index] has ReplayGain data, reading it from the
-  /// file when the server didn't provide it, and applies the volume if the
-  /// song is (still) the current one.
+  /// file when the server didn't provide it. A gain read here is applied to
+  /// the song's items in the player's sequence.
   Future<void> _loadReplayGain(int index) async {
     final playlist = _playlist;
     final song = playlist[index];
@@ -782,12 +782,12 @@ class AudioPlayerService extends ChangeNotifier {
     }
 
     if (identical(playlist, _playlist) && index == _currentIndex) {
-      _applyReplayGainVolume();
+      _logReplayGain();
     }
   }
 
   /// Stores ReplayGain data read from a file in the playlist entry at
-  /// [index], if [playlist] is still the current one.
+  /// [index], if [playlist] is still the current one, and applies it.
   void _storeReplayGain(List<Song> playlist, int index, ReplayGainData data) {
     if (!data.hasAnyData ||
         !identical(playlist, _playlist) ||
@@ -812,35 +812,54 @@ class AudioPlayerService extends ChangeNotifier {
       replayGainAlbumPeak: data.albumPeak,
     );
     playlist[index] = updated;
-    // Not notified: only the volume depends on it
+    // Not notified: only the gain depends on it
     if (index == _currentIndex) _currentSong = updated;
+    _updateGains(onlyIndex: index);
   }
 
-  void _applyReplayGainVolume() {
+  /// The linear gain [song] plays at, from its ReplayGain data and the
+  /// settings.
+  double _gainFor(Song song) => _settingsService.calculateVolumeAdjustment(
+        trackGain: song.replayGainTrackGain,
+        albumGain: song.replayGainAlbumGain,
+        trackPeak: song.replayGainTrackPeak,
+        albumPeak: song.replayGainAlbumPeak,
+      );
+
+  /// Sets the gain of the items in the player's sequence (only those for
+  /// playlist position [onlyIndex], if given) from their songs. Each item
+  /// carries its own gain, which the player applies to that item's samples
+  /// only, so a change never spills over into the neighboring tracks.
+  void _updateGains({int? onlyIndex}) {
+    for (final source in _audioPlayer.sequence) {
+      final tag = source.tag;
+      if (tag is! _QueueEntry || tag.generation != _generation) continue;
+      if (onlyIndex != null && tag.index != onlyIndex) continue;
+      if (tag.index >= _playlist.length) continue;
+      unawaited(_audioPlayer
+          .setGain(source, _gainFor(_playlist[tag.index]))
+          .catchError((Object e) {
+        debugPrint('[ReplayGain] Could not set gain: $e');
+      }));
+    }
+  }
+
+  void _logReplayGain() {
     if (_currentSong == null) return;
 
     final trackGain = _currentSong!.replayGainTrackGain;
     final albumGain = _currentSong!.replayGainAlbumGain;
     final trackPeak = _currentSong!.replayGainTrackPeak;
     final albumPeak = _currentSong!.replayGainAlbumPeak;
+    final volumeMultiplier = _gainFor(_currentSong!);
 
-    final volumeMultiplier = _settingsService.calculateVolumeAdjustment(
-      trackGain: trackGain,
-      albumGain: albumGain,
-      trackPeak: trackPeak,
-      albumPeak: albumPeak,
-    );
-
-    _audioPlayer.setVolume(volumeMultiplier);
-
-    // Enhanced debug output to show ReplayGain metadata status
     final hasTrackGain = trackGain != null;
     final hasAlbumGain = albumGain != null;
     final rgMode = _settingsService.replayGainMode.toString().split('.').last;
 
     _rgLog('');
     _rgLog('='.padRight(80, '='));
-    _rgLog('[ReplayGain] VOLUME APPLIED');
+    _rgLog('[ReplayGain] GAIN OF CURRENT TRACK');
     _rgLog('='.padRight(80, '='));
     _rgLog(
         '[ReplayGain] Song: "${_currentSong!.title}" by "${_currentSong!.artist}" (id=${_currentSong!.id})');
@@ -864,13 +883,15 @@ class AudioPlayerService extends ChangeNotifier {
     _rgLog(
         '[ReplayGain] Source: ${hasTrackGain || hasAlbumGain ? 'METADATA' : 'FALLBACK'}');
     _rgLog(
-        '[ReplayGain] Final Volume Multiplier: ${volumeMultiplier.toStringAsFixed(6)} (${(volumeMultiplier * 100).toStringAsFixed(2)}%)');
+        '[ReplayGain] Final Gain Multiplier: ${volumeMultiplier.toStringAsFixed(6)} (${(volumeMultiplier * 100).toStringAsFixed(2)}%)');
     _rgLog('='.padRight(80, '='));
     _rgLog('');
   }
 
+  /// Applies changed ReplayGain settings to every track in the queue.
   Future<void> refreshReplayGainVolume() async {
-    _applyReplayGainVolume();
+    _updateGains();
+    _logReplayGain();
   }
 
   /// Downloads upcoming songs in the playlist to the disk cache so playback

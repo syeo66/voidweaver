@@ -9,7 +9,7 @@ ReplayGain adjusts playback volume so tracks play at a similar loudness. Setting
 | Prevent clipping | on/off | Lowers the gain so `peak × gain` stays ≤ 1.0 |
 | Fallback gain | -15 to +15 dB | Used for tracks without ReplayGain data |
 
-Volume is `10^((gain + preamp) / 20)`, clamped by the peak when clipping prevention is on. It is applied before playback starts, so there's no audible jump.
+The gain is `10^((gain + preamp) / 20)`, limited by the peak when clipping prevention is on. It can be above 1, so quiet tracks are raised too. Each track's gain is applied to its own samples inside the player, before they're mixed to the output, so it changes exactly where the track changes, also between gapless tracks (see [PLAYBACK.md](PLAYBACK.md#replaygain-per-track)). The device volume is left alone.
 
 ## Where the values come from
 

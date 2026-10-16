@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:audio_service/audio_service.dart' hide PlaybackState;
-import 'package:just_audio/just_audio.dart' show ProcessingState;
+import 'package:voidweaver_player/voidweaver_player.dart' show ProcessingState;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -181,6 +181,52 @@ void main() {
     });
   });
 
+  group('ReplayGain', () {
+    test('gives every track its own gain before playback starts', () async {
+      serverReachable = false;
+      await service.playAlbum(album([song('s1'), song('s2', gain: -3.0)]));
+
+      expect(player.gainOfSource(urlFor('s1')), 0.5);
+      expect(player.gainOfSource(urlFor('s2')), 0.7);
+    });
+
+    test('leaves the gains alone when the player moves on', () async {
+      serverReachable = false;
+      await service.playAlbum(album([song('s1'), song('s2', gain: -3.0)]));
+
+      player.simulateTrackTransition();
+      await until(() => service.currentSong?.id == 's2', 'the service follows');
+
+      // A change at the transition would apply to whatever is playing then
+      expect(player.gainOfSource(urlFor('s1')), 0.5);
+      expect(player.gainOfSource(urlFor('s2')), 0.7);
+    });
+
+    test('a downloaded track swapped in keeps its gain', () async {
+      await service.playAlbum(album([song('s1'), song('s2', gain: -3.0)]));
+      await until(() => playsFromCache(1, 's2'), 's2 plays from the cache');
+
+      expect(player.gainOfSource(fileFor('s2')), 0.7);
+    });
+
+    test('changed settings apply to every track', () async {
+      serverReachable = false;
+      await service.playAlbum(albumOf(3));
+      when(mockSettings.calculateVolumeAdjustment(
+        trackGain: anyNamed('trackGain'),
+        albumGain: anyNamed('albumGain'),
+        trackPeak: anyNamed('trackPeak'),
+        albumPeak: anyNamed('albumPeak'),
+      )).thenReturn(1.4);
+
+      await service.refreshReplayGainVolume();
+
+      for (final id in ['s1', 's2', 's3']) {
+        expect(player.gainOfSource(urlFor(id)), 1.4);
+      }
+    });
+  });
+
   group('transition', () {
     test('follows the player to the next track without reloading', () async {
       await service.playAlbum(albumOf(3));
@@ -230,14 +276,6 @@ void main() {
       verify(mockApi.scrobbleSubmission('s1', playedAt: anyNamed('playedAt')))
           .called(1);
       verify(mockApi.scrobbleNowPlaying('s2')).called(1);
-    });
-
-    test('applies the new track\'s ReplayGain', () async {
-      await service.playAlbum(album([song('s1'), song('s2', gain: -3.0)]));
-      expect(player.volumes.last, 0.5);
-
-      player.simulateTrackTransition();
-      await until(() => player.volumes.last == 0.7, 'the volume changes');
     });
 
     test('pauses at the start of the last track after it ends', () async {

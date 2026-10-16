@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:voidweaver_player/voidweaver_player.dart';
 import 'audio_player_service.dart' as aps;
 import 'subsonic_api.dart';
 
@@ -38,7 +38,7 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
     // Listen to MediaItem changes from AudioPlayerService (track info, loading states)
     audioPlayerService.addListener(_updateMediaItem);
 
-    // Listen directly to just_audio PlayerState for real-time system state updates
+    // Listen directly to the player's PlayerState for real-time system state updates
     _directPlayerStateSubscription =
         audioPlayerService.audioPlayer.playerStateStream.listen((playerState) {
       _updateSystemPlaybackState(playerState);
@@ -127,7 +127,7 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
     // Skip state masking: during skip operations, ignore transient paused states
     bool effectivePlaying;
     if (isSkipping && !actualPlaying) {
-      // During skip, ignore just_audio's temporary paused state
+      // During skip, ignore the player's temporary paused state
       effectivePlaying = _lastKnownPlayingState;
       debugPrint(
           '[native_controls] Skip state masking: ignoring paused state during skip, using last known: $_lastKnownPlayingState');
@@ -229,8 +229,8 @@ class VoidweaverAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> play() async {
     debugPrint('[native_controls] Play requested from native controls');
     // Audio focus and interruptions (calls, other media) are handled by
-    // just_audio through audio_session. Don't request focus separately here:
-    // a second focus listener in the same app competes with just_audio's and
+    // the player (ExoPlayer). Don't request focus separately here: a second
+    // focus listener in the same app competes with the player's and
     // prevents it from being told when an interruption ends.
     await _service?.play();
   }
