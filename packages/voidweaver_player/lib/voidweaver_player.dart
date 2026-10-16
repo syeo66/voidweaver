@@ -88,6 +88,12 @@ class AudioSource {
   /// Linear gain the item plays at, see [VoidweaverPlayer.setGain]
   final double gain;
 
+  /// Identifies the item's data in the [MediaCache], so a cached item plays
+  /// without the network and a streamed one is cached while it plays. Stream
+  /// URLs can't serve as the key when they change on every request (e.g. a
+  /// new auth token). Null: the URL is the key.
+  final String? cacheKey;
+
   final String? title;
   final String? artist;
   final String? album;
@@ -96,33 +102,18 @@ class AudioSource {
   AudioSource.uri(this.uri,
       {this.tag,
       this.gain = 1.0,
+      this.cacheKey,
       this.title,
       this.artist,
       this.album,
       this.artUri})
       : id = '${++_lastId}';
 
-  AudioSource.file(String path,
-      {Object? tag,
-      double gain = 1.0,
-      String? title,
-      String? artist,
-      String? album,
-      Uri? artUri})
-      : this.uri(Uri.file(path),
-            tag: tag,
-            gain: gain,
-            title: title,
-            artist: artist,
-            album: album,
-            artUri: artUri);
-
-  bool get isFile => uri.isScheme('file');
-
   Map<String, Object?> _toMap() => {
         'id': id,
         'uri': uri.toString(),
         'gain': gain,
+        'cacheKey': cacheKey,
         'title': title,
         'artist': artist,
         'album': album,
@@ -264,18 +255,6 @@ class VoidweaverPlayer {
     return _duration;
   }
 
-  Future<void> insertAudioSource(int index, AudioSource source) {
-    _sequence.insert(index, source);
-    _gains[source.id] = source.gain;
-    return _invoke(
-        'insertAudioSource', {'index': index, 'source': source._toMap()});
-  }
-
-  Future<void> removeAudioSourceAt(int index) {
-    _gains.remove(_sequence.removeAt(index).id);
-    return _invoke('removeAudioSourceAt', {'index': index});
-  }
-
   /// The linear gain [source] plays at, applied to its samples before they
   /// are mixed: it takes effect exactly where the item starts, and can be
   /// above 1 (samples are clipped at full scale).
@@ -321,4 +300,37 @@ class VoidweaverPlayer {
       await _commandController.close();
     }
   }
+}
+
+/// The audio cache shared by all players (Media3 `SimpleCache`, 1 GB, least
+/// recently used evicted first). Items are cached while they play; [prefetch]
+/// downloads ahead.
+class MediaCache {
+  static const _channel = MethodChannel('voidweaver_player');
+
+  const MediaCache();
+
+  /// Downloads [uri] completely into the cache under [key]. Downloads run one
+  /// at a time. Throws if the download fails; what was downloaded stays
+  /// cached and the next attempt continues from there.
+  Future<void> prefetch(String key, Uri uri) =>
+      _channel.invokeMethod('cache.prefetch', {'key': key, 'uri': '$uri'});
+
+  /// Those of [keys] whose content is completely cached, in order.
+  Future<List<String>> cachedKeys(List<String> keys) async =>
+      (await _channel
+          .invokeListMethod<String>('cache.cachedKeys', {'keys': keys})) ??
+      const [];
+
+  /// Up to [length] bytes from the start of the cached content for [key],
+  /// without the network. Null if its start isn't cached.
+  Future<Uint8List?> readHead(String key, int length) =>
+      _channel.invokeMethod<Uint8List>(
+          'cache.readHead', {'key': key, 'length': length});
+
+  Future<int> sizeInBytes() async =>
+      await _channel.invokeMethod<int>('cache.size') ?? 0;
+
+  /// Removes everything. Downloads that are running still finish.
+  Future<void> clear() => _channel.invokeMethod('cache.clear');
 }

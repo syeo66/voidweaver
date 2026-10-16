@@ -1,19 +1,15 @@
-import 'dart:async';
-import 'dart:io';
-
 import 'package:voidweaver_player/voidweaver_player.dart'
     show ProcessingState, SystemCommandType;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:voidweaver/services/audio_cache.dart';
+import 'package:voidweaver/services/replaygain_reader.dart';
 import 'package:voidweaver/services/audio_player_service.dart';
 import 'package:voidweaver/services/settings_service.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 
+import '../test_helpers/fake_audio_cache.dart';
 import '../test_helpers/mock_audio_player.dart';
 import 'gapless_playback_test.mocks.dart';
 
@@ -22,18 +18,13 @@ void main() {
   // Skips within this window of the previous one are ignored by the service
   const pastSkipDebounce = Duration(milliseconds: 250);
 
-  late Directory cacheDir;
   late MockSubsonicApi mockApi;
   late MockSettingsService mockSettings;
   late MockAudioPlayer player;
-  late AudioCache cache;
+  late FakeAudioCache cache;
   late AudioPlayerService service;
-  late bool serverReachable;
-  // When set, downloads wait for it to complete
-  Completer<void>? downloadGate;
 
   String urlFor(String id) => 'https://music.test/rest/stream?id=$id';
-  String fileFor(String id) => 'file:${cache.getCachedFile(id)?.path}';
 
   // Each song's track gain maps to a distinct volume, see setUp
   Song song(String id, {double gain = -6.0}) => Song(
@@ -60,32 +51,17 @@ void main() {
     fail('Timed out waiting until $description');
   }
 
-  /// Whether the player's item at [index] is the downloaded file of [id].
-  bool playsFromCache(int index, String id) =>
-      index < player.sequenceSources.length &&
-      cache.isCached(id) &&
-      player.sequenceSources[index] == fileFor(id);
-
-  Future<void> download(String id) async {
-    final reachable = serverReachable;
-    serverReachable = true;
-    await cache.prefetch(id, urlFor(id));
-    serverReachable = reachable;
-  }
-
   setUpAll(() {
     TestWidgetsFlutterBinding.ensureInitialized();
   });
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
-    cacheDir = await Directory.systemTemp.createTemp('gapless_test');
-    serverReachable = true;
-    downloadGate = null;
 
     mockApi = MockSubsonicApi();
     mockSettings = MockSettingsService();
-    player = MockAudioPlayer();
+    cache = FakeAudioCache();
+    player = MockAudioPlayer(isCached: cache.isCachedKey);
 
     when(mockSettings.replayGainMode).thenReturn(ReplayGainMode.track);
     when(mockSettings.replayGainPreamp).thenReturn(0.0);
@@ -99,23 +75,12 @@ void main() {
       trackPeak: anyNamed('trackPeak'),
       albumPeak: anyNamed('albumPeak'),
     )).thenAnswer((invocation) {
-      final gain = invocation.namedArguments[#trackGain] as double;
+      final gain = invocation.namedArguments[#trackGain] as double?;
       return gain == -6.0 ? 0.5 : 0.7;
     });
 
     when(mockApi.getStreamUrl(any)).thenAnswer(
         (invocation) => urlFor(invocation.positionalArguments.first as String));
-
-    cache = AudioCache(
-      client: MockClient((_) async {
-        await downloadGate?.future;
-        return serverReachable
-            ? http.Response.bytes([1, 2, 3], 200,
-                headers: {'content-type': 'audio/mpeg'})
-            : http.Response('offline', 503);
-      }),
-      directoryProvider: () async => cacheDir,
-    );
 
     service = AudioPlayerService(mockApi, mockSettings,
         audioPlayer: player, audioCache: cache);
@@ -123,14 +88,12 @@ void main() {
 
   tearDown(() async {
     service.dispose();
-    cache.dispose();
     await player.dispose();
-    await cacheDir.delete(recursive: true);
   });
 
   group('queue', () {
     test('hands the whole playlist to the player', () async {
-      serverReachable = false;
+      cache.reachable = false;
 
       await service.playAlbum(albumOf(3));
 
@@ -140,49 +103,27 @@ void main() {
       expect(player.loadedSources, [urlFor('s1')]);
     });
 
-    test('plays tracks that are already downloaded from the cache', () async {
-      await download('s2');
-      serverReachable = false;
+    test('identifies each track in the cache by server and song', () async {
+      cache.reachable = false;
+      await service.playAlbum(albumOf(2));
 
-      await service.playAlbum(albumOf(3));
-
-      expect(
-          player.sequenceSources, [urlFor('s1'), fileFor('s2'), urlFor('s3')]);
+      expect([for (final s in player.sequence) s.cacheKey],
+          ['server|s1', 'server|s2']);
     });
 
-    test('swaps the next three tracks for their downloads', () async {
+    test('downloads the next three tracks, nearest first', () async {
       await service.playAlbum(albumOf(5));
-      await until(() => playsFromCache(3, 's4'), 's4 plays from the cache');
+      await until(() => cache.downloaded.length == 3, 'three downloads');
 
-      expect(player.sequenceSources, [
-        urlFor('s1'),
-        fileFor('s2'),
-        fileFor('s3'),
-        fileFor('s4'),
-        urlFor('s5'),
-      ]);
-      // Positions up to the current track never shift
-      expect(player.currentIndex, 0);
-      expect(service.currentIndex, 0);
-    });
-
-    test('leaves the next track alone right before the current one ends',
-        () async {
-      downloadGate = Completer();
-      await service.playAlbum(albumOf(3));
-      player.simulatePositionChange(const Duration(minutes: 2, seconds: 55));
-      await Future.delayed(const Duration(milliseconds: 20));
-
-      downloadGate!.complete();
-      await until(() => playsFromCache(2, 's3'), 's3 plays from the cache');
-
-      expect(player.sequenceSources[1], urlFor('s2'));
+      expect(cache.downloaded, ['s2', 's3', 's4']);
+      // Downloads go to the cache, which the player reads; the queue stays
+      expect(player.loadedSources, [urlFor('s1')]);
     });
   });
 
   group('ReplayGain', () {
     test('gives every track its own gain before playback starts', () async {
-      serverReachable = false;
+      cache.reachable = false;
       await service.playAlbum(album([song('s1'), song('s2', gain: -3.0)]));
 
       expect(player.gainOfSource(urlFor('s1')), 0.5);
@@ -190,7 +131,7 @@ void main() {
     });
 
     test('leaves the gains alone when the player moves on', () async {
-      serverReachable = false;
+      cache.reachable = false;
       await service.playAlbum(album([song('s1'), song('s2', gain: -3.0)]));
 
       player.simulateTrackTransition();
@@ -201,15 +142,20 @@ void main() {
       expect(player.gainOfSource(urlFor('s2')), 0.7);
     });
 
-    test('a downloaded track swapped in keeps its gain', () async {
-      await service.playAlbum(album([song('s1'), song('s2', gain: -3.0)]));
-      await until(() => playsFromCache(1, 's2'), 's2 plays from the cache');
+    test('a gain read from a downloaded track applies to it', () async {
+      final untagged =
+          Song(id: 's2', title: 'Title s2', artist: 'Artist', album: 'Album');
+      cache.tags['s2'] = const ReplayGainData(trackGain: -6.0);
+      await service.playAlbum(album([song('s1', gain: -3.0), untagged]));
+      expect(player.gainOfSource(urlFor('s2')), 0.7);
 
-      expect(player.gainOfSource(fileFor('s2')), 0.7);
+      await until(() => player.gainOfSource(urlFor('s2')) == 0.5,
+          'the gain is read from the cache');
+      expect(player.gainOfSource(urlFor('s1')), 0.7);
     });
 
     test('changed settings apply to every track', () async {
-      serverReachable = false;
+      cache.reachable = false;
       await service.playAlbum(albumOf(3));
       when(mockSettings.calculateVolumeAdjustment(
         trackGain: anyNamed('trackGain'),
@@ -229,7 +175,6 @@ void main() {
   group('transition', () {
     test('follows the player to the next track without reloading', () async {
       await service.playAlbum(albumOf(3));
-      await until(() => playsFromCache(1, 's2'), 's2 plays from the cache');
 
       player.simulateTrackTransition();
       await until(() => service.currentSong?.id == 's2', 'the service follows');
@@ -241,18 +186,18 @@ void main() {
 
     test('downloads further ahead after moving on', () async {
       await service.playAlbum(albumOf(5));
-      await until(() => playsFromCache(3, 's4'), 's4 plays from the cache');
+      await until(() => cache.downloaded.length == 3, 'three downloads');
 
       player.simulateTrackTransition();
-      await until(() => playsFromCache(4, 's5'), 's5 plays from the cache');
+      await until(() => cache.downloaded.contains('s5'), 's5 is downloaded');
 
+      expect(cache.downloaded, ['s2', 's3', 's4', 's5']);
       expect(player.currentIndex, 1);
       expect(player.loadedSources, [urlFor('s1')]);
     });
 
     test('ignores repeated and late index events', () async {
       await service.playAlbum(albumOf(4));
-      await until(() => playsFromCache(3, 's4'), 's4 plays from the cache');
       player.simulateTrackTransition();
       await until(() => service.currentSong?.id == 's2', 'the service follows');
 
@@ -322,35 +267,49 @@ void main() {
   });
 
   group('offline', () {
+    test('a downloaded track plays although its stream fails', () async {
+      cache.cached.add('s2');
+      cache.reachable = false;
+      await service.playAlbum(albumOf(3));
+      player.failingUrls.add(urlFor('s2'));
+
+      player.simulateTrackTransition();
+      await until(() => service.currentIndex == 1, 'the service follows');
+      await pumpEventQueue();
+
+      expect(service.playbackState, PlaybackState.playing);
+      expect(player.loadedSources, [urlFor('s1')]);
+    });
+
     test('continues at the next downloaded track when the next one fails',
         () async {
-      await download('s3');
-      serverReachable = false;
+      cache.cached.add('s3');
+      cache.reachable = false;
       await service.playAlbum(albumOf(3));
       player.failingUrls.add(urlFor('s2'));
 
       player.simulateTrackTransition();
       await until(() => service.currentIndex == 2, 'playback continues at s3');
 
-      expect(player.loadedSources.last, fileFor('s3'));
+      expect(player.loadedSources.last, urlFor('s3'));
       expect(service.playbackState, PlaybackState.playing);
     });
 
     test('continues at the next downloaded track when a stream breaks off',
         () async {
-      await download('s3');
-      serverReachable = false;
+      cache.cached.add('s3');
+      cache.reachable = false;
       await service.playAlbum(albumOf(3));
 
       player.simulateLoadError();
       await until(() => service.currentIndex == 2, 'playback continues at s3');
 
-      expect(player.loadedSources.last, fileFor('s3'));
+      expect(player.loadedSources.last, urlFor('s3'));
     });
 
     test('stops when nothing ahead is downloaded, and play() tries again',
         () async {
-      serverReachable = false;
+      cache.reachable = false;
       await service.playAlbum(albumOf(2));
       player.failingUrls.add(urlFor('s2'));
 
@@ -372,14 +331,13 @@ void main() {
   group('manual skips', () {
     test('next moves within the queue', () async {
       await service.playAlbum(albumOf(3));
-      await until(() => playsFromCache(2, 's3'), 's3 plays from the cache');
       await Future.delayed(pastSkipDebounce);
 
       await service.next();
 
       expect(service.currentIndex, 1);
       expect(player.currentIndex, 1);
-      expect(player.loadedSources, [urlFor('s1'), fileFor('s2')]);
+      expect(player.loadedSources, [urlFor('s1'), urlFor('s2')]);
       expect(player.sequenceSources.length, 3);
     });
 
@@ -431,7 +389,7 @@ void main() {
     });
 
     test('play after a load error loads the track again', () async {
-      serverReachable = false;
+      cache.reachable = false;
       await service.playAlbum(albumOf(2));
       player.failingUrls.add(urlFor('s2'));
       player.simulateTrackTransition();

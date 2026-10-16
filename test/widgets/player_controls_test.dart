@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:voidweaver/services/audio_cache.dart';
 import 'package:voidweaver/services/audio_player_service.dart';
 import 'package:voidweaver/services/settings_service.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 import 'package:voidweaver/widgets/player_controls.dart';
 
+import '../test_helpers/fake_audio_cache.dart';
 import '../test_helpers/mock_audio_player.dart';
 import 'player_controls_test.mocks.dart';
 
@@ -20,7 +18,7 @@ void main() {
   late MockSubsonicApi mockApi;
   late MockSettingsService mockSettings;
   late MockAudioPlayer player;
-  late AudioCache cache;
+  late FakeAudioCache cache;
   late AudioPlayerService service;
 
   Song song(String id) => Song(
@@ -60,18 +58,14 @@ void main() {
     when(mockApi.getStreamUrl(any)).thenAnswer((invocation) =>
         'https://music.test/rest/stream?id=${invocation.positionalArguments.first}');
 
-    // No disk cache in widget tests: preloading is a no-op
-    cache = AudioCache(
-      client: MockClient((_) async => http.Response('offline', 503)),
-      directoryProvider: () async => throw UnsupportedError('no disk'),
-    );
+    // Offline: preloading downloads nothing
+    cache = FakeAudioCache()..reachable = false;
     service = AudioPlayerService(mockApi, mockSettings,
         audioPlayer: player, audioCache: cache);
   });
 
   tearDown(() {
     service.dispose();
-    cache.dispose();
   });
 
   Future<void> pumpControls(WidgetTester tester) async {

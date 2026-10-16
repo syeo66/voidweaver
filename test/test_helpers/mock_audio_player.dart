@@ -22,13 +22,19 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
   PlayerState _currentPlayerState = PlayerState(false, ProcessingState.idle);
 
   /// Every item the player was explicitly told to play, by setting the
-  /// sequence or seeking to an index, in order: the URL for streams,
-  /// `file:<path>` for cached files. Moving on at the end of a track isn't
-  /// recorded.
+  /// sequence or seeking to an index, in order, by URL. Moving on at the end
+  /// of a track isn't recorded.
   final List<String> loadedSources = [];
 
-  /// URLs that fail to load, as when the network is down.
+  /// URLs that fail to load, as when the network is down. Like the real
+  /// player, items whose cache key is cached ([isCached]) still play.
   final Set<String> failingUrls = {};
+
+  /// Whether the content for a cache key is cached, see [AudioSource.cacheKey]
+  final bool Function(String? cacheKey) isCached;
+
+  MockAudioPlayer({bool Function(String? cacheKey)? isCached})
+      : isCached = isCached ?? ((_) => false);
 
   /// The player's current sequence, in the same notation as [loadedSources].
   List<String> get sequenceSources => [for (final s in _sequence) _describe(s)];
@@ -50,8 +56,7 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
   Duration? _duration;
   Duration _position = Duration.zero;
 
-  static String _describe(AudioSource source) =>
-      source.isFile ? 'file:${source.uri.toFilePath()}' : '${source.uri}';
+  static String _describe(AudioSource source) => '${source.uri}';
 
   @override
   Stream<Duration> get positionStream => _positionController.stream;
@@ -101,7 +106,9 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
     _stateController.add(_currentPlayerState);
   }
 
-  bool _fails(int index) => failingUrls.contains(_describe(_sequence[index]));
+  bool _fails(int index) =>
+      failingUrls.contains(_describe(_sequence[index])) &&
+      !isCached(_sequence[index].cacheKey);
 
   /// Makes the item at [index] the current one, starting at [position].
   void _moveTo(int index, Duration position) {
@@ -136,24 +143,6 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
     }
     _setState(playing, ProcessingState.ready);
     return _duration;
-  }
-
-  @override
-  Future<void> insertAudioSource(int index, AudioSource audioSource) async {
-    _sequence.insert(index, audioSource);
-    if (_currentIndex != null && index <= _currentIndex!) {
-      _currentIndex = _currentIndex! + 1;
-    }
-    _indexController.add(_currentIndex);
-  }
-
-  @override
-  Future<void> removeAudioSourceAt(int index) async {
-    _sequence.removeAt(index);
-    if (_currentIndex != null && index < _currentIndex!) {
-      _currentIndex = _currentIndex! - 1;
-    }
-    _indexController.add(_currentIndex);
   }
 
   @override

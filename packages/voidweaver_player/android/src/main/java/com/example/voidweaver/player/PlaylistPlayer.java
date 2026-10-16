@@ -16,8 +16,6 @@ import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.Timeline;
 import androidx.media3.common.audio.AudioProcessor;
-import androidx.media3.datasource.DefaultDataSource;
-import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlaybackException;
 import androidx.media3.exoplayer.ExoPlayer;
@@ -85,17 +83,13 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
                 .build();
           }
         };
-    DefaultHttpDataSource.Factory httpFactory =
-        new DefaultHttpDataSource.Factory()
-            .setUserAgent("voidweaver")
-            .setAllowCrossProtocolRedirects(true);
     DefaultExtractorsFactory extractorsFactory =
         new DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true);
     player =
         new ExoPlayer.Builder(context, renderersFactory)
             .setMediaSourceFactory(
                 new DefaultMediaSourceFactory(
-                    new DefaultDataSource.Factory(context, httpFactory), extractorsFactory))
+                    MediaCache.dataSourceFactory(context), extractorsFactory))
             // ExoPlayer requests audio focus, pauses for interruptions and resumes after
             // transient ones. Nothing else in the app may request focus.
             .setAudioAttributes(
@@ -151,15 +145,6 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
         case "setAudioSources":
           setAudioSources(call, result);
           return;
-        case "insertAudioSource":
-          {
-            Map<?, ?> source = call.argument("source");
-            player.addMediaItem(intArg(call, "index"), mediaItem(source));
-            break;
-          }
-        case "removeAudioSourceAt":
-          player.removeMediaItem(intArg(call, "index"));
-          break;
         case "setGain":
           gainProcessor.setGain(call.argument("id"), ((Number) call.argument("gain")).floatValue());
           break;
@@ -207,6 +192,7 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
     return new MediaItem.Builder()
         .setMediaId(id)
         .setUri(Uri.parse((String) source.get("uri")))
+        .setCustomCacheKey((String) source.get("cacheKey"))
         .setMediaMetadata(metadata.build())
         .build();
   }

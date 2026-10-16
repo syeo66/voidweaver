@@ -27,17 +27,13 @@ Every item in the sequence carries its own gain (`AudioSource.gain`, from `_gain
 - Each switch to a new item is logged with the tag `VoidweaverGain` (`adb logcat -s VoidweaverGain`).
 - Track mode still changes the level between songs that run into each other (live albums, mixes), since each has its own gain. Album mode keeps one gain within an album.
 
-## Downloads in the queue
+## Downloads and the cache
 
-Tracks already in the audio cache go into the sequence as files, the rest as streams. While a track plays, the next 3 are downloaded (see [CACHING.md](CACHING.md)), and `_useCachedFile()` replaces each one's stream with the file. The track then plays without the network and isn't downloaded a second time.
-
-- The file is inserted before the stream is removed, and only after the current track, so positions up to the current track never shift.
-- The next track is left alone in the last 10 s of the current one (`_swapCutoff`), when the player may already be moving on to the stream. Removing the item the player just moved to would skip it.
-- `_fileBacked` records which positions are files, so nothing is swapped twice.
+Every item in the sequence is a stream URL with a cache key (server and song id, `AudioCache.keyFor()`). The player reads through its Media3 cache, so a cached track plays without the network wherever it is in the queue, and the track that's playing is cached as it streams. While a track plays, the next 3 are downloaded into the same cache (see [CACHING.md](CACHING.md)). The queue itself never changes for that; earlier versions swapped streams for downloaded files in the sequence, which needed care around the track the player was about to move to.
 
 ## Load errors
 
-A track that can't load (offline and not downloaded, or a stream breaking off) is reported on `errorStream`. `_onPlayerError()` continues at the next downloaded track; if there is none, playback stops on the failing track and the next `play()` loads the queue again from there. Errors while a `_playerOp()` runs are handled once it finishes. If `_jumpTo()`'s target failed, it then leaves playback to `_onPlayerError()` instead of starting it.
+A track that can't load (offline and not downloaded, or a stream breaking off) is reported on `errorStream`. `_onPlayerError()` marks the queue for reloading (the player is idle after an error) and continues at the next completely cached track (`_continueAfterError()`, which asks the cache); if there is none, playback stops on the failing track and the next `play()` loads the queue again from there. Errors while a `_playerOp()` runs are handled once it finishes. If `_jumpTo()`'s target failed, it then leaves playback to `_onPlayerError()` instead of starting it.
 
 The player's `seek()` completes once the target is ready or has failed (the error arrives on `errorStream` first). With `just_audio`, a seek to a target that failed never completed; awaited inside a `_playerOp()`, that blocked every later operation. `_seekToItem()` still stops waiting once the player reports an error or goes idle, so a seek that never completes can't block playback again. `setAudioSources()` completes once the start item is ready and throws its own errors, and `_loadQueue()` handles them the same way.
 
@@ -45,7 +41,7 @@ After `stop()` or an error the player is idle, so `play()` and skips load the qu
 
 ## Skips
 
-- `next()` and `previous()` seek within the sequence (`_jumpTo()`). Nothing is reloaded, and a downloaded target plays from its file.
+- `next()` and `previous()` seek within the sequence (`_jumpTo()`). Nothing is reloaded, and a cached target plays from the cache.
 - Skips are debounced (200 ms, `_skipDebounceMs`) in the service, so UI and system controls share the debounce. `_skipOperationInProgress` blocks a skip while another runs, and is reset in a `finally` block so the skip buttons can't get stuck.
 - A skip scrobbles the current track if it passed the threshold.
 

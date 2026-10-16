@@ -87,26 +87,41 @@ class ReplayGainReader {
     }
   }
 
-  /// Reads ReplayGain metadata from the start of a locally cached file.
+  /// Reads ReplayGain metadata from the start of a local file.
   static Future<ReplayGainData> readFromFile(File file) async {
+    _log('Reading ReplayGain metadata from file: ${file.path}');
     try {
-      _log('Reading ReplayGain metadata from cached file: ${file.path}');
       final raf = await file.open();
       try {
-        var bytes = await raf.read(_maxHeaderSize);
-        if (bytes.isEmpty) return const ReplayGainData();
-        final required = requiredHeaderSize(bytes);
-        if (required > bytes.length) {
-          _log('Metadata extends to $required bytes, reading the rest');
+        return await readFromHead((length) async {
           await raf.setPosition(0);
-          bytes = await raf.read(required);
-        }
-        return _parseReplayGainFromBytes(bytes);
+          return raf.read(length);
+        });
       } finally {
         await raf.close();
       }
     } catch (e) {
       _log('Error reading ReplayGain metadata from file: $e');
+      return const ReplayGainData();
+    }
+  }
+
+  /// Reads ReplayGain metadata through [readHead], which returns up to the
+  /// given number of bytes from the start of the audio (null if unavailable).
+  /// Reads more if the tags extend past the first 256 KB.
+  static Future<ReplayGainData> readFromHead(
+      Future<Uint8List?> Function(int length) readHead) async {
+    try {
+      var bytes = await readHead(_maxHeaderSize);
+      if (bytes == null || bytes.isEmpty) return const ReplayGainData();
+      final required = requiredHeaderSize(bytes);
+      if (required > bytes.length) {
+        _log('Metadata extends to $required bytes, reading the rest');
+        bytes = await readHead(required) ?? bytes;
+      }
+      return _parseReplayGainFromBytes(bytes);
+    } catch (e) {
+      _log('Error reading ReplayGain metadata: $e');
       return const ReplayGainData();
     }
   }

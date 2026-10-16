@@ -21,18 +21,21 @@ Three caches keep the app fast and usable offline. All of them can be cleared fr
 
 `getRandomSongs` isn't persisted and expires quickly, so each shuffle gets a fresh pick from subsoxy.
 
-## Audio files (`AudioCache`)
+## Audio files (Media3 cache)
 
-While a song plays, `AudioPlayerService` downloads the next 3 tracks into `audio_cache/` in the app cache directory, one at a time, nearest first.
+Audio is cached by the player itself: a Media3 `SimpleCache` in `media_cache/` in the app cache directory (`MediaCache.java` in `packages/voidweaver_player`), shared by all logins. `AudioCache` (Dart) is a thin layer over it that works by song.
 
-- Cached tracks play from disk. Other tracks stream. When a download finishes, the track's stream in the player's queue is replaced with the file, see [PLAYBACK.md](PLAYBACK.md#downloads-in-the-queue).
-- If a track can't be loaded and isn't cached (offline), playback skips ahead to the next cached track.
-- Downloads go to a `.part` file and are renamed when complete. Non-200 responses and Subsonic error documents are discarded.
-- Files are keyed by SHA-1 of server URL + song id.
-- The least recently played files are evicted once the cache exceeds 1 GB.
-- If the saved song can't load at startup, the queue is kept and the song is retried on the next play.
+- **Playback reads through the cache.** Cached data plays without the network; whatever isn't cached is streamed and cached on the way. So a track that has played once (to the end) plays offline next time, as do the downloaded ones.
+- **Downloads ahead.** While a song plays, `AudioPlayerService` downloads the next 3 tracks into the cache, one at a time, nearest first (`MediaCache.prefetch()`, a Media3 `CacheWriter`). An interrupted download keeps what it got, and the next attempt continues from there.
+- **Keys** are server URL + song id (`AudioCache.keyFor()`), set as each queue item's cache key. Stream URLs can't be the key: they carry a new salt and token on every request.
+- **Error documents aren't cached.** Subsonic reports errors as HTTP 200 with an XML/JSON body; `ErrorDocumentGuard` fails such responses before they reach the cache.
+- **Eviction**: least recently used, once the cache exceeds 1 GB.
+- **ReplayGain** of a cached song is read from the cached start of the file (`AudioCache.readReplayGain()`), also offline.
+- **Offline**: if a track can't be loaded, playback continues at the next track that's completely cached. If the saved song can't load at startup, the queue is kept and the song is retried on the next play.
 
-A track that wasn't prefetched (e.g. the first track of a new playlist) is streamed, so a network drop can still interrupt it.
+A track that wasn't cached (e.g. the first track of a new playlist) is streamed, so a network drop can still interrupt it.
+
+The Dart download cache used before (`audio_cache/`) is deleted when the Media3 cache is first opened.
 
 ## Cover art (`ImageCacheManager`)
 

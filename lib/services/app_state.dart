@@ -236,7 +236,6 @@ class AppState extends ChangeNotifier {
     _audioPlayerService = null;
     // Already disposed by the player; kept to clear it on logout
     _scrobbleQueue = null;
-    _audioCache?.dispose();
     _audioCache = null;
     _api?.dispose();
     _api = null;

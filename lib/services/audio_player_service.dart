@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:voidweaver_player/voidweaver_player.dart';
 import 'subsonic_api.dart';
@@ -33,13 +32,8 @@ class _QueueEntry {
 /// itself (gaplessly); the service follows its current index. Each item
 /// carries its own ReplayGain gain. See docs/PLAYBACK.md.
 class AudioPlayerService extends ChangeNotifier {
-  /// Upcoming tracks downloaded to the disk cache while playing
+  /// Upcoming tracks downloaded to the cache while playing
   static const int _maxPreloadTracks = 3;
-
-  /// A downloaded next track isn't swapped into the sequence this close to
-  /// the end of the current one, when the player may already be moving on to
-  /// the streamed copy.
-  static const Duration _swapCutoff = Duration(seconds: 10);
 
   static const _skipDebounceMs = 200;
 
@@ -49,7 +43,6 @@ class AudioPlayerService extends ChangeNotifier {
   final PlaybackPersistenceService? _persistence;
   final ScrobbleQueue _scrobbleQueue;
   final AudioCache _audioCache;
-  final bool _ownsAudioCache;
 
   PlaybackState _playbackState = PlaybackState.stopped;
   List<Song> _playlist = [];
@@ -62,11 +55,9 @@ class AudioPlayerService extends ChangeNotifier {
   String? _playlistSource;
   String? _sourceId;
 
-  // Incremented whenever the player's sequence is replaced. Sources, preloads
-  // and swaps from an older generation are ignored.
+  // Incremented whenever the player's sequence is replaced. Sources and
+  // events from an older generation are ignored.
   int _generation = 0;
-  // Playlist positions whose item in the player's sequence is a cached file
-  final Set<int> _fileBacked = {};
 
   // Changes to the player's index or sequence run one at a time, see
   // _playerOp(). While one runs, index events are ignored.
@@ -121,11 +112,9 @@ class AudioPlayerService extends ChangeNotifier {
       : _audioPlayer = audioPlayer ?? VoidweaverPlayer(),
         _persistence = persistence,
         _scrobbleQueue = scrobbleQueue ?? ScrobbleQueue(_api),
-        _audioCache = audioCache ?? AudioCache(),
-        _ownsAudioCache = audioCache == null {
+        _audioCache = audioCache ?? AudioCache() {
     _initializePlayer();
     _scrobbleQueue.initialize();
-    _audioCache.initialize();
   }
 
   /// Whether a skip is being carried out; the UI disables the skip buttons.
@@ -382,20 +371,17 @@ class AudioPlayerService extends ChangeNotifier {
     });
   }
 
-  AudioSource _sourceFor(int generation, int index, {File? file}) {
+  AudioSource _sourceFor(int generation, int index) {
     final song = _playlist[index];
     final tag = _QueueEntry(generation, index);
     final gain = _gainFor(song);
     final artUri = song.coverArt != null
         ? Uri.parse(_api.getCoverArtUrl(song.coverArt!))
         : null;
-    file ??= _audioCache.getCachedFile(song.id);
-    return AudioSource.uri(
-        file != null
-            ? Uri.file(file.path)
-            : Uri.parse(_api.getStreamUrl(song.id)),
+    return AudioSource.uri(Uri.parse(_api.getStreamUrl(song.id)),
         tag: tag,
         gain: gain,
+        cacheKey: _audioCache.keyFor(song.id),
         title: song.title,
         artist: song.artist,
         album: song.album,
@@ -403,13 +389,12 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   /// Hands the whole playlist to the player, starting at [startIndex] and
-  /// [position]. Downloaded tracks are played from the disk cache, the rest
-  /// is streamed. If the start track can't be loaded and [play] is set,
-  /// continues from the next downloaded track.
+  /// [position]. The player plays cached tracks from the cache and streams
+  /// the rest. If the start track can't be loaded and [play] is set,
+  /// continues from the next cached track.
   Future<void> _loadQueue(int startIndex,
       {Duration position = Duration.zero, bool play = true}) async {
     final generation = ++_generation;
-    _fileBacked.clear();
     _awaitedIndex = null;
 
     _setCurrentTrack(startIndex, position: position, playing: play);
@@ -422,9 +407,6 @@ class AudioPlayerService extends ChangeNotifier {
     final sources = [
       for (var i = 0; i < _playlist.length; i++) _sourceFor(generation, i)
     ];
-    for (var i = 0; i < sources.length; i++) {
-      if (sources[i].isFile) _fileBacked.add(i);
-    }
 
     try {
       await _playerOp(() async {
@@ -442,7 +424,8 @@ class AudioPlayerService extends ChangeNotifier {
       return;
     } catch (e) {
       if (generation != _generation) return;
-      final next = play ? _nextCachedIndex(startIndex) : null;
+      final next = play ? await _nextCachedIndex(startIndex) : null;
+      if (generation != _generation) return;
       if (next == null) rethrow;
       debugPrint(
           '[offline] Could not load index $startIndex, continuing at cached index $next');
@@ -477,8 +460,8 @@ class AudioPlayerService extends ChangeNotifier {
       _awaitedIndex = index;
       await _seekToItem(index);
     });
-    // The target failed to load: _onPlayerError() already moved on to a
-    // downloaded track (new generation) or stopped on this one
+    // The target failed to load: _onPlayerError() takes over, continuing at
+    // a cached track or stopping on this one
     if (generation != _generation ||
         _currentIndex != index ||
         _needsSourceReload) {
@@ -593,30 +576,53 @@ class AudioPlayerService extends ChangeNotifier {
 
     final failedIndex = _entryAt(error.index)?.index ?? _currentIndex;
     debugPrint('[audio_player] Playback error at index $failedIndex: $error');
-    final next = _nextCachedIndex(failedIndex);
+    // The player is idle after an error: whatever plays next loads the queue
+    // again. Set right away, so _jumpTo() doesn't take its target for started.
+    _needsSourceReload = true;
+    _pendingResumePosition = Duration.zero;
+    unawaited(_continueAfterError(failedIndex, error));
+  }
+
+  /// Continues at the next cached track after [failedIndex], or stops on it.
+  Future<void> _continueAfterError(
+      int failedIndex, PlayerException error) async {
+    final generation = _generation;
+    final next = await _nextCachedIndex(failedIndex);
+    // The queue was replaced, or a skip took over, while looking
+    if (_disposed || generation != _generation || _pendingPlayerOps > 0) {
+      return;
+    }
     if (next != null) {
       debugPrint('[offline] Continuing at cached index $next');
-      unawaited(_jumpTo(next).catchError((Object e) {
+      try {
+        await _jumpTo(next);
+      } catch (e) {
         _onLoadFailed('Failed to play song: $e');
-      }));
+      }
       return;
     }
 
     // Nothing later is playable; play() tries this track again
-    _needsSourceReload = true;
-    _pendingResumePosition = Duration.zero;
     if (failedIndex != _currentIndex) {
       _setCurrentTrack(failedIndex, playing: false);
     }
     _onLoadFailed('Failed to play song: ${error.message ?? error}');
   }
 
-  /// The first track after [index] that's in the disk cache.
-  int? _nextCachedIndex(int index) {
-    for (var i = index + 1; i < _playlist.length; i++) {
-      if (_audioCache.isCached(_playlist[i].id)) return i;
+  /// The first track after [index] that's completely cached.
+  Future<int?> _nextCachedIndex(int index) async {
+    final playlist = _playlist;
+    if (index + 1 >= playlist.length) return null;
+    final ids = [for (final song in playlist.sublist(index + 1)) song.id];
+    try {
+      final id = await _audioCache.firstCached(ids);
+      if (id == null || !identical(playlist, _playlist)) return null;
+      final next = playlist.indexWhere((song) => song.id == id, index + 1);
+      return next < 0 ? null : next;
+    } catch (e) {
+      debugPrint('[audio_cache] Could not check the cache: $e');
+      return null;
     }
-    return null;
   }
 
   Future<void> play() async {
@@ -779,10 +785,8 @@ class AudioPlayerService extends ChangeNotifier {
       _rgLog(
           '[ReplayGain] Stream URL: ${ReplayGainDebugLogger.redact(streamUrl)}');
       try {
-        final cachedFile = _audioCache.getCachedFile(song.id);
-        final data = cachedFile != null
-            ? await ReplayGainReader.readFromFile(cachedFile)
-            : await ReplayGainReader.readFromUrl(streamUrl);
+        final data = await _audioCache.readReplayGain(song.id) ??
+            await ReplayGainReader.readFromUrl(streamUrl);
         _rgLog('[ReplayGain] File reading complete: '
             'TrackGain=${data.trackGain?.toStringAsFixed(2) ?? "null"}, '
             'AlbumGain=${data.albumGain?.toStringAsFixed(2) ?? "null"}, '
@@ -908,13 +912,12 @@ class AudioPlayerService extends ChangeNotifier {
     _logReplayGain();
   }
 
-  /// Downloads upcoming songs in the playlist to the disk cache so playback
-  /// can continue if the network drops. Downloads run one at a time, nearest
-  /// track first, so the next song is ready as early as possible. Each
-  /// finished download replaces the stream in the player's sequence.
+  /// Downloads upcoming songs in the playlist to the cache so playback can
+  /// continue if the network drops; the player plays them from there.
+  /// Downloads run one at a time, nearest track first, so the next song is
+  /// ready as early as possible.
   Future<void> _preloadUpcomingSongs() async {
     final playlist = _playlist;
-    final generation = _generation;
     final start = _currentIndex + 1;
     final end = (start + _maxPreloadTracks).clamp(0, playlist.length);
     if (start >= end) return;
@@ -922,72 +925,31 @@ class AudioPlayerService extends ChangeNotifier {
     for (var index = start; index < end; index++) {
       // Stop if the playlist was replaced while downloading
       if (_disposed || !identical(playlist, _playlist)) break;
-      final file = await _preloadSingleTrack(playlist, index);
-      if (file != null) {
-        await _useCachedFile(generation, index, file);
-      }
+      await _preloadSingleTrack(playlist, index);
     }
   }
 
   /// Downloads the track at [index] and reads its ReplayGain metadata from
-  /// the downloaded file if the server didn't provide it.
-  Future<File?> _preloadSingleTrack(List<Song> playlist, int index) async {
+  /// the cache if the server didn't provide it.
+  Future<void> _preloadSingleTrack(List<Song> playlist, int index) async {
     final song = playlist[index];
-    try {
-      final file = await _audioCache.prefetch(
-        song.id,
-        _api.getStreamUrl(song.id),
-        suffix: song.suffix,
-      );
-      if (file == null) return null;
-
-      if (song.replayGainTrackGain == null &&
-          song.replayGainAlbumGain == null) {
-        final data = await ReplayGainReader.readFromFile(file);
-        _rgLog(
-            '[ReplayGain] Preload read "${song.title}": Track=${data.trackGain}, Album=${data.albumGain}');
-        _storeReplayGain(playlist, index, data);
-      }
-      return file;
-    } catch (e) {
-      debugPrint('Error preloading track $index (${song.title}): $e');
-      // Don't rethrow - continue with other preloads
-      return null;
+    if (!await _audioCache.prefetch(song.id, _api.getStreamUrl(song.id))) {
+      return;
     }
+    if (song.replayGainTrackGain != null || song.replayGainAlbumGain != null) {
+      return;
+    }
+    final data = await _audioCache.readReplayGain(song.id);
+    if (data == null) return;
+    _rgLog(
+        '[ReplayGain] Preload read "${song.title}": Track=${data.trackGain}, Album=${data.albumGain}');
+    _storeReplayGain(playlist, index, data);
   }
 
-  /// Replaces the stream of the upcoming track at [index] in the player's
-  /// sequence with its downloaded [file]: it then plays without the network
-  /// and isn't downloaded a second time. The file is inserted before the
-  /// stream is removed, so positions up to the current track never shift.
-  Future<void> _useCachedFile(int generation, int index, File file) =>
-      _playerOp(() async {
-        if (_disposed ||
-            generation != _generation ||
-            index <= _currentIndex ||
-            _fileBacked.contains(index)) {
-          return;
-        }
-        if (index == _currentIndex + 1 &&
-            _totalDuration > Duration.zero &&
-            _totalDuration - _currentPosition < _swapCutoff) {
-          return;
-        }
-        try {
-          await _audioPlayer.insertAudioSource(
-              index, _sourceFor(generation, index, file: file));
-          await _audioPlayer.removeAudioSourceAt(index + 1);
-          _fileBacked.add(index);
-          debugPrint('[audio_cache] Index $index now plays from the cache');
-        } catch (e) {
-          debugPrint('[audio_cache] Could not swap in index $index: $e');
-        }
-      });
-
-  /// Removes all downloaded audio from the disk cache.
+  /// Removes all cached audio.
   Future<void> clearAudioCache() => _audioCache.clear();
 
-  /// Size of downloaded audio in the disk cache, in bytes.
+  /// Size of cached audio, in bytes.
   Future<int> audioCacheSize() => _audioCache.sizeInBytes();
 
   /// Starts the sleep timer with the specified duration
@@ -1075,7 +1037,6 @@ class AudioPlayerService extends ChangeNotifier {
     _errorSubscription?.cancel();
     _commandSubscription?.cancel();
     _sleepTimer?.cancel();
-    if (_ownsAudioCache) _audioCache.dispose();
     _persistence?.dispose();
     _scrobbleQueue.dispose();
     _audioPlayer.dispose();

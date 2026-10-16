@@ -1,16 +1,12 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:voidweaver/services/audio_cache.dart';
 import 'package:voidweaver/services/audio_player_service.dart';
 import 'package:voidweaver/services/settings_service.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 
+import '../test_helpers/fake_audio_cache.dart';
 import '../test_helpers/mock_audio_player.dart';
 import 'skip_operations_test.mocks.dart';
 
@@ -19,14 +15,12 @@ void main() {
   // Skips within this window of the previous one are ignored by the service
   const pastSkipDebounce = Duration(milliseconds: 250);
 
-  late Directory cacheDir;
   late MockSubsonicApi mockApi;
   late MockSettingsService mockSettings;
   late MockAudioPlayer player;
-  late AudioCache cache;
+  late FakeAudioCache cache;
   // Whether the fake server delivers audio; off, preloads of upcoming
   // tracks fail as if the network were down
-  late bool serverReachable;
   late AudioPlayerService service;
 
   String urlFor(String id) => 'https://music.test/rest/stream?id=$id';
@@ -58,11 +52,11 @@ void main() {
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
-    cacheDir = await Directory.systemTemp.createTemp('skip_ops_test');
 
     mockApi = MockSubsonicApi();
     mockSettings = MockSettingsService();
-    player = MockAudioPlayer();
+    cache = FakeAudioCache()..reachable = false;
+    player = MockAudioPlayer(isCached: cache.isCachedKey);
 
     when(mockSettings.replayGainMode).thenReturn(ReplayGainMode.off);
     when(mockSettings.replayGainPreamp).thenReturn(0.0);
@@ -80,24 +74,13 @@ void main() {
     when(mockApi.getStreamUrl(any)).thenAnswer(
         (invocation) => urlFor(invocation.positionalArguments.first as String));
 
-    serverReachable = false;
-    cache = AudioCache(
-      client: MockClient((_) async => serverReachable
-          ? http.Response.bytes([1, 2, 3], 200,
-              headers: {'content-type': 'audio/mpeg'})
-          : http.Response('offline', 503)),
-      directoryProvider: () async => cacheDir,
-    );
-
     service = AudioPlayerService(mockApi, mockSettings,
         audioPlayer: player, audioCache: cache);
   });
 
   tearDown(() async {
     service.dispose();
-    cache.dispose();
     await player.dispose();
-    await cacheDir.delete(recursive: true);
   });
 
   group('next()', () {
@@ -146,9 +129,7 @@ void main() {
     });
 
     test('skips past an unreachable track to the next cached one', () async {
-      serverReachable = true;
-      await cache.prefetch('s3', urlFor('s3'));
-      serverReachable = false;
+      cache.cached.add('s3');
 
       await service.playAlbum(album(3));
       await Future.delayed(pastSkipDebounce);
@@ -160,7 +141,7 @@ void main() {
 
       expect(service.currentIndex, 2);
       expect(service.currentSong?.id, 's3');
-      expect(player.loadedSources.last, startsWith('file:'));
+      expect(player.loadedSources.last, urlFor('s3'));
     });
 
     test('stops on a track that can\'t load when nothing later can', () async {
