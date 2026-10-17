@@ -28,7 +28,7 @@ class AlbumList extends StatelessWidget {
                 Text('Error: ${appState.error}'),
                 const SizedBox(height: 16),
                 ElevatedButton(
-                  onPressed: () => appState.loadAlbums(),
+                  onPressed: () => appState.loadAlbums(forceRefresh: true),
                   child: const Text('Retry'),
                 ),
               ],
@@ -46,7 +46,7 @@ class AlbumList extends StatelessWidget {
                 const Text('No albums found'),
                 const SizedBox(height: 16),
                 ElevatedButton(
-                  onPressed: () => appState.loadAlbums(),
+                  onPressed: () => appState.loadAlbums(forceRefresh: true),
                   child: const Text('Refresh'),
                 ),
               ],
@@ -59,7 +59,7 @@ class AlbumList extends StatelessWidget {
 
         return RefreshIndicator(
           onRefresh: () async {
-            await appState.loadAlbums();
+            await appState.loadAlbums(forceRefresh: true);
             final error = appState.albumError;
             if (error != null && context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(

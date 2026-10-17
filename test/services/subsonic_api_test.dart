@@ -1,5 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:voidweaver/services/network_config.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 
 void main() {
@@ -88,6 +90,38 @@ void main() {
 
       // Should not throw when disposing
       expect(() => api.dispose(), returnsNormally);
+    });
+  });
+
+  group('SubsonicApi network config', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+    });
+
+    test('uses the config it was created with', () {
+      final api = SubsonicApi(
+        serverUrl: 'https://demo.navidrome.org',
+        username: 'testuser',
+        password: 'testpass',
+        networkConfig: NetworkConfig.slowConfig,
+      );
+      addTearDown(api.dispose);
+
+      expect(api.networkConfig, NetworkConfig.slowConfig);
+    });
+
+    test('applies a changed config and stays usable', () {
+      final api = SubsonicApi(
+        serverUrl: 'https://demo.navidrome.org',
+        username: 'testuser',
+        password: 'testpass',
+      );
+
+      api.networkConfig = NetworkConfig.fastConfig;
+
+      expect(api.networkConfig, NetworkConfig.fastConfig);
+      // The replaced client is closed once; disposing closes the new one
+      expect(api.dispose, returnsNormally);
     });
   });
 

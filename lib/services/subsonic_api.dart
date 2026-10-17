@@ -35,9 +35,9 @@ class SubsonicApi {
   final String clientName = 'voidweaver';
   final String version = '1.16.1';
   final ApiCache _cache = ApiCache();
-  late final http_plus.HttpPlusClient _httpClient;
-  late final NetworkRetryService _retryService;
-  final NetworkConfig _networkConfig;
+  late http_plus.HttpPlusClient _httpClient;
+  late NetworkRetryService _retryService;
+  NetworkConfig _networkConfig;
 
   SubsonicApi({
     required this.serverUrl,
@@ -184,7 +184,9 @@ class SubsonicApi {
       .map((a) => Album.fromJson(a as Map<String, dynamic>))
       .toList();
 
-  Future<List<Album>> getAlbumList() async {
+  /// The most recently added albums. With [forceRefresh] they're fetched from
+  /// the server even if the cached list hasn't expired yet.
+  Future<List<Album>> getAlbumList({bool forceRefresh = false}) async {
     return await _cache.getOrFetch<List<Album>>(
       'getAlbumList2',
       {'type': 'recent', 'size': '500'},
@@ -202,6 +204,7 @@ class SubsonicApi {
       },
       cacheDuration: const Duration(minutes: 3),
       usePersistentCache: true,
+      forceRefresh: forceRefresh,
       toJson: _albumsToJson,
       fromJson: _albumsFromJson,
     );
@@ -446,6 +449,22 @@ class SubsonicApi {
   /// Invalidate search cache entries
   void invalidateSearchCache() {
     _cache.invalidatePattern('search');
+  }
+
+  /// Timeouts and retry settings of the requests
+  NetworkConfig get networkConfig => _networkConfig;
+
+  /// Applies new timeouts and retry settings to the requests from now on.
+  /// The connection timeout belongs to the HTTP client, so it's replaced;
+  /// closing the old one lets requests that are already running finish.
+  set networkConfig(NetworkConfig config) {
+    if (config == _networkConfig) return;
+    final oldClient = _httpClient;
+    final oldRetryService = _retryService;
+    _networkConfig = config;
+    _initializeHttpClient();
+    oldRetryService.dispose();
+    oldClient.close();
   }
 
   /// Dispose the HTTP client and clean up resources

@@ -17,6 +17,7 @@ Three caches keep the app fast and usable offline. All of them can be cleared fr
 - **Keys** are the endpoint plus sorted query parameters, e.g. `getAlbumList2?size=500&type=recent`.
 - **Deduplication**: concurrent identical calls share one request.
 - **Offline fallback**: if a fetch fails, the expired entry is returned instead of the error. Expired entries are replaced but never deleted, so the last known library stays browsable offline.
+- **Forced refresh**: `getOrFetch(forceRefresh: true)` fetches even if the entry hasn't expired, and still falls back to it offline. Pull-to-refresh on the album list uses it (`getAlbumList(forceRefresh: true)`).
 - **Invalidation**: `invalidateAlbumCache()`, `invalidateArtistCache()` and `invalidateSearchCache()` clear by prefix.
 
 `getRandomSongs` isn't persisted and expires quickly, so each shuffle gets a fresh pick from subsoxy.

@@ -76,6 +76,7 @@ class AppState extends ChangeNotifier {
   Future<void> initialize() async {
     _settingsService = SettingsService();
     await _settingsService!.initialize();
+    _settingsService!.addListener(_applyNetworkConfig);
 
     await ReplayGainDebugLogger.instance.initialize();
 
@@ -103,6 +104,7 @@ class AppState extends ChangeNotifier {
         serverUrl: serverUrl,
         username: username,
         password: password,
+        networkConfig: _settingsService!.networkConfig,
       );
       if (verifyCredentials) {
         try {
@@ -154,6 +156,11 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Hands changed network settings (timeouts, retries) to the API
+  void _applyNetworkConfig() {
+    _api?.networkConfig = _settingsService!.networkConfig;
+  }
+
   /// Removes downloaded audio, cached library data and cover art.
   Future<void> clearCaches() async {
     await Future.wait([
@@ -163,7 +170,9 @@ class AppState extends ChangeNotifier {
     ]);
   }
 
-  Future<void> loadAlbums() async {
+  /// Loads the album list. [forceRefresh] (a refresh by the user) bypasses
+  /// the API cache's fresh entry; when offline the cached list is used.
+  Future<void> loadAlbums({bool forceRefresh = false}) async {
     if (_api == null) return;
 
     _isLoading = true;
@@ -173,7 +182,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _albums = await _api!.getAlbumList();
+      _albums = await _api!.getAlbumList(forceRefresh: forceRefresh);
       _albumLoadingState = LoadingState.success;
     } catch (e) {
       _error = e.toString();
@@ -343,6 +352,7 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _settingsService?.removeListener(_applyNetworkConfig);
     _disposeServices();
     _persistenceService?.dispose();
     super.dispose();

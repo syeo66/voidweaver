@@ -71,12 +71,16 @@ class ApiCache {
   ///
   /// If the fetch fails (e.g. the device is offline) and an expired entry is
   /// still available, the stale data is returned instead of the error.
+  ///
+  /// With [forceRefresh] the data is fetched even if the cached entry hasn't
+  /// expired yet; it's still the fallback if the fetch fails.
   Future<T> getOrFetch<T>(
     String endpoint,
     Map<String, String>? params,
     Future<T> Function() fetcher, {
     Duration cacheDuration = const Duration(minutes: 5),
     bool usePersistentCache = false,
+    bool forceRefresh = false,
     Object? Function(T data)? toJson,
     T Function(dynamic json)? fromJson,
   }) async {
@@ -84,7 +88,7 @@ class ApiCache {
 
     // Check memory cache first
     final memoryCached = _memoryCache[key];
-    if (memoryCached != null && memoryCached.isValid) {
+    if (!forceRefresh && memoryCached != null && memoryCached.isValid) {
       debugPrint('Cache HIT (memory): $key');
       return memoryCached.data as T;
     }
@@ -94,7 +98,9 @@ class ApiCache {
     if (usePersistentCache) {
       await initialize();
       persistentCached = _getPersistentCache<T>(key, fromJson);
-      if (persistentCached != null && persistentCached.isValid) {
+      if (!forceRefresh &&
+          persistentCached != null &&
+          persistentCached.isValid) {
         debugPrint('Cache HIT (persistent): $key');
         // Store in memory cache for faster access
         _memoryCache[key] = persistentCached;

@@ -286,6 +286,32 @@ void main() {
       expect(result, 'saved');
     });
 
+    test('should fetch despite a valid entry with forceRefresh', () async {
+      await cache.getOrFetch<String>('endpoint', null, () async => 'old',
+          cacheDuration: const Duration(minutes: 3), usePersistentCache: true);
+
+      final result = await cache.getOrFetch<String>(
+          'endpoint', null, () async => 'new',
+          usePersistentCache: true, forceRefresh: true);
+      final cached = await cache.getOrFetch<String>(
+          'endpoint', null, () async => 'not fetched',
+          usePersistentCache: true);
+
+      expect(result, 'new');
+      expect(cached, 'new');
+    });
+
+    test('should serve the cached entry when a forced refresh fails', () async {
+      await cache.getOrFetch<String>('endpoint', null, () async => 'cached',
+          cacheDuration: const Duration(minutes: 3), usePersistentCache: true);
+
+      final result = await cache.getOrFetch<String>(
+          'endpoint', null, () async => throw Exception('offline'),
+          usePersistentCache: true, forceRefresh: true);
+
+      expect(result, 'cached');
+    });
+
     test('should rethrow when fetch fails and nothing is cached', () async {
       expect(
         cache.getOrFetch<String>(
