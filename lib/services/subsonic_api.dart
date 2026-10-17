@@ -448,38 +448,6 @@ class SubsonicApi {
     _cache.invalidatePattern('search');
   }
 
-  /// Update network configuration (recreates HTTP client and retry service)
-  void updateNetworkConfig(NetworkConfig newConfig) {
-    // Dispose existing resources
-    _httpClient.close();
-    _retryService.dispose();
-
-    // Update config and reinitialize
-    // Note: We can't update _networkConfig directly since it's final
-    // This would require a refactor to make it mutable, but for now
-    // we'll document that a new SubsonicApi instance is needed
-    throw UnsupportedError(
-        'Network configuration updates require creating a new SubsonicApi instance. '
-        'Current config: $_networkConfig');
-  }
-
-  /// Get current network configuration
-  NetworkConfig get networkConfig => _networkConfig;
-
-  /// Check if retry service is available and configured
-  bool get hasRetryCapability => _networkConfig.maxRetryAttempts > 0;
-
-  /// Get network timeout statistics
-  Map<String, dynamic> getNetworkStats() {
-    return {
-      'connectionTimeout': _networkConfig.connectionTimeout.inSeconds,
-      'requestTimeout': _networkConfig.requestTimeout.inSeconds,
-      'maxRetries': _networkConfig.maxRetryAttempts,
-      'retryEnabled': hasRetryCapability,
-      'config': _networkConfig.toString(),
-    };
-  }
-
   /// Dispose the HTTP client and clean up resources
   void dispose() {
     _retryService.dispose();

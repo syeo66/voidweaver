@@ -10,9 +10,9 @@ import 'dart:ui' as _i8;
 import 'package:flutter/material.dart' as _i7;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i4;
-import 'package:voidweaver/services/network_config.dart' as _i2;
+import 'package:voidweaver/services/network_config.dart' as _i3;
 import 'package:voidweaver/services/settings_service.dart' as _i6;
-import 'package:voidweaver/services/subsonic_api.dart' as _i3;
+import 'package:voidweaver/services/subsonic_api.dart' as _i2;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -30,8 +30,8 @@ import 'package:voidweaver/services/subsonic_api.dart' as _i3;
 // ignore_for_file: subtype_of_sealed_class
 // ignore_for_file: invalid_use_of_internal_member
 
-class _FakeNetworkConfig_0 extends _i1.SmartFake implements _i2.NetworkConfig {
-  _FakeNetworkConfig_0(
+class _FakeAlbum_0 extends _i1.SmartFake implements _i2.Album {
+  _FakeAlbum_0(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -40,8 +40,8 @@ class _FakeNetworkConfig_0 extends _i1.SmartFake implements _i2.NetworkConfig {
         );
 }
 
-class _FakeAlbum_1 extends _i1.SmartFake implements _i3.Album {
-  _FakeAlbum_1(
+class _FakeSearchResult_1 extends _i1.SmartFake implements _i2.SearchResult {
+  _FakeSearchResult_1(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -50,8 +50,8 @@ class _FakeAlbum_1 extends _i1.SmartFake implements _i3.Album {
         );
 }
 
-class _FakeSearchResult_2 extends _i1.SmartFake implements _i3.SearchResult {
-  _FakeSearchResult_2(
+class _FakeNetworkConfig_2 extends _i1.SmartFake implements _i3.NetworkConfig {
+  _FakeNetworkConfig_2(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -63,7 +63,7 @@ class _FakeSearchResult_2 extends _i1.SmartFake implements _i3.SearchResult {
 /// A class which mocks [SubsonicApi].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
+class MockSubsonicApi extends _i1.Mock implements _i2.SubsonicApi {
   MockSubsonicApi() {
     _i1.throwOnMissingStub(this);
   }
@@ -114,53 +114,48 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
       ) as String);
 
   @override
-  _i2.NetworkConfig get networkConfig => (super.noSuchMethod(
-        Invocation.getter(#networkConfig),
-        returnValue: _FakeNetworkConfig_0(
-          this,
-          Invocation.getter(#networkConfig),
+  _i5.Future<void> ping() => (super.noSuchMethod(
+        Invocation.method(
+          #ping,
+          [],
         ),
-      ) as _i2.NetworkConfig);
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
 
   @override
-  bool get hasRetryCapability => (super.noSuchMethod(
-        Invocation.getter(#hasRetryCapability),
-        returnValue: false,
-      ) as bool);
-
-  @override
-  _i5.Future<List<_i3.Album>> getAlbumList() => (super.noSuchMethod(
+  _i5.Future<List<_i2.Album>> getAlbumList() => (super.noSuchMethod(
         Invocation.method(
           #getAlbumList,
           [],
         ),
-        returnValue: _i5.Future<List<_i3.Album>>.value(<_i3.Album>[]),
-      ) as _i5.Future<List<_i3.Album>>);
+        returnValue: _i5.Future<List<_i2.Album>>.value(<_i2.Album>[]),
+      ) as _i5.Future<List<_i2.Album>>);
 
   @override
-  _i5.Future<_i3.Album> getAlbum(String? id) => (super.noSuchMethod(
+  _i5.Future<_i2.Album> getAlbum(String? id) => (super.noSuchMethod(
         Invocation.method(
           #getAlbum,
           [id],
         ),
-        returnValue: _i5.Future<_i3.Album>.value(_FakeAlbum_1(
+        returnValue: _i5.Future<_i2.Album>.value(_FakeAlbum_0(
           this,
           Invocation.method(
             #getAlbum,
             [id],
           ),
         )),
-      ) as _i5.Future<_i3.Album>);
+      ) as _i5.Future<_i2.Album>);
 
   @override
-  _i5.Future<List<_i3.Song>> getRandomSongs([int? count = 50]) =>
+  _i5.Future<List<_i2.Song>> getRandomSongs([int? count = 50]) =>
       (super.noSuchMethod(
         Invocation.method(
           #getRandomSongs,
           [count],
         ),
-        returnValue: _i5.Future<List<_i3.Song>>.value(<_i3.Song>[]),
-      ) as _i5.Future<List<_i3.Song>>);
+        returnValue: _i5.Future<List<_i2.Song>>.value(<_i2.Song>[]),
+      ) as _i5.Future<List<_i2.Song>>);
 
   @override
   String getStreamUrl(String? id) => (super.noSuchMethod(
@@ -218,7 +213,7 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
       ) as _i5.Future<void>);
 
   @override
-  _i5.Future<_i3.SearchResult> search(
+  _i5.Future<_i2.SearchResult> search(
     String? query, {
     int? artistCount = 20,
     int? albumCount = 20,
@@ -234,7 +229,7 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
             #songCount: songCount,
           },
         ),
-        returnValue: _i5.Future<_i3.SearchResult>.value(_FakeSearchResult_2(
+        returnValue: _i5.Future<_i2.SearchResult>.value(_FakeSearchResult_1(
           this,
           Invocation.method(
             #search,
@@ -246,26 +241,26 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
             },
           ),
         )),
-      ) as _i5.Future<_i3.SearchResult>);
+      ) as _i5.Future<_i2.SearchResult>);
 
   @override
-  _i5.Future<List<_i3.Artist>> getArtists() => (super.noSuchMethod(
+  _i5.Future<List<_i2.Artist>> getArtists() => (super.noSuchMethod(
         Invocation.method(
           #getArtists,
           [],
         ),
-        returnValue: _i5.Future<List<_i3.Artist>>.value(<_i3.Artist>[]),
-      ) as _i5.Future<List<_i3.Artist>>);
+        returnValue: _i5.Future<List<_i2.Artist>>.value(<_i2.Artist>[]),
+      ) as _i5.Future<List<_i2.Artist>>);
 
   @override
-  _i5.Future<List<_i3.Album>> getArtistAlbums(String? artistId) =>
+  _i5.Future<List<_i2.Album>> getArtistAlbums(String? artistId) =>
       (super.noSuchMethod(
         Invocation.method(
           #getArtistAlbums,
           [artistId],
         ),
-        returnValue: _i5.Future<List<_i3.Album>>.value(<_i3.Album>[]),
-      ) as _i5.Future<List<_i3.Album>>);
+        returnValue: _i5.Future<List<_i2.Album>>.value(<_i2.Album>[]),
+      ) as _i5.Future<List<_i2.Album>>);
 
   @override
   _i5.Future<void> clearCache() => (super.noSuchMethod(
@@ -339,24 +334,6 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
       );
 
   @override
-  void updateNetworkConfig(_i2.NetworkConfig? newConfig) => super.noSuchMethod(
-        Invocation.method(
-          #updateNetworkConfig,
-          [newConfig],
-        ),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  Map<String, dynamic> getNetworkStats() => (super.noSuchMethod(
-        Invocation.method(
-          #getNetworkStats,
-          [],
-        ),
-        returnValue: <String, dynamic>{},
-      ) as Map<String, dynamic>);
-
-  @override
   void dispose() => super.noSuchMethod(
         Invocation.method(
           #dispose,
@@ -405,13 +382,13 @@ class MockSettingsService extends _i1.Mock implements _i6.SettingsService {
       ) as _i7.ThemeMode);
 
   @override
-  _i2.NetworkConfig get networkConfig => (super.noSuchMethod(
+  _i3.NetworkConfig get networkConfig => (super.noSuchMethod(
         Invocation.getter(#networkConfig),
-        returnValue: _FakeNetworkConfig_0(
+        returnValue: _FakeNetworkConfig_2(
           this,
           Invocation.getter(#networkConfig),
         ),
-      ) as _i2.NetworkConfig);
+      ) as _i3.NetworkConfig);
 
   @override
   double get scrobbleMinPlayTimeMinutes => (super.noSuchMethod(
@@ -516,7 +493,7 @@ class MockSettingsService extends _i1.Mock implements _i6.SettingsService {
       ) as _i5.Future<void>);
 
   @override
-  _i5.Future<void> setNetworkConfig(_i2.NetworkConfig? config) =>
+  _i5.Future<void> setNetworkConfig(_i3.NetworkConfig? config) =>
       (super.noSuchMethod(
         Invocation.method(
           #setNetworkConfig,

@@ -13,22 +13,26 @@ class ImageCacheManager {
     Widget Function(BuildContext, String, dynamic)? errorWidget,
     String? cacheKey,
   }) {
-    return CachedNetworkImage(
-      imageUrl: imageUrl,
-      width: width,
-      height: height,
-      fit: fit ?? BoxFit.cover,
-      cacheKey: cacheKey,
-      placeholder: placeholder ?? (context, url) => _buildPlaceholder(),
-      errorWidget: errorWidget ??
-          (context, url, error) => _buildErrorWidget(context, url, error),
-      memCacheWidth: width?.toInt(),
-      memCacheHeight: height?.toInt(),
-      maxHeightDiskCache: 800, // Limit disk cache size
-      maxWidthDiskCache: 800,
-      fadeInDuration: const Duration(milliseconds: 200),
-      fadeOutDuration: const Duration(milliseconds: 100),
-    );
+    return Builder(builder: (context) {
+      // Decode at the size in physical pixels, so images stay sharp
+      final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+      return CachedNetworkImage(
+        imageUrl: imageUrl,
+        width: width,
+        height: height,
+        fit: fit ?? BoxFit.cover,
+        cacheKey: cacheKey,
+        placeholder: placeholder ?? (context, url) => _buildPlaceholder(),
+        errorWidget: errorWidget ??
+            (context, url, error) => _buildErrorWidget(context, url, error),
+        memCacheWidth: width == null ? null : (width * pixelRatio).round(),
+        memCacheHeight: height == null ? null : (height * pixelRatio).round(),
+        maxHeightDiskCache: 800, // Limit disk cache size
+        maxWidthDiskCache: 800,
+        fadeInDuration: const Duration(milliseconds: 200),
+        fadeOutDuration: const Duration(milliseconds: 100),
+      );
+    });
   }
 
   /// Build album art widget with consistent styling

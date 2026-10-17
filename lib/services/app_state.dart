@@ -198,8 +198,9 @@ class AppState extends ChangeNotifier {
       _lastSyncTime = DateTime.now();
       _error = null;
     } catch (e) {
+      // Only the sync indicator shows this; the albums loaded before stay
       _syncStatus = SyncStatus.error;
-      _error = e.toString();
+      debugPrint('Background sync failed: $e');
     }
 
     notifyListeners();

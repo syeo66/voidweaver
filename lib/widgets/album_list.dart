@@ -12,11 +12,13 @@ class AlbumList extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, appState, child) {
-        if (appState.isLoading) {
+        // On a refresh, the RefreshIndicator shows the progress
+        if (appState.isLoading && appState.albums.isEmpty) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        if (appState.error != null) {
+        // A failed refresh keeps the albums loaded before (see onRefresh)
+        if (appState.error != null && appState.albums.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -56,7 +58,15 @@ class AlbumList extends StatelessWidget {
             MediaQuery.of(context).orientation == Orientation.landscape;
 
         return RefreshIndicator(
-          onRefresh: () => appState.loadAlbums(),
+          onRefresh: () async {
+            await appState.loadAlbums();
+            final error = appState.albumError;
+            if (error != null && context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Refresh failed: $error')),
+              );
+            }
+          },
           child: isLandscape
               ? GridView.builder(
                   padding: const EdgeInsets.all(8),
