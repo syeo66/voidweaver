@@ -14,6 +14,12 @@ class FakeAudioCache implements AudioCache {
   /// Whether downloads succeed.
   bool reachable = true;
 
+  /// Song ids whose downloads fail, also while [reachable].
+  final Set<String> failing = {};
+
+  /// Every download attempt, by song id, including failed ones.
+  final Map<String, int> attempts = {};
+
   /// When set, downloads wait for it to complete.
   Completer<void>? gate;
 
@@ -37,7 +43,8 @@ class FakeAudioCache implements AudioCache {
   Future<bool> prefetch(String songId, String url) async {
     await gate?.future;
     if (cached.contains(songId)) return true;
-    if (!reachable) return false;
+    attempts[songId] = (attempts[songId] ?? 0) + 1;
+    if (!reachable || failing.contains(songId)) return false;
     downloaded.add(songId);
     cached.add(songId);
     return true;

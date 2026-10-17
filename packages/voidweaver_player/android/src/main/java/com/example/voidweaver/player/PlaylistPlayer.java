@@ -22,6 +22,7 @@ import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.audio.AudioSink;
 import androidx.media3.exoplayer.audio.DefaultAudioSink;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy;
 import androidx.media3.extractor.DefaultExtractorsFactory;
 import androidx.media3.session.MediaSession;
 import com.google.common.util.concurrent.Futures;
@@ -54,6 +55,14 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
   private static final int STATE_COMPLETED = 4;
 
   private static final long POSITION_UPDATE_INTERVAL_MS = 200;
+
+  /**
+   * Failed loads are retried this often before the error is reported, with 0, 1, 2, ... up to 5 s
+   * in between: about 25 s. ExoPlayer's default (3, a few seconds) turned a short network drop
+   * while it loaded the next track into a load error, which cut off the end of the current track
+   * and stopped playback.
+   */
+  private static final int LOAD_RETRY_COUNT = 8;
 
   private final MethodChannel methodChannel;
   private final EventChannel eventChannel;
@@ -89,7 +98,9 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
         new ExoPlayer.Builder(context, renderersFactory)
             .setMediaSourceFactory(
                 new DefaultMediaSourceFactory(
-                    MediaCache.dataSourceFactory(context), extractorsFactory))
+                        MediaCache.dataSourceFactory(context), extractorsFactory)
+                    .setLoadErrorHandlingPolicy(
+                        new DefaultLoadErrorHandlingPolicy(LOAD_RETRY_COUNT)))
             // ExoPlayer requests audio focus, pauses for interruptions and resumes after
             // transient ones. Nothing else in the app may request focus.
             .setAudioAttributes(

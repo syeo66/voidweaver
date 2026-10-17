@@ -83,7 +83,9 @@ void main() {
         (invocation) => urlFor(invocation.positionalArguments.first as String));
 
     service = AudioPlayerService(mockApi, mockSettings,
-        audioPlayer: player, audioCache: cache);
+        audioPlayer: player,
+        audioCache: cache,
+        downloadRetryDelay: const Duration(milliseconds: 5));
   });
 
   tearDown(() async {
@@ -118,6 +120,42 @@ void main() {
       expect(cache.downloaded, ['s2', 's3', 's4']);
       // Downloads go to the cache, which the player reads; the queue stays
       expect(player.loadedSources, [urlFor('s1')]);
+    });
+
+    test('tries a failed download again', () async {
+      cache.reachable = false;
+      await service.playAlbum(albumOf(3));
+      await until(() => (cache.attempts['s2'] ?? 0) >= 2, 'a second attempt');
+
+      // The network is back
+      cache.reachable = true;
+      await until(() => cache.downloaded.length == 2, 'both downloads');
+
+      expect(cache.downloaded, ['s2', 's3']);
+    });
+
+    test('moves on to the next download after a few retries', () async {
+      cache.failing.add('s2');
+      await service.playAlbum(albumOf(4));
+      await until(() => cache.downloaded.length == 2, 'the later downloads');
+
+      expect(cache.downloaded, ['s3', 's4']);
+      expect(cache.attempts['s2'], 6);
+    });
+
+    test('stops retrying once another track starts', () async {
+      cache.failing.add('s3');
+      await service.playAlbum(albumOf(5));
+      await until(() => (cache.attempts['s3'] ?? 0) >= 2, 'a retry');
+
+      final before = cache.attempts['s3']!;
+      player.simulateTrackTransition();
+      await until(() => service.currentIndex == 1, 'the service follows');
+      await until(() => cache.downloaded.contains('s5'), 's5 is downloaded');
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      // Only the new track's downloads try s3: a first attempt, five retries
+      expect(cache.attempts['s3'], before + 6);
     });
   });
 

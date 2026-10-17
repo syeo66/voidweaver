@@ -37,12 +37,17 @@ class AudioPlayerService extends ChangeNotifier {
 
   static const _skipDebounceMs = 200;
 
+  /// Retries of a failed download, see _preloadUpcomingSongs(). The delay
+  /// before each retry doubles: 5 s, 10 s, ... about 2.5 minutes in all.
+  static const _maxDownloadRetries = 5;
+
   final VoidweaverPlayer _audioPlayer;
   final SubsonicApi _api;
   final SettingsService _settingsService;
   final PlaybackPersistenceService? _persistence;
   final ScrobbleQueue _scrobbleQueue;
   final AudioCache _audioCache;
+  final Duration _downloadRetryDelay;
 
   PlaybackState _playbackState = PlaybackState.stopped;
   List<Song> _playlist = [];
@@ -101,6 +106,10 @@ class AudioPlayerService extends ChangeNotifier {
   StreamSubscription? _errorSubscription;
   StreamSubscription? _commandSubscription;
 
+  // Incremented whenever downloads of upcoming tracks start; an older run
+  // stops, see _preloadUpcomingSongs()
+  int _preloadRun = 0;
+
   // Async work (preloads, ReplayGain reads) can finish after dispose()
   bool _disposed = false;
 
@@ -108,8 +117,11 @@ class AudioPlayerService extends ChangeNotifier {
       {VoidweaverPlayer? audioPlayer,
       PlaybackPersistenceService? persistence,
       ScrobbleQueue? scrobbleQueue,
-      AudioCache? audioCache})
+      AudioCache? audioCache,
+      @visibleForTesting
+      Duration downloadRetryDelay = const Duration(seconds: 5)})
       : _audioPlayer = audioPlayer ?? VoidweaverPlayer(),
+        _downloadRetryDelay = downloadRetryDelay,
         _persistence = persistence,
         _scrobbleQueue = scrobbleQueue ?? ScrobbleQueue(_api),
         _audioCache = audioCache ?? AudioCache() {
@@ -916,34 +928,53 @@ class AudioPlayerService extends ChangeNotifier {
   /// continue if the network drops; the player plays them from there.
   /// Downloads run one at a time, nearest track first, so the next song is
   /// ready as early as possible.
+  ///
+  /// A failed download (e.g. the network dropped for a moment) is tried
+  /// again a few times. Otherwise the player would have to stream the track
+  /// when it gets there, and a network drop at that moment stops playback.
   Future<void> _preloadUpcomingSongs() async {
+    final run = ++_preloadRun;
     final playlist = _playlist;
     final start = _currentIndex + 1;
     final end = (start + _maxPreloadTracks).clamp(0, playlist.length);
     if (start >= end) return;
 
+    // Stop once the playlist is replaced or another track started (which
+    // starts its own downloads)
+    bool current() =>
+        !_disposed && run == _preloadRun && identical(playlist, _playlist);
+
     for (var index = start; index < end; index++) {
-      // Stop if the playlist was replaced while downloading
-      if (_disposed || !identical(playlist, _playlist)) break;
-      await _preloadSingleTrack(playlist, index);
+      var delay = _downloadRetryDelay;
+      for (var attempt = 0; current(); attempt++) {
+        if (await _preloadSingleTrack(playlist, index) ||
+            attempt == _maxDownloadRetries) {
+          break;
+        }
+        await Future.delayed(delay);
+        delay *= 2;
+      }
+      if (!current()) break;
     }
   }
 
   /// Downloads the track at [index] and reads its ReplayGain metadata from
-  /// the cache if the server didn't provide it.
-  Future<void> _preloadSingleTrack(List<Song> playlist, int index) async {
+  /// the cache if the server didn't provide it. Returns whether the track is
+  /// completely cached.
+  Future<bool> _preloadSingleTrack(List<Song> playlist, int index) async {
     final song = playlist[index];
     if (!await _audioCache.prefetch(song.id, _api.getStreamUrl(song.id))) {
-      return;
+      return false;
     }
     if (song.replayGainTrackGain != null || song.replayGainAlbumGain != null) {
-      return;
+      return true;
     }
     final data = await _audioCache.readReplayGain(song.id);
-    if (data == null) return;
+    if (data == null) return true;
     _rgLog(
         '[ReplayGain] Preload read "${song.title}": Track=${data.trackGain}, Album=${data.albumGain}');
     _storeReplayGain(playlist, index, data);
+    return true;
   }
 
   /// Removes all cached audio.

@@ -33,6 +33,8 @@ Every item in the sequence is a stream URL with a cache key (server and song id,
 
 ## Load errors
 
+The player retries a failed load 8 times, about 25 s in all (`LOAD_RETRY_COUNT` in `PlaylistPlayer`), before it reports an error. With ExoPlayer's default of a few seconds, a short network drop while it loaded the next track (near the end of the current one) became a load error: ExoPlayer cut the current track off, moved to the failed one and stopped there (0:00/0:00). Downloads ahead are retried too, see [CACHING.md](CACHING.md).
+
 A track that can't load (offline and not downloaded, or a stream breaking off) is reported on `errorStream`. `_onPlayerError()` marks the queue for reloading (the player is idle after an error) and continues at the next completely cached track (`_continueAfterError()`, which asks the cache); if there is none, playback stops on the failing track and the next `play()` loads the queue again from there. Errors while a `_playerOp()` runs are handled once it finishes. If `_jumpTo()`'s target failed, it then leaves playback to `_onPlayerError()` instead of starting it.
 
 The player's `seek()` completes once the target is ready or has failed (the error arrives on `errorStream` first). With `just_audio`, a seek to a target that failed never completed; awaited inside a `_playerOp()`, that blocked every later operation. `_seekToItem()` still stops waiting once the player reports an error or goes idle, so a seek that never completes can't block playback again. `setAudioSources()` completes once the start item is ready and throws its own errors, and `_loadQueue()` handles them the same way.
