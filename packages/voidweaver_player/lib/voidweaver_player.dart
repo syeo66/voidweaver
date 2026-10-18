@@ -129,7 +129,7 @@ class VoidweaverPlayer {
       '${DateTime.now().microsecondsSinceEpoch}-${++_lastPlayerId}';
   late final MethodChannel _channel = MethodChannel('voidweaver_player/$_id');
   late final Future<void> _created = _create();
-  StreamSubscription? _eventSubscription;
+  StreamSubscription<dynamic>? _eventSubscription;
   bool _disposed = false;
 
   final List<AudioSource> _sequence = [];
@@ -189,12 +189,11 @@ class VoidweaverPlayer {
     }
   }
 
-  static PlayerException _exception(Map map) => PlayerException(
-      map['code'] as int? ?? 0,
-      map['message'] as String?,
-      map['index'] as int?);
+  static PlayerException _exception(Map<Object?, Object?> map) =>
+      PlayerException(map['code'] as int? ?? 0, map['message'] as String?,
+          map['index'] as int?);
 
-  void _applyState(Map? map) {
+  void _applyState(Map<Object?, Object?>? map) {
     if (map == null || _disposed) return;
     final state = PlayerState(map['playing'] as bool,
         ProcessingState.values[map['processingState'] as int]);
@@ -225,7 +224,8 @@ class VoidweaverPlayer {
   Future<void> _invoke(String method, [Map<String, Object?>? arguments]) async {
     await _created;
     if (_disposed) return;
-    _applyState(await _channel.invokeMethod<Map>(method, arguments));
+    _applyState(
+        await _channel.invokeMethod<Map<Object?, Object?>>(method, arguments));
   }
 
   /// Replaces the playlist and prepares the item at [initialIndex]. Completes

@@ -52,6 +52,10 @@ class AppState extends ChangeNotifier {
   Timer? _syncStatusResetTimer;
   DateTime? _lastSyncTime;
 
+  static const _syncInterval = Duration(minutes: 5);
+  // Background sync only runs while the app is visible, see setVisible()
+  bool _visible = true;
+
   // Enhanced loading states
   LoadingState _configurationLoadingState = LoadingState.idle;
   LoadingState _albumLoadingState = LoadingState.idle;
@@ -187,6 +191,7 @@ class AppState extends ChangeNotifier {
     try {
       _albums = await _api!.getAlbumList(forceRefresh: forceRefresh);
       _albumLoadingState = LoadingState.success;
+      _lastSyncTime = DateTime.now();
     } catch (e) {
       _error = NetworkErrorHelper.getErrorMessage(e,
           context: 'Failed to load albums');
@@ -230,9 +235,30 @@ class AppState extends ChangeNotifier {
 
   void _startBackgroundSync() {
     _syncTimer?.cancel();
-    _syncTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
-      _backgroundSync();
+    if (!_visible) return;
+    _syncTimer = Timer.periodic(_syncInterval, (timer) {
+      unawaited(_backgroundSync());
     });
+  }
+
+  /// Called when the app is shown or hidden. Background sync pauses while
+  /// the app is hidden (e.g. playing with the screen off), so it doesn't wake
+  /// the network for a list nobody sees; when shown again, a sync that came
+  /// due meanwhile runs right away.
+  void setVisible(bool visible) {
+    if (visible == _visible) return;
+    _visible = visible;
+    if (_api == null) return;
+    if (!visible) {
+      _stopBackgroundSync();
+      return;
+    }
+    _startBackgroundSync();
+    final lastSync = _lastSyncTime;
+    if (lastSync == null ||
+        DateTime.now().difference(lastSync) >= _syncInterval) {
+      unawaited(_backgroundSync());
+    }
   }
 
   void _stopBackgroundSync() {

@@ -3,6 +3,7 @@ import 'package:voidweaver/services/audio_player_service.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 import 'package:voidweaver/services/settings_service.dart';
 import 'package:mockito/annotations.dart';
+import 'package:voidweaver_player/voidweaver_player.dart';
 
 import 'sleep_timer_test.mocks.dart';
 import '../test_helpers/mock_audio_player.dart';
@@ -27,9 +28,9 @@ void main() {
           audioPlayer: mockAudioPlayer);
     });
 
-    tearDown(() {
+    tearDown(() async {
       audioPlayerService.dispose();
-      mockAudioPlayer.dispose();
+      await mockAudioPlayer.dispose();
     });
 
     test('should start sleep timer correctly', () {
@@ -125,5 +126,26 @@ void main() {
       expect(audioPlayerService.sleepTimerDuration, secondDuration);
       expect(audioPlayerService.isSleepTimerActive, true);
     });
+
+    test('ends the timer even if the player fails to pause', () async {
+      final player = _FailingPausePlayer();
+      final service =
+          AudioPlayerService(mockApi, mockSettingsService, audioPlayer: player);
+      addTearDown(() async {
+        service.dispose();
+        await player.dispose();
+      });
+
+      service.startSleepTimer(const Duration(milliseconds: 10));
+      // An unhandled error from pause() would fail the test
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      expect(service.isSleepTimerActive, false);
+    });
   });
+}
+
+class _FailingPausePlayer extends MockAudioPlayer {
+  @override
+  Future<void> pause() async => throw PlayerException(0, 'Player released');
 }

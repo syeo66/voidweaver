@@ -145,7 +145,12 @@ class _ProgressSection extends StatelessWidget {
                       milliseconds:
                           (newValue * progress.total.inMilliseconds).round(),
                     );
-                    context.read<AudioPlayerService>().seekTo(newPosition);
+                    unawaited(context
+                        .read<AudioPlayerService>()
+                        .seekTo(newPosition)
+                        .catchError((Object e) {
+                      debugPrint('[player_controls] Seek failed: $e');
+                    }));
                   }
                 },
               ),

@@ -28,7 +28,7 @@ Endpoints used: `ping` (checks the credentials on login), `getAlbumList2`, `getA
 
 | Path | Purpose |
 |------|---------|
-| `lib/services/app_state.dart` | App-wide state: login, creates the API and player services, background sync every 5 minutes |
+| `lib/services/app_state.dart` | App-wide state: login, creates the API and player services, background sync every 5 minutes while the app is visible (`setVisible()`, driven by `AppRouter`'s lifecycle listener) |
 | `lib/services/subsonic_api.dart` | Subsonic client: token auth, response parsing, API cache, HTTP/2 via `http_plus` |
 | `lib/services/audio_player_service.dart` | Hands the playlist to the player and follows it; skips, load errors, ReplayGain gains, scrobbling, prefetching |
 | `packages/voidweaver_player/` | Local plugin: playlist player on Media3 ExoPlayer with a gain stage per item, and the Media3 media session for notification, lock screen and Bluetooth controls (Java on the Android side) |
@@ -48,6 +48,7 @@ State is managed with Provider. Services take optional dependencies (`Voidweaver
 - Check `mounted` after `await` in widgets.
 - Screens choose layouts with `MediaQuery.of(context).orientation`, using `_buildPortraitLayout()` / `_buildLandscapeLayout()`. Test both orientations when changing a screen.
 - Wrap independent screen sections in `.withErrorBoundary()`.
+- The analyzer runs with `strict-casts`, `strict-raw-types`, `discarded_futures` and `unawaited_futures`. Cast JSON values explicitly (`json['id'] as String?`), and mark fire-and-forget futures with `unawaited(...)`, adding `.catchError` when a failure needs more than the zone's error report.
 - Let exceptions keep their type (rethrow rather than wrapping them in `Exception('...: $e')`) and show them with `NetworkErrorHelper.getErrorMessage(e, context: '...')`, never with `toString()`. Throw `UserFacingException` for errors whose message is meant for the user.
 - `AudioPlayerService` doesn't notify its listeners for position updates (several a second). Widgets that show the position listen to `AudioPlayerService.position`.
 

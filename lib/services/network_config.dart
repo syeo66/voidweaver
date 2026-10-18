@@ -169,19 +169,23 @@ class NetworkConfig {
   factory NetworkConfig.fromJson(Map<String, dynamic> json) {
     return NetworkConfig(
       connectionTimeout:
-          Duration(milliseconds: json['connectionTimeout'] ?? 15000),
-      requestTimeout: Duration(milliseconds: json['requestTimeout'] ?? 30000),
-      metadataTimeout: Duration(milliseconds: json['metadataTimeout'] ?? 20000),
+          Duration(milliseconds: json['connectionTimeout'] as int? ?? 15000),
+      requestTimeout:
+          Duration(milliseconds: json['requestTimeout'] as int? ?? 30000),
+      metadataTimeout:
+          Duration(milliseconds: json['metadataTimeout'] as int? ?? 20000),
       streamingTimeout:
-          Duration(milliseconds: json['streamingTimeout'] ?? 60000),
-      maxRetryAttempts: json['maxRetryAttempts'] ?? 3,
+          Duration(milliseconds: json['streamingTimeout'] as int? ?? 60000),
+      maxRetryAttempts: json['maxRetryAttempts'] as int? ?? 3,
       initialRetryDelay:
-          Duration(milliseconds: json['initialRetryDelay'] ?? 500),
-      retryBackoffMultiplier: json['retryBackoffMultiplier']?.toDouble() ?? 2.0,
-      maxRetryDelay: Duration(milliseconds: json['maxRetryDelay'] ?? 10000),
-      enableRetryOnTimeout: json['enableRetryOnTimeout'] ?? true,
+          Duration(milliseconds: json['initialRetryDelay'] as int? ?? 500),
+      retryBackoffMultiplier:
+          (json['retryBackoffMultiplier'] as num?)?.toDouble() ?? 2.0,
+      maxRetryDelay:
+          Duration(milliseconds: json['maxRetryDelay'] as int? ?? 10000),
+      enableRetryOnTimeout: json['enableRetryOnTimeout'] as bool? ?? true,
       enableRetryOnConnectionError:
-          json['enableRetryOnConnectionError'] ?? true,
+          json['enableRetryOnConnectionError'] as bool? ?? true,
     );
   }
 

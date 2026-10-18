@@ -50,9 +50,9 @@ void main() {
       when(mockApi.getStreamUrl(any)).thenReturn('https://example.com/stream');
     });
 
-    tearDown(() {
+    tearDown(() async {
       service.dispose();
-      mockAudioPlayer.dispose();
+      await mockAudioPlayer.dispose();
     });
 
     Future<void> restoreAt(Duration position) async {
@@ -117,6 +117,29 @@ void main() {
 
       verifyNever(
           mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')));
+    });
+
+    test('a single song replaces the saved source of the album before it',
+        () async {
+      SharedPreferences.setMockInitialValues({});
+      final persistence = PlaybackPersistenceService();
+      await persistence.initialize();
+      service = AudioPlayerService(mockApi, mockSettingsService,
+          audioPlayer: mockAudioPlayer, persistence: persistence);
+
+      await service.playAlbum(Album(
+          id: 'album1',
+          name: 'Test Album',
+          artist: 'Test Artist',
+          songCount: 1,
+          songs: [song]));
+      await service.playSong(
+          Song(id: 'song2', title: 'Other', artist: 'Other', album: 'Other'));
+      await Future.delayed(const Duration(milliseconds: 250));
+
+      final saved = await persistence.loadPlaybackState();
+      expect(saved!.playlistSource, 'song');
+      expect(saved.sourceId, 'song2');
     });
   });
 }

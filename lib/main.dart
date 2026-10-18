@@ -11,7 +11,7 @@ import 'widgets/error_boundary.dart';
 
 void main() async {
   // Run the app in a zone to catch async errors
-  runZonedGuarded(
+  unawaited(runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
 
@@ -33,7 +33,7 @@ void main() async {
         context: 'Main zone error',
       );
     },
-  );
+  ));
 }
 
 class MyApp extends StatelessWidget {
@@ -93,11 +93,25 @@ class AppRouter extends StatefulWidget {
 
 class _AppRouterState extends State<AppRouter> {
   bool _initialized = false;
+  late final AppLifecycleListener _lifecycleListener;
 
   @override
   void initState() {
     super.initState();
-    _initializeApp();
+    // By state rather than onShow/onHide: with the cached engine the app can
+    // return from detached straight to resumed, which calls no onShow
+    _lifecycleListener = AppLifecycleListener(
+      onStateChange: (state) => context.read<AppState>().setVisible(
+          state == AppLifecycleState.resumed ||
+              state == AppLifecycleState.inactive),
+    );
+    unawaited(_initializeApp());
+  }
+
+  @override
+  void dispose() {
+    _lifecycleListener.dispose();
+    super.dispose();
   }
 
   Future<void> _initializeApp() async {

@@ -13,7 +13,7 @@ Three caches keep the app fast and usable offline. All of them can be cleared fr
 | `getArtists` | 15 min | yes |
 | `search` | 5 min | yes |
 
-- **Keys** are the endpoint plus sorted query parameters, e.g. `getAlbumList2?size=500&type=recent`.
+- **Keys** are the endpoint plus sorted query parameters, e.g. `getAlbumList2?size=500&type=recent`. The album list is one entry holding every page (`getAlbumList2` returns at most 500 albums per request, so `getAlbumList` follows `offset` until a page comes back short).
 - **Deduplication**: concurrent identical calls share one request.
 - **Offline fallback**: if a fetch fails, the expired entry is returned instead of the error. Expired entries are replaced but never deleted, so the last known library stays browsable offline.
 - **Forced refresh**: `getOrFetch(forceRefresh: true)` fetches even if the entry hasn't expired, and still falls back to it offline. Pull-to-refresh on the album list uses it (`getAlbumList(forceRefresh: true)`).

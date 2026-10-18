@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -53,7 +54,7 @@ class SubsonicApi {
       throw ArgumentError('Server URL must use HTTPS protocol for security');
     }
 
-    _cache.initialize();
+    unawaited(_cache.initialize());
     _initializeHttpClient();
   }
 
@@ -195,30 +196,57 @@ class SubsonicApi {
       .map((a) => Album.fromJson(a as Map<String, dynamic>))
       .toList();
 
-  /// The most recently added albums. With [forceRefresh] they're fetched from
-  /// the server even if the cached list hasn't expired yet.
+  /// Albums per getAlbumList2 request, the most the Subsonic API allows
+  static const _albumPageSize = 500;
+
+  /// All albums, most recently added first, fetched page by page. With
+  /// [forceRefresh] they're fetched from the server even if the cached list
+  /// hasn't expired yet.
   Future<List<Album>> getAlbumList({bool forceRefresh = false}) async {
     return await _cache.getOrFetch<List<Album>>(
       'getAlbumList2',
-      {'type': 'recent', 'size': '500'},
-      () async {
-        final doc = await _makeRequest('getAlbumList2',
-            {'type': 'recent', 'size': '500'}, NetworkRequestType.metadata);
-        final albums = <Album>[];
-
-        final albumElements = doc.findAllElements('album');
-        for (final element in albumElements) {
-          albums.add(Album.fromXml(element));
-        }
-
-        return albums;
-      },
+      {'type': 'recent', 'size': '$_albumPageSize'},
+      () => fetchAllAlbumPages((offset) async {
+        final doc = await _makeRequest(
+            'getAlbumList2',
+            {
+              'type': 'recent',
+              'size': '$_albumPageSize',
+              'offset': '$offset',
+            },
+            NetworkRequestType.metadata);
+        return [
+          for (final element in doc.findAllElements('album'))
+            Album.fromXml(element)
+        ];
+      }),
       cacheDuration: const Duration(minutes: 3),
       usePersistentCache: true,
       forceRefresh: forceRefresh,
       toJson: _albumsToJson,
       fromJson: _albumsFromJson,
     );
+  }
+
+  /// Requests pages of albums from [fetchPage] (given the offset) until one
+  /// comes back short. Albums already seen are dropped: a server that ignores
+  /// the offset returns the first page again, which ends the loop, and an
+  /// album added between requests shifts the pages by one.
+  @visibleForTesting
+  static Future<List<Album>> fetchAllAlbumPages(
+      Future<List<Album>> Function(int offset) fetchPage,
+      {int pageSize = _albumPageSize}) async {
+    final albums = <Album>[];
+    final seen = <String>{};
+    while (true) {
+      final page = await fetchPage(albums.length);
+      final added = [
+        for (final album in page)
+          if (seen.add(album.id)) album
+      ];
+      albums.addAll(added);
+      if (page.length < pageSize || added.isEmpty) return albums;
+    }
   }
 
   Future<Album> getAlbum(String id) async {
@@ -570,15 +598,16 @@ class Album {
 
   static Album fromJson(Map<String, dynamic> json) {
     return Album(
-      id: json['id'] ?? '',
-      name: json['name'] ?? '',
-      artist: json['artist'] ?? '',
-      artistId: json['artistId'],
-      coverArt: json['coverArt'],
-      songCount: json['songCount'],
-      duration: json['duration'],
-      created:
-          json['created'] != null ? DateTime.tryParse(json['created']) : null,
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      artist: json['artist'] as String? ?? '',
+      artistId: json['artistId'] as String?,
+      coverArt: json['coverArt'] as String?,
+      songCount: json['songCount'] as int?,
+      duration: json['duration'] as int?,
+      created: json['created'] != null
+          ? DateTime.tryParse(json['created'] as String)
+          : null,
       songs: (json['songs'] as List<dynamic>?)
               ?.map(
                   (songJson) => Song.fromJson(songJson as Map<String, dynamic>))
@@ -627,6 +656,40 @@ class Song {
     this.replayGainTrackPeak,
     this.replayGainAlbumPeak,
   });
+
+  Song copyWith({
+    String? id,
+    String? title,
+    String? artist,
+    String? album,
+    String? albumId,
+    String? coverArt,
+    int? duration,
+    int? track,
+    String? contentType,
+    String? suffix,
+    double? replayGainTrackGain,
+    double? replayGainAlbumGain,
+    double? replayGainTrackPeak,
+    double? replayGainAlbumPeak,
+  }) {
+    return Song(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      artist: artist ?? this.artist,
+      album: album ?? this.album,
+      albumId: albumId ?? this.albumId,
+      coverArt: coverArt ?? this.coverArt,
+      duration: duration ?? this.duration,
+      track: track ?? this.track,
+      contentType: contentType ?? this.contentType,
+      suffix: suffix ?? this.suffix,
+      replayGainTrackGain: replayGainTrackGain ?? this.replayGainTrackGain,
+      replayGainAlbumGain: replayGainAlbumGain ?? this.replayGainAlbumGain,
+      replayGainTrackPeak: replayGainTrackPeak ?? this.replayGainTrackPeak,
+      replayGainAlbumPeak: replayGainAlbumPeak ?? this.replayGainAlbumPeak,
+    );
+  }
 
   factory Song.fromXml(XmlElement element) {
     final songId = element.getAttribute('id') ?? '';
@@ -780,35 +843,35 @@ class Song {
 
     if (json.containsKey('replayGain') && json['replayGain'] is Map) {
       final replayGain = json['replayGain'] as Map<String, dynamic>;
-      trackGain = replayGain['trackGain']?.toDouble();
-      albumGain = replayGain['albumGain']?.toDouble();
-      trackPeak = replayGain['trackPeak']?.toDouble();
-      albumPeak = replayGain['albumPeak']?.toDouble();
+      trackGain = (replayGain['trackGain'] as num?)?.toDouble();
+      albumGain = (replayGain['albumGain'] as num?)?.toDouble();
+      trackPeak = (replayGain['trackPeak'] as num?)?.toDouble();
+      albumPeak = (replayGain['albumPeak'] as num?)?.toDouble();
       _rgLog(
           '[ReplayGain JSON] "${json['title']}" (id=${json['id']}): nested replayGain='
           '{trackGain: $trackGain, albumGain: $albumGain, trackPeak: $trackPeak, albumPeak: $albumPeak}');
     } else {
       // Fallback to flat format for backwards compatibility
-      trackGain = json['replayGainTrackGain']?.toDouble();
-      albumGain = json['replayGainAlbumGain']?.toDouble();
-      trackPeak = json['replayGainTrackPeak']?.toDouble();
-      albumPeak = json['replayGainAlbumPeak']?.toDouble();
+      trackGain = (json['replayGainTrackGain'] as num?)?.toDouble();
+      albumGain = (json['replayGainAlbumGain'] as num?)?.toDouble();
+      trackPeak = (json['replayGainTrackPeak'] as num?)?.toDouble();
+      albumPeak = (json['replayGainAlbumPeak'] as num?)?.toDouble();
       _rgLog(
           '[ReplayGain JSON] "${json['title']}" (id=${json['id']}): flat fields='
           '{trackGain: $trackGain, albumGain: $albumGain, trackPeak: $trackPeak, albumPeak: $albumPeak}');
     }
 
     return Song(
-      id: json['id'] ?? '',
-      title: json['title'] ?? '',
-      artist: json['artist'] ?? '',
-      album: json['album'] ?? '',
-      albumId: json['albumId'],
-      coverArt: json['coverArt'],
-      duration: json['duration'],
-      track: json['track'],
-      contentType: json['contentType'],
-      suffix: json['suffix'],
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      artist: json['artist'] as String? ?? '',
+      album: json['album'] as String? ?? '',
+      albumId: json['albumId'] as String?,
+      coverArt: json['coverArt'] as String?,
+      duration: json['duration'] as int?,
+      track: json['track'] as int?,
+      contentType: json['contentType'] as String?,
+      suffix: json['suffix'] as String?,
       replayGainTrackGain: trackGain,
       replayGainAlbumGain: albumGain,
       replayGainTrackPeak: trackPeak,
@@ -865,10 +928,10 @@ class Artist {
 
   static Artist fromJson(Map<String, dynamic> json) {
     return Artist(
-      id: json['id'] ?? '',
-      name: json['name'] ?? '',
-      coverArt: json['coverArt'],
-      albumCount: json['albumCount'],
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      coverArt: json['coverArt'] as String?,
+      albumCount: json['albumCount'] as int?,
     );
   }
 }

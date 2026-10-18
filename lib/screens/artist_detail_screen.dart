@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -25,7 +26,7 @@ class _ArtistDetailScreenState extends State<ArtistDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _loadArtistAlbums();
+    unawaited(_loadArtistAlbums());
   }
 
   Future<void> _loadArtistAlbums() async {

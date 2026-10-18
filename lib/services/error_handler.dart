@@ -11,7 +11,7 @@ class ErrorHandler {
   ErrorHandler._();
 
   final List<ErrorReporter> _reporters = [];
-  late final FlutterErrorDetails Function(dynamic error, StackTrace? stackTrace)
+  late final FlutterErrorDetails Function(Object error, StackTrace? stackTrace)
       _errorDetailsBuilder;
 
   /// Initialize the global error handler.
@@ -35,7 +35,7 @@ class ErrorHandler {
       _handleAsyncError(error, stack);
     });
 
-    _errorDetailsBuilder = (dynamic error, StackTrace? stackTrace) {
+    _errorDetailsBuilder = (Object error, StackTrace? stackTrace) {
       return FlutterErrorDetails(
         exception: error,
         stack: stackTrace,

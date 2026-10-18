@@ -12,7 +12,7 @@
 ## Reliability
 - [ ] Handle self-signed certificates
 - [ ] Better login validation and feedback
-- [ ] Smarter background sync (currently every 5 minutes)
+- [ ] Smarter background sync (currently every 5 minutes while the app is visible)
 - [ ] Structured logging
 - [ ] Crash reporting
 - [ ] Battery optimization

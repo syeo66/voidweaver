@@ -161,4 +161,77 @@ void main() {
       expect(const SubsonicException(null, 'Unknown').isAuthError, isFalse);
     });
   });
+
+  group('SubsonicApi.fetchAllAlbumPages', () {
+    List<Album> albums(int from, int count) => [
+          for (var i = from; i < from + count; i++)
+            Album(id: 'a$i', name: 'Album $i', artist: 'Artist', songs: [])
+        ];
+
+    test('requests pages until one comes back short', () async {
+      final offsets = <int>[];
+      final result = await SubsonicApi.fetchAllAlbumPages((offset) async {
+        offsets.add(offset);
+        return albums(offset, offset < 6 ? 3 : 1);
+      }, pageSize: 3);
+
+      expect(offsets, [0, 3, 6]);
+      expect(result.map((a) => a.id), [for (var i = 0; i < 7; i++) 'a$i']);
+    });
+
+    test('stops when the server ignores the offset', () async {
+      var requests = 0;
+      final result = await SubsonicApi.fetchAllAlbumPages((offset) async {
+        requests++;
+        return albums(0, 3);
+      }, pageSize: 3);
+
+      expect(requests, 2);
+      expect(result, hasLength(3));
+    });
+
+    test('drops an album seen again after the list shifted', () async {
+      final result = await SubsonicApi.fetchAllAlbumPages((offset) async {
+        // A new album at the top pushed a2 onto the second page
+        return offset == 0 ? albums(0, 3) : albums(2, 2);
+      }, pageSize: 3);
+
+      expect(result.map((a) => a.id), ['a0', 'a1', 'a2', 'a3']);
+    });
+  });
+
+  group('Song.copyWith', () {
+    test('keeps every field it is not given', () {
+      final song = Song(
+        id: '1',
+        title: 'Title',
+        artist: 'Artist',
+        album: 'Album',
+        albumId: 'al1',
+        coverArt: 'cover',
+        duration: 200,
+        track: 3,
+        contentType: 'audio/flac',
+        suffix: 'flac',
+        replayGainTrackPeak: 0.9,
+      );
+
+      expect(
+          song.copyWith(replayGainTrackGain: -6.5),
+          Song(
+            id: '1',
+            title: 'Title',
+            artist: 'Artist',
+            album: 'Album',
+            albumId: 'al1',
+            coverArt: 'cover',
+            duration: 200,
+            track: 3,
+            contentType: 'audio/flac',
+            suffix: 'flac',
+            replayGainTrackGain: -6.5,
+            replayGainTrackPeak: 0.9,
+          ));
+    });
+  });
 }

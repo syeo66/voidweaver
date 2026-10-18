@@ -46,9 +46,9 @@ void main() {
           audioPlayer: mockAudioPlayer);
     });
 
-    tearDown(() {
+    tearDown(() async {
       audioPlayerService.dispose();
-      mockAudioPlayer.dispose();
+      await mockAudioPlayer.dispose();
     });
 
     test('should send now playing notification when song starts', () async {

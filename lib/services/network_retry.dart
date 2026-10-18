@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:http_plus/http_plus.dart' as http_plus;
 import 'network_config.dart';
 
@@ -15,7 +16,7 @@ class NetworkRetryService {
   }) : _httpClient = httpClient;
 
   /// Execute an HTTP GET request with retry logic and timeout handling
-  Future<dynamic> getWithRetry(
+  Future<http.Response> getWithRetry(
     Uri uri, {
     Map<String, String>? headers,
     NetworkRequestType requestType = NetworkRequestType.general,
@@ -29,7 +30,7 @@ class NetworkRetryService {
   }
 
   /// Execute an HTTP POST request with retry logic and timeout handling
-  Future<dynamic> postWithRetry(
+  Future<http.Response> postWithRetry(
     Uri uri, {
     Map<String, String>? headers,
     Object? body,
@@ -44,8 +45,8 @@ class NetworkRetryService {
   }
 
   /// Execute any HTTP request with retry logic and timeout handling
-  Future<dynamic> _executeWithRetry(
-    Future<dynamic> Function() request, {
+  Future<http.Response> _executeWithRetry(
+    Future<http.Response> Function() request, {
     required NetworkRequestType requestType,
     required String contextDescription,
   }) async {
@@ -59,7 +60,7 @@ class NetworkRetryService {
       try {
         if (kDebugMode) {
           debugPrint(
-              'Network request attempt $attemptNumber/$config.maxRetryAttempts: $contextDescription');
+              'Network request attempt $attemptNumber/${config.maxRetryAttempts}: $contextDescription');
         }
 
         final response = await _executeWithTimeout(request, requestType);
@@ -132,8 +133,8 @@ class NetworkRetryService {
   }
 
   /// Execute a request with timeout handling
-  Future<dynamic> _executeWithTimeout(
-    Future<dynamic> Function() request,
+  Future<http.Response> _executeWithTimeout(
+    Future<http.Response> Function() request,
     NetworkRequestType requestType,
   ) async {
     final timeout = config.getTimeoutForRequestType(requestType);
@@ -209,35 +210,5 @@ mixin NetworkRetryMixin {
   void disposeRetryService() {
     _retryService?.dispose();
     _retryService = null;
-  }
-}
-
-/// Enhanced HTTP response with retry metadata
-class RetryResponse {
-  final dynamic response;
-  final int attemptsMade;
-  final Duration totalDuration;
-  final List<String> attemptErrors;
-
-  RetryResponse({
-    required this.response,
-    required this.attemptsMade,
-    required this.totalDuration,
-    required this.attemptErrors,
-  });
-
-  // Delegate to the wrapped response
-  String get body => response.body;
-  int get statusCode => response.statusCode;
-  Map<String, String> get headers => response.headers;
-  bool get isRedirect => response.isRedirect;
-  bool get persistentConnection => response.persistentConnection;
-  String? get reasonPhrase => response.reasonPhrase;
-  dynamic get request => response.request;
-
-  @override
-  String toString() {
-    return 'RetryResponse($statusCode, attempts: $attemptsMade, '
-        'duration: ${totalDuration.inMilliseconds}ms)';
   }
 }

@@ -102,12 +102,12 @@ class AudioPlayerService extends ChangeNotifier {
   DateTime? _sleepTimerStartTime;
   bool _isSleepTimerActive = false;
 
-  StreamSubscription? _positionSubscription;
-  StreamSubscription? _durationSubscription;
-  StreamSubscription? _playerStateSubscription;
-  StreamSubscription? _currentIndexSubscription;
-  StreamSubscription? _errorSubscription;
-  StreamSubscription? _commandSubscription;
+  StreamSubscription<Duration>? _positionSubscription;
+  StreamSubscription<Duration?>? _durationSubscription;
+  StreamSubscription<PlayerState>? _playerStateSubscription;
+  StreamSubscription<int?>? _currentIndexSubscription;
+  StreamSubscription<PlayerException>? _errorSubscription;
+  StreamSubscription<SystemCommand>? _commandSubscription;
 
   // Incremented whenever downloads of upcoming tracks start; an older run
   // stops, see _preloadUpcomingSongs()
@@ -129,7 +129,7 @@ class AudioPlayerService extends ChangeNotifier {
         _scrobbleQueue = scrobbleQueue ?? ScrobbleQueue(_api),
         _audioCache = audioCache ?? AudioCache() {
     _initializePlayer();
-    _scrobbleQueue.initialize();
+    unawaited(_scrobbleQueue.initialize());
   }
 
   /// Whether a skip is being carried out; the UI disables the skip buttons.
@@ -346,6 +346,8 @@ class AudioPlayerService extends ChangeNotifier {
 
   Future<void> playSong(Song song) async {
     _playlist = [song];
+    _playlistSource = 'song';
+    _sourceId = song.id;
     try {
       await _loadQueue(0);
     } catch (e) {
@@ -564,8 +566,8 @@ class AudioPlayerService extends ChangeNotifier {
 
   /// Bookkeeping once a track is playing.
   void _onTrackStarted() {
-    _scrobbleQueue.queueNowPlaying(_currentSong!.id);
-    _preloadUpcomingSongs();
+    unawaited(_scrobbleQueue.queueNowPlaying(_currentSong!.id));
+    unawaited(_preloadUpcomingSongs());
     unawaited(_saveCurrentState());
     notifyListeners();
   }
@@ -728,8 +730,8 @@ class AudioPlayerService extends ChangeNotifier {
         _currentSongStartTime != null &&
         !_currentSongScrobbled) {
       // Send scrobble submission with the timestamp when the song started playing (queued for reliability)
-      _scrobbleQueue.queueSubmission(_currentSong!.id,
-          playedAt: _currentSongStartTime!);
+      unawaited(_scrobbleQueue.queueSubmission(_currentSong!.id,
+          playedAt: _currentSongStartTime!));
 
       // Mark this play as scrobbled to prevent duplicate scrobbles
       _currentSongScrobbled = true;
@@ -834,18 +836,7 @@ class AudioPlayerService extends ChangeNotifier {
         index >= playlist.length) {
       return;
     }
-    final song = playlist[index];
-    final updated = Song(
-      id: song.id,
-      title: song.title,
-      artist: song.artist,
-      album: song.album,
-      albumId: song.albumId,
-      coverArt: song.coverArt,
-      duration: song.duration,
-      track: song.track,
-      contentType: song.contentType,
-      suffix: song.suffix,
+    final updated = playlist[index].copyWith(
       replayGainTrackGain: data.trackGain,
       replayGainAlbumGain: data.albumGain,
       replayGainTrackPeak: data.trackPeak,
@@ -1051,8 +1042,9 @@ class AudioPlayerService extends ChangeNotifier {
   void _onSleepTimerComplete() {
     debugPrint('Sleep timer expired - pausing playback');
 
-    // Pause the audio
-    pause();
+    unawaited(pause().catchError((Object e) {
+      debugPrint('Sleep timer could not pause playback: $e');
+    }));
 
     // Reset timer state
     _sleepTimer = null;
@@ -1071,16 +1063,18 @@ class AudioPlayerService extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    _positionSubscription?.cancel();
-    _durationSubscription?.cancel();
-    _playerStateSubscription?.cancel();
-    _currentIndexSubscription?.cancel();
-    _errorSubscription?.cancel();
-    _commandSubscription?.cancel();
+    unawaited(_positionSubscription?.cancel());
+    unawaited(_durationSubscription?.cancel());
+    unawaited(_playerStateSubscription?.cancel());
+    unawaited(_currentIndexSubscription?.cancel());
+    unawaited(_errorSubscription?.cancel());
+    unawaited(_commandSubscription?.cancel());
     _sleepTimer?.cancel();
     _persistence?.dispose();
     _scrobbleQueue.dispose();
-    _audioPlayer.dispose();
+    unawaited(_audioPlayer.dispose().catchError((Object e) {
+      debugPrint('[audio_player] Could not release the player: $e');
+    }));
     _position.dispose();
     super.dispose();
   }

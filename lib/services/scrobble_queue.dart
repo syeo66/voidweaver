@@ -200,10 +200,12 @@ class ScrobbleQueue {
       final queueJson = prefs.getString(_storageKey);
 
       if (queueJson != null) {
-        final List<dynamic> queueData = json.decode(queueJson);
+        final queueData = json.decode(queueJson) as List<dynamic>;
         _queue.clear();
-        _queue.addAll(
-            queueData.map((item) => ScrobbleRequest.fromJson(item)).toList());
+        _queue.addAll(queueData
+            .map((item) =>
+                ScrobbleRequest.fromJson(item as Map<String, dynamic>))
+            .toList());
         debugPrint('Loaded ${_queue.length} scrobble requests from storage');
       }
     } catch (e) {

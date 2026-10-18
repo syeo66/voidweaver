@@ -122,7 +122,7 @@ class _SearchScreenState extends State<SearchScreen>
                             icon: const Icon(Icons.clear),
                             onPressed: () {
                               _searchController.clear();
-                              _performSearch('');
+                              unawaited(_performSearch(''));
                             },
                           )
                         : null,

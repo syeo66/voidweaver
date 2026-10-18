@@ -28,8 +28,8 @@ class CacheEntry<T> {
       Map<String, dynamic> json, T Function(dynamic) fromJsonData) {
     return CacheEntry<T>(
       data: fromJsonData(json['data']),
-      expiresAt: DateTime.parse(json['expiresAt']),
-      key: json['key'],
+      expiresAt: DateTime.parse(json['expiresAt'] as String),
+      key: json['key'] as String,
     );
   }
 }
@@ -44,8 +44,8 @@ class ApiCache {
   @visibleForTesting
   ApiCache.forTesting();
 
-  final Map<String, CacheEntry> _memoryCache = {};
-  final Map<String, Completer> _ongoingRequests = {};
+  final Map<String, CacheEntry<Object?>> _memoryCache = {};
+  final Map<String, Completer<Object?>> _ongoingRequests = {};
   SharedPreferences? _prefs;
 
   /// Initialize persistent storage
@@ -170,7 +170,7 @@ class ApiCache {
     } catch (e) {
       debugPrint('Error reading persistent cache for $key: $e');
       // Remove corrupted entry
-      _prefs!.remove('cache_$key');
+      unawaited(_prefs!.remove('cache_$key'));
       return null;
     }
   }
@@ -195,7 +195,7 @@ class ApiCache {
   void clearEntry(String endpoint, [Map<String, String>? params]) {
     final key = _generateKey(endpoint, params);
     _memoryCache.remove(key);
-    _prefs?.remove('cache_$key');
+    unawaited(_prefs?.remove('cache_$key'));
     debugPrint('Cache CLEARED: $key');
   }
 
@@ -251,7 +251,7 @@ class ApiCache {
 
     for (final key in keysToRemove) {
       _memoryCache.remove(key);
-      _prefs?.remove('cache_$key');
+      unawaited(_prefs?.remove('cache_$key'));
     }
 
     if (keysToRemove.isNotEmpty) {

@@ -111,7 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.more_vert),
             onSelected: (value) {
               if (value == 'logout') {
-                context.read<AppState>().clearConfiguration();
+                unawaited(context.read<AppState>().clearConfiguration());
               } else if (value == 'settings') {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -228,12 +228,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showSleepTimerDialog(
       BuildContext context, AudioPlayerService playerService) {
-    showDialog(
+    unawaited(showDialog(
       context: context,
       builder: (BuildContext context) {
         return _SleepTimerDialog(playerService: playerService);
       },
-    );
+    ));
   }
 }
 

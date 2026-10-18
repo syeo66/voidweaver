@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/settings_service.dart';
@@ -87,7 +88,7 @@ class _SettingsContent extends StatelessWidget {
               groupValue: settingsService.themeMode,
               onChanged: (ThemeMode? value) {
                 if (value != null) {
-                  settingsService.setThemeMode(value);
+                  unawaited(settingsService.setThemeMode(value));
                 }
               },
               child: Column(
@@ -97,7 +98,7 @@ class _SettingsContent extends StatelessWidget {
                     subtitle: Text(_getThemeModeDescription(mode)),
                     leading: Radio<ThemeMode>(value: mode),
                     onTap: () {
-                      settingsService.setThemeMode(mode);
+                      unawaited(settingsService.setThemeMode(mode));
                     },
                   );
                 }).toList(),
@@ -162,7 +163,7 @@ class _SettingsContent extends StatelessWidget {
               groupValue: settingsService.replayGainMode,
               onChanged: (ReplayGainMode? value) {
                 if (value != null) {
-                  settingsService.setReplayGainMode(value);
+                  unawaited(settingsService.setReplayGainMode(value));
                   _refreshAudioVolume(context);
                 }
               },
@@ -173,7 +174,7 @@ class _SettingsContent extends StatelessWidget {
                     subtitle: Text(_getReplayGainModeDescription(mode)),
                     leading: Radio<ReplayGainMode>(value: mode),
                     onTap: () {
-                      settingsService.setReplayGainMode(mode);
+                      unawaited(settingsService.setReplayGainMode(mode));
                       _refreshAudioVolume(context);
                     },
                   );
@@ -203,7 +204,7 @@ class _SettingsContent extends StatelessWidget {
                   final validationError =
                       Validators.validateReplayGainPreamp(value);
                   if (validationError == null) {
-                    settingsService.setReplayGainPreamp(value);
+                    unawaited(settingsService.setReplayGainPreamp(value));
                     _refreshAudioVolume(context);
                   } else {
                     _showValidationError(context, validationError);
@@ -226,7 +227,8 @@ class _SettingsContent extends StatelessWidget {
                     const Text('Reduce volume to prevent audio distortion'),
                 value: settingsService.replayGainPreventClipping,
                 onChanged: (value) {
-                  settingsService.setReplayGainPreventClipping(value);
+                  unawaited(
+                      settingsService.setReplayGainPreventClipping(value));
                   _refreshAudioVolume(context);
                 },
               ),
@@ -250,7 +252,7 @@ class _SettingsContent extends StatelessWidget {
                   final validationError =
                       Validators.validateReplayGainFallbackGain(value);
                   if (validationError == null) {
-                    settingsService.setReplayGainFallbackGain(value);
+                    unawaited(settingsService.setReplayGainFallbackGain(value));
                     _refreshAudioVolume(context);
                   } else {
                     _showValidationError(context, validationError);
@@ -353,7 +355,8 @@ class _SettingsContent extends StatelessWidget {
                 final validationError =
                     Validators.validateScrobbleMinPlayTimeMinutes(value);
                 if (validationError == null) {
-                  settingsService.setScrobbleMinPlayTimeMinutes(value);
+                  unawaited(
+                      settingsService.setScrobbleMinPlayTimeMinutes(value));
                 } else {
                   _showValidationError(context, validationError);
                 }
@@ -384,7 +387,7 @@ class _SettingsContent extends StatelessWidget {
                 final validationError =
                     Validators.validateScrobbleThresholdPercent(value);
                 if (validationError == null) {
-                  settingsService.setScrobbleThresholdPercent(value);
+                  unawaited(settingsService.setScrobbleThresholdPercent(value));
                 } else {
                   _showValidationError(context, validationError);
                 }
@@ -406,7 +409,7 @@ class _SettingsContent extends StatelessWidget {
     final appState = context.read<AppState>();
     final audioPlayer = appState.audioPlayerService;
     if (audioPlayer != null) {
-      audioPlayer.refreshReplayGainVolume();
+      unawaited(audioPlayer.refreshReplayGainVolume());
     }
   }
 
@@ -543,12 +546,12 @@ class _SettingsContent extends StatelessWidget {
 
   void _showAdvancedNetworkSettings(
       BuildContext context, SettingsService settingsService) {
-    showDialog(
+    unawaited(showDialog(
       context: context,
       builder: (context) => AdvancedNetworkSettingsDialog(
         settingsService: settingsService,
       ),
-    );
+    ));
   }
 
   void _showNetworkConfigSuccess(BuildContext context, String message) {

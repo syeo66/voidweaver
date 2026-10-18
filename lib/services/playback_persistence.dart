@@ -42,13 +42,15 @@ class PersistedPlaybackState {
                 ?.map((s) => Song.fromJson(s as Map<String, dynamic>))
                 .toList() ??
             [],
-        currentIndex: json['currentIndex'] ?? 0,
-        currentPosition: Duration(milliseconds: json['currentPositionMs'] ?? 0),
-        isPlaying: json['isPlaying'] ?? false,
+        currentIndex: json['currentIndex'] as int? ?? 0,
+        currentPosition:
+            Duration(milliseconds: json['currentPositionMs'] as int? ?? 0),
+        isPlaying: json['isPlaying'] as bool? ?? false,
         lastUpdated: DateTime.fromMillisecondsSinceEpoch(
-            json['lastUpdated'] ?? DateTime.now().millisecondsSinceEpoch),
-        playlistSource: json['playlistSource'],
-        sourceId: json['sourceId'],
+            json['lastUpdated'] as int? ??
+                DateTime.now().millisecondsSinceEpoch),
+        playlistSource: json['playlistSource'] as String?,
+        sourceId: json['sourceId'] as String?,
       );
     } catch (e) {
       debugPrint('Failed to deserialize PlaybackState: $e');
@@ -158,7 +160,7 @@ class PlaybackPersistenceService {
     _positionSaveTimer = Timer(_positionSaveInterval, () {
       final pending = _pendingPositionState;
       _pendingPositionState = null;
-      if (pending != null) _writePlaybackState(pending);
+      if (pending != null) unawaited(_writePlaybackState(pending));
     });
   }
 
