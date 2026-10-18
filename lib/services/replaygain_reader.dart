@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
@@ -44,45 +45,60 @@ class ReplayGainReader {
     ReplayGainDebugLogger.instance.log(message);
   }
 
-  static Future<ReplayGainData> readFromUrl(String url) async {
+  /// Gives up on reading the tags over the network after this long, see
+  /// [readFromUrl].
+  static const Duration defaultUrlTimeout = Duration(seconds: 3);
+
+  /// Reads ReplayGain metadata from the start of the file at [url]. Playback
+  /// waits for this, so after [timeout] it gives up and returns no data (the
+  /// fallback gain applies) rather than hold it up on a stalled connection.
+  static Future<ReplayGainData> readFromUrl(String url,
+      {Duration timeout = defaultUrlTimeout}) async {
     try {
-      _log(
-          'Reading ReplayGain metadata from: ${ReplayGainDebugLogger.redact(url)}');
-
-      // Make a range request to get just the beginning of the file
-      final response = await http.get(
-        Uri.parse(url),
-        headers: {'Range': 'bytes=0-${_maxHeaderSize - 1}'},
-      );
-
-      if (response.statusCode != 206 && response.statusCode != 200) {
-        _log('Failed to fetch audio data: ${response.statusCode}');
-        return const ReplayGainData();
-      }
-
-      var bytes = response.bodyBytes;
-      if (bytes.isNotEmpty) {
-        _log(
-            'Received ${bytes.length} bytes, first 16 bytes: ${bytes.take(16).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
-        final required = requiredHeaderSize(bytes);
-        if (response.statusCode == 206 && required > bytes.length) {
-          _log('Metadata extends to $required bytes, fetching the rest');
-          final rest = await http.get(
-            Uri.parse(url),
-            headers: {'Range': 'bytes=${bytes.length}-${required - 1}'},
-          );
-          if (rest.statusCode == 206) {
-            bytes = Uint8List.fromList([...bytes, ...rest.bodyBytes]);
-          }
-        }
-        return _parseReplayGainFromBytes(bytes);
-      } else {
-        _log('Received empty response');
-        return const ReplayGainData();
-      }
+      return await _fetchFromUrl(url).timeout(timeout);
+    } on TimeoutException {
+      _log('Reading ReplayGain metadata timed out after $timeout');
+      return const ReplayGainData();
     } catch (e, stackTrace) {
       _log('Error reading ReplayGain metadata: $e');
       _log('Stack trace: $stackTrace');
+      return const ReplayGainData();
+    }
+  }
+
+  static Future<ReplayGainData> _fetchFromUrl(String url) async {
+    _log(
+        'Reading ReplayGain metadata from: ${ReplayGainDebugLogger.redact(url)}');
+
+    // Make a range request to get just the beginning of the file
+    final response = await http.get(
+      Uri.parse(url),
+      headers: {'Range': 'bytes=0-${_maxHeaderSize - 1}'},
+    );
+
+    if (response.statusCode != 206 && response.statusCode != 200) {
+      _log('Failed to fetch audio data: ${response.statusCode}');
+      return const ReplayGainData();
+    }
+
+    var bytes = response.bodyBytes;
+    if (bytes.isNotEmpty) {
+      _log(
+          'Received ${bytes.length} bytes, first 16 bytes: ${bytes.take(16).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      final required = requiredHeaderSize(bytes);
+      if (response.statusCode == 206 && required > bytes.length) {
+        _log('Metadata extends to $required bytes, fetching the rest');
+        final rest = await http.get(
+          Uri.parse(url),
+          headers: {'Range': 'bytes=${bytes.length}-${required - 1}'},
+        );
+        if (rest.statusCode == 206) {
+          bytes = Uint8List.fromList([...bytes, ...rest.bodyBytes]);
+        }
+      }
+      return _parseReplayGainFromBytes(bytes);
+    } else {
+      _log('Received empty response');
       return const ReplayGainData();
     }
   }

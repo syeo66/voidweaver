@@ -275,12 +275,14 @@ class AppState extends ChangeNotifier {
 
       if (serverUrl != null && username != null && password != null) {
         await configure(serverUrl, username, password);
+        return;
       }
     } catch (e) {
       debugPrint('Error loading secure credentials: $e');
-      // Fallback to check old SharedPreferences for migration
-      await _migrateFromSharedPreferences();
     }
+    // Not in secure storage: credentials saved by an old version may still be
+    // in SharedPreferences
+    await _migrateFromSharedPreferences();
   }
 
   /// Logs out: releases the services and removes the credentials and the

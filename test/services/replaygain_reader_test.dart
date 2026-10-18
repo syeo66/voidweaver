@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -271,6 +272,39 @@ void main() {
         settings.calculateVolumeAdjustment(trackGain: data.trackGain),
         closeTo(dbToLinear(-4.0), 1e-9),
       );
+    });
+  });
+
+  group('Reading from a URL', () {
+    Future<HttpServer> serve(Future<void> Function(HttpRequest) handler) async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => server.close(force: true));
+      server.listen(handler);
+      return server;
+    }
+
+    String urlOf(HttpServer server) => 'http://127.0.0.1:${server.port}/stream';
+
+    test('reads the tags the server returns', () async {
+      final server = await serve((request) async {
+        request.response
+            .add(id3v23(txxxFrame('REPLAYGAIN_TRACK_GAIN', '-6.5 dB')));
+        await request.response.close();
+      });
+
+      final data = await ReplayGainReader.readFromUrl(urlOf(server));
+      expect(data.trackGain, -6.5);
+    });
+
+    test('gives up with no data when the server does not answer', () async {
+      // Accepts the request but never responds, like a stalled connection
+      final server = await serve((_) => Completer<void>().future);
+
+      final stopwatch = Stopwatch()..start();
+      final data = await ReplayGainReader.readFromUrl(urlOf(server),
+          timeout: const Duration(milliseconds: 200));
+      expect(data.hasAnyData, isFalse);
+      expect(stopwatch.elapsed, lessThan(const Duration(seconds: 2)));
     });
   });
 }
