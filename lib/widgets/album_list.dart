@@ -4,6 +4,7 @@ import '../services/app_state.dart';
 import '../services/subsonic_api.dart';
 import '../services/audio_player_service.dart';
 import '../services/image_cache_manager.dart';
+import '../services/network_errors.dart';
 
 class AlbumList extends StatelessWidget {
   const AlbumList({super.key});
@@ -25,7 +26,7 @@ class AlbumList extends StatelessWidget {
               children: [
                 const Icon(Icons.error_outline, size: 64, color: Colors.red),
                 const SizedBox(height: 16),
-                Text('Error: ${appState.error}'),
+                Text(appState.error!),
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () => appState.loadAlbums(forceRefresh: true),
@@ -202,7 +203,8 @@ class _AlbumTileState extends State<AlbumTile> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to play album: ${e.toString()}'),
+            content: Text(NetworkErrorHelper.getErrorMessage(e,
+                context: 'Failed to play album')),
             backgroundColor: Colors.red,
           ),
         );
@@ -329,7 +331,8 @@ class _AlbumGridTileState extends State<AlbumGridTile> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to play album: ${e.toString()}'),
+            content: Text(NetworkErrorHelper.getErrorMessage(e,
+                context: 'Failed to play album')),
             backgroundColor: Colors.red,
           ),
         );

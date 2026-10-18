@@ -48,7 +48,7 @@ void main() {
     testWidgets('shows the error when no albums are loaded', (tester) async {
       await _pumpAlbumList(tester, _StubAppState(stubError: 'offline'));
 
-      expect(find.text('Error: offline'), findsOneWidget);
+      expect(find.text('offline'), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
     });
 
@@ -57,7 +57,7 @@ void main() {
           tester, _StubAppState(stubAlbums: [album], stubError: 'offline'));
 
       expect(find.text('Loaded Album'), findsOneWidget);
-      expect(find.text('Error: offline'), findsNothing);
+      expect(find.text('offline'), findsNothing);
     });
 
     testWidgets('keeps the loaded albums while refreshing', (tester) async {

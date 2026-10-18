@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/app_state.dart';
 import '../services/subsonic_api.dart';
+import '../services/network_errors.dart';
 
 class ArtistScreen extends StatefulWidget {
   const ArtistScreen({super.key});
@@ -44,7 +45,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
     } catch (e) {
       setState(() {
         _isLoadingArtists = false;
-        _errorMessage = 'Failed to load artists: $e';
+        _errorMessage = NetworkErrorHelper.getErrorMessage(e,
+            context: 'Failed to load artists');
       });
     }
   }
@@ -70,7 +72,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
     } catch (e) {
       setState(() {
         _isLoadingAlbums = false;
-        _errorMessage = 'Failed to load albums for ${artist.name}: $e';
+        _errorMessage = NetworkErrorHelper.getErrorMessage(e,
+            context: 'Failed to load albums for ${artist.name}');
       });
     }
   }
@@ -83,7 +86,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to play album: $e'),
+            content: Text(NetworkErrorHelper.getErrorMessage(e,
+                context: 'Failed to play album')),
             backgroundColor: Colors.red,
           ),
         );

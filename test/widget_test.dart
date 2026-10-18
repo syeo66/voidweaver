@@ -2,8 +2,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:voidweaver/main.dart';
+import 'package:voidweaver/services/app_state.dart';
 
 void main() {
   testWidgets('App can be instantiated without errors',
@@ -34,5 +37,31 @@ void main() {
     expect(app.theme, isNotNull);
     expect(app.darkTheme, isNotNull);
     expect(app.themeMode, equals(ThemeMode.system));
+  });
+
+  testWidgets('App follows the theme setting', (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({'themeMode': ThemeMode.dark.index});
+    await tester.pumpWidget(const MyApp());
+    // Initialization does real I/O, so let it run outside the fake clock
+    for (var i = 0;
+        i < 50 && find.byType(CircularProgressIndicator).evaluate().isNotEmpty;
+        i++) {
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+    }
+
+    ThemeMode themeMode() =>
+        tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode!;
+
+    // The saved setting applies once the app is initialized
+    expect(themeMode(), equals(ThemeMode.dark));
+
+    final appState = Provider.of<AppState>(
+        tester.element(find.byType(AppRouter)),
+        listen: false);
+    await appState.settingsService!.setThemeMode(ThemeMode.light);
+    await tester.pump();
+    expect(themeMode(), equals(ThemeMode.light));
   });
 }

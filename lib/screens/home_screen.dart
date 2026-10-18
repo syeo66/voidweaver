@@ -12,6 +12,7 @@ import '../widgets/error_boundary.dart';
 import 'settings_screen.dart';
 import 'search_screen.dart';
 import 'artist_screen.dart';
+import '../services/network_errors.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -73,7 +74,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       if (mounted) {
                         messenger.showSnackBar(
                           SnackBar(
-                            content: Text('Failed to play random songs: $e'),
+                            content: Text(NetworkErrorHelper.getErrorMessage(e,
+                                context: 'Failed to play random songs')),
                             backgroundColor: Colors.red,
                           ),
                         );

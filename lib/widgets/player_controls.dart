@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/audio_player_service.dart';
@@ -90,17 +91,35 @@ class PlayerControls extends StatelessWidget {
   }
 }
 
+/// Builds with the playback position, which the service publishes separately
+/// from its other state, and the track's duration
+class _ProgressBuilder extends StatelessWidget {
+  final Widget Function(
+          BuildContext context, ({Duration current, Duration total}) progress)
+      builder;
+
+  const _ProgressBuilder({required this.builder});
+
+  @override
+  Widget build(BuildContext context) {
+    final service = context.read<AudioPlayerService>();
+    final total =
+        context.select<AudioPlayerService, Duration>((s) => s.totalDuration);
+    return ValueListenableBuilder<Duration>(
+      valueListenable: service.position,
+      builder: (context, current, child) =>
+          builder(context, (current: current, total: total)),
+    );
+  }
+}
+
 class _ProgressSection extends StatelessWidget {
   const _ProgressSection();
 
   @override
   Widget build(BuildContext context) {
-    return Selector<AudioPlayerService, ({Duration current, Duration total})>(
-      selector: (context, service) => (
-        current: service.currentPosition,
-        total: service.totalDuration,
-      ),
-      builder: (context, progress, child) {
+    return _ProgressBuilder(
+      builder: (context, progress) {
         final double value = progress.total.inMilliseconds > 0
             ? progress.current.inMilliseconds / progress.total.inMilliseconds
             : 0;
@@ -143,12 +162,8 @@ class _TimeLabels extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Selector<AudioPlayerService, ({Duration current, Duration total})>(
-      selector: (context, service) => (
-        current: service.currentPosition,
-        total: service.totalDuration,
-      ),
-      builder: (context, progress, child) {
+    return _ProgressBuilder(
+      builder: (context, progress) {
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: Row(
@@ -181,13 +196,10 @@ class _SleepTimerIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Selector<AudioPlayerService, ({bool isActive, Duration? remaining})>(
-      selector: (context, service) => (
-        isActive: service.isSleepTimerActive,
-        remaining: service.sleepTimerRemaining,
-      ),
-      builder: (context, timer, child) {
-        if (!timer.isActive) {
+    return Selector<AudioPlayerService, bool>(
+      selector: (context, service) => service.isSleepTimerActive,
+      builder: (context, isActive, child) {
+        if (!isActive) {
           return const SizedBox.shrink();
         }
 
@@ -199,27 +211,59 @@ class _SleepTimerIndicator extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
           ),
-          child: Row(
+          child: const Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.bedtime,
                 size: 16,
                 color: Colors.orange,
               ),
-              const SizedBox(width: 8),
-              Text(
-                'Sleep timer: ${timer.remaining != null ? _formatDuration(timer.remaining!) : "0:00"}',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.orange,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              SizedBox(width: 8),
+              _SleepTimerCountdown(),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+/// The sleep timer's remaining time, updated every second while it's shown
+class _SleepTimerCountdown extends StatefulWidget {
+  const _SleepTimerCountdown();
+
+  @override
+  State<_SleepTimerCountdown> createState() => _SleepTimerCountdownState();
+}
+
+class _SleepTimerCountdownState extends State<_SleepTimerCountdown> {
+  Timer? _updateTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _updateTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _updateTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining = context.read<AudioPlayerService>().sleepTimerRemaining;
+    return Text(
+      'Sleep timer: ${remaining != null ? _formatDuration(remaining) : "0:00"}',
+      style: const TextStyle(
+        fontSize: 12,
+        color: Colors.orange,
+        fontWeight: FontWeight.w500,
+      ),
     );
   }
 }

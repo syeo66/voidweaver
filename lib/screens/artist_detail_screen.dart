@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/app_state.dart';
 import '../services/subsonic_api.dart';
+import '../services/network_errors.dart';
 
 class ArtistDetailScreen extends StatefulWidget {
   final Artist artist;
@@ -47,7 +48,8 @@ class _ArtistDetailScreenState extends State<ArtistDetailScreen> {
     } catch (e) {
       setState(() {
         _isLoadingAlbums = false;
-        _errorMessage = 'Failed to load albums for ${widget.artist.name}: $e';
+        _errorMessage = NetworkErrorHelper.getErrorMessage(e,
+            context: 'Failed to load albums for ${widget.artist.name}');
       });
     }
   }
@@ -60,7 +62,8 @@ class _ArtistDetailScreenState extends State<ArtistDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to play album: $e'),
+            content: Text(NetworkErrorHelper.getErrorMessage(e,
+                context: 'Failed to play album')),
             backgroundColor: Colors.red,
           ),
         );

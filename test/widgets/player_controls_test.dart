@@ -152,6 +152,27 @@ void main() {
     expect(buttonWithIcon(tester, Icons.skip_next).onPressed, isNull);
   });
 
+  testWidgets('follows the position without notifying the service',
+      (tester) async {
+    await pumpControls(tester);
+    await playAlbum(tester);
+    var notifications = 0;
+    service.addListener(() => notifications++);
+
+    // The service subscribed outside the fake clock (in setUp)
+    await tester.runAsync(() async {
+      player.simulatePositionChange(const Duration(seconds: 30));
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pump();
+
+    expect(find.text('0:30'), findsOneWidget);
+    expect(tester.widget<Slider>(find.byType(Slider)).value,
+        closeTo(30 / 180, 0.001));
+    // Only the position listenable changed, so nothing else rebuilt
+    expect(notifications, 0);
+  });
+
   testWidgets('moving the slider seeks', (tester) async {
     await pumpControls(tester);
     await playAlbum(tester);

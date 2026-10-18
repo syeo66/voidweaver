@@ -10,6 +10,7 @@ import 'settings_service.dart';
 import 'playback_persistence.dart';
 import 'replaygain_debug_logger.dart';
 import 'scrobble_queue.dart';
+import 'network_errors.dart';
 
 enum SyncStatus {
   idle,
@@ -77,6 +78,8 @@ class AppState extends ChangeNotifier {
     _settingsService = SettingsService();
     await _settingsService!.initialize();
     _settingsService!.addListener(_applyNetworkConfig);
+    // The app's theme comes from the settings
+    notifyListeners();
 
     await ReplayGainDebugLogger.instance.initialize();
 
@@ -146,8 +149,8 @@ class AppState extends ChangeNotifier {
       _startBackgroundSync();
       notifyListeners();
     } catch (e) {
-      _configurationError = e.toString();
-      _error = e.toString();
+      _configurationError = NetworkErrorHelper.getErrorMessage(e);
+      _error = _configurationError;
       _configurationLoadingState = LoadingState.error;
       _isConfigured = false;
       _isLoading = false;
@@ -185,8 +188,9 @@ class AppState extends ChangeNotifier {
       _albums = await _api!.getAlbumList(forceRefresh: forceRefresh);
       _albumLoadingState = LoadingState.success;
     } catch (e) {
-      _error = e.toString();
-      _albumError = e.toString();
+      _error = NetworkErrorHelper.getErrorMessage(e,
+          context: 'Failed to load albums');
+      _albumError = _error;
       _albumLoadingState = LoadingState.error;
     } finally {
       _isLoading = false;

@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../services/app_state.dart';
 import '../services/subsonic_api.dart';
 import 'artist_detail_screen.dart';
+import '../services/network_errors.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -68,7 +69,8 @@ class _SearchScreenState extends State<SearchScreen>
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = 'Search failed: ${e.toString()}';
+          _errorMessage =
+              NetworkErrorHelper.getErrorMessage(e, context: 'Search failed');
         });
       }
     }
@@ -346,7 +348,9 @@ class _SearchScreenState extends State<SearchScreen>
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error playing album: $e')),
+              SnackBar(
+                  content: Text(NetworkErrorHelper.getErrorMessage(e,
+                      context: 'Failed to play album'))),
             );
           }
         }
@@ -383,7 +387,9 @@ class _SearchScreenState extends State<SearchScreen>
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error playing song: $e')),
+              SnackBar(
+                  content: Text(NetworkErrorHelper.getErrorMessage(e,
+                      context: 'Failed to play song'))),
             );
           }
         }

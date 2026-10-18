@@ -8,6 +8,7 @@ import 'replaygain_debug_logger.dart';
 import 'playback_persistence.dart';
 import 'scrobble_queue.dart';
 import 'audio_cache.dart';
+import 'network_errors.dart';
 
 enum PlaybackState {
   stopped,
@@ -52,7 +53,9 @@ class AudioPlayerService extends ChangeNotifier {
   PlaybackState _playbackState = PlaybackState.stopped;
   List<Song> _playlist = [];
   int _currentIndex = 0;
-  Duration _currentPosition = Duration.zero;
+  // Changes several times a second, so it has its own listenable ([position])
+  // instead of notifying the service's listeners
+  final ValueNotifier<Duration> _position = ValueNotifier(Duration.zero);
   Duration _totalDuration = Duration.zero;
   Song? _currentSong;
 
@@ -136,6 +139,15 @@ class AudioPlayerService extends ChangeNotifier {
   List<Song> get playlist => _playlist;
   int get currentIndex => _currentIndex;
   Duration get currentPosition => _currentPosition;
+
+  /// The playback position. Listen to this for the position; the service
+  /// itself doesn't notify its listeners when only the position changes.
+  ValueListenable<Duration> get position => _position;
+  Duration get _currentPosition => _position.value;
+  set _currentPosition(Duration value) {
+    if (!_disposed) _position.value = value;
+  }
+
   Duration get totalDuration => _totalDuration;
   Song? get currentSong => _currentSong;
   bool get hasNext => _currentIndex < _playlist.length - 1;
@@ -155,9 +167,6 @@ class AudioPlayerService extends ChangeNotifier {
     return remaining.isNegative ? Duration.zero : remaining;
   }
 
-  // Position stream for real-time updates
-  Stream<Duration> get onPositionChanged => _audioPlayer.positionStream;
-
   void _initializePlayer() {
     _positionSubscription = _audioPlayer.positionStream.listen((position) {
       _currentPosition = position;
@@ -165,7 +174,6 @@ class AudioPlayerService extends ChangeNotifier {
         _scrobbleCurrentSongIfEligible();
         _schedulePositionSave();
       }
-      notifyListeners();
     });
 
     _durationSubscription = _audioPlayer.durationStream.listen((duration) {
@@ -302,7 +310,7 @@ class AudioPlayerService extends ChangeNotifier {
             'Album ${album.name} has no songs, trying to fetch from API...');
         songs = (await _api.getAlbum(album.id)).songs;
       }
-      if (songs.isEmpty) throw Exception('Album has no songs');
+      if (songs.isEmpty) throw const UserFacingException('Album has no songs');
 
       debugPrint('Playing album: ${album.name} with ${songs.length} songs');
       _playlist = List.of(songs);
@@ -311,7 +319,7 @@ class AudioPlayerService extends ChangeNotifier {
       await _loadQueue(0);
     } catch (e) {
       _onLoadFailed('Failed to play album: $e');
-      throw Exception('Failed to play album: $e');
+      rethrow;
     }
   }
 
@@ -321,7 +329,9 @@ class AudioPlayerService extends ChangeNotifier {
       notifyListeners();
 
       final songs = await _api.getRandomSongs(count);
-      if (songs.isEmpty) throw Exception('No random songs available');
+      if (songs.isEmpty) {
+        throw const UserFacingException('No random songs available');
+      }
 
       debugPrint('Playing random songs: ${songs.length} songs loaded');
       _playlist = List.of(songs);
@@ -330,7 +340,7 @@ class AudioPlayerService extends ChangeNotifier {
       await _loadQueue(0);
     } catch (e) {
       _onLoadFailed('Failed to play random songs: $e');
-      throw Exception('Failed to play random songs: $e');
+      rethrow;
     }
   }
 
@@ -340,7 +350,7 @@ class AudioPlayerService extends ChangeNotifier {
       await _loadQueue(0);
     } catch (e) {
       _onLoadFailed('Failed to play song: $e');
-      throw Exception('Failed to play song: $e');
+      rethrow;
     }
   }
 
@@ -1071,6 +1081,7 @@ class AudioPlayerService extends ChangeNotifier {
     _persistence?.dispose();
     _scrobbleQueue.dispose();
     _audioPlayer.dispose();
+    _position.dispose();
     super.dispose();
   }
 }

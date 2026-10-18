@@ -48,6 +48,8 @@ State is managed with Provider. Services take optional dependencies (`Voidweaver
 - Check `mounted` after `await` in widgets.
 - Screens choose layouts with `MediaQuery.of(context).orientation`, using `_buildPortraitLayout()` / `_buildLandscapeLayout()`. Test both orientations when changing a screen.
 - Wrap independent screen sections in `.withErrorBoundary()`.
+- Let exceptions keep their type (rethrow rather than wrapping them in `Exception('...: $e')`) and show them with `NetworkErrorHelper.getErrorMessage(e, context: '...')`, never with `toString()`. Throw `UserFacingException` for errors whose message is meant for the user.
+- `AudioPlayerService` doesn't notify its listeners for position updates (several a second). Widgets that show the position listen to `AudioPlayerService.position`.
 
 ## Playback internals
 

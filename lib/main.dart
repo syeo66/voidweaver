@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/app_state.dart';
 import 'services/error_handler.dart';
+import 'services/settings_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'widgets/error_boundary.dart';
@@ -52,9 +53,14 @@ class MyApp extends StatelessWidget {
       },
       child: ChangeNotifierProvider(
         create: (context) => AppState(),
-        child: Consumer<AppState>(
-          builder: (context, appState, child) {
-            return MaterialApp(
+        // Rebuilds only when the settings change, not on every AppState
+        // change; the settings exist once AppState is initialized
+        child: Selector<AppState, SettingsService?>(
+          selector: (context, appState) => appState.settingsService,
+          builder: (context, settingsService, child) => ListenableBuilder(
+            listenable: Listenable.merge(
+                [if (settingsService != null) settingsService]),
+            builder: (context, child) => MaterialApp(
               title: 'Voidweaver',
               theme: ThemeData(
                 primarySwatch: Colors.deepPurple,
@@ -66,13 +72,12 @@ class MyApp extends StatelessWidget {
                 visualDensity: VisualDensity.adaptivePlatformDensity,
                 brightness: Brightness.dark,
               ),
-              themeMode:
-                  appState.settingsService?.themeMode ?? ThemeMode.system,
+              themeMode: settingsService?.themeMode ?? ThemeMode.system,
               home: const AppRouter().withErrorBoundary(
                 errorMessage: 'Failed to load the main application screen.',
               ),
-            );
-          },
+            ),
+          ),
         ),
       ),
     );

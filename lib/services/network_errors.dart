@@ -1,11 +1,40 @@
 import 'dart:io';
+import 'package:xml/xml.dart';
 import 'network_config.dart';
+import 'subsonic_api.dart';
 
-/// Helper class for converting network exceptions to user-friendly messages
+/// An error whose message can be shown to the user as it is, e.g. an album
+/// without songs.
+class UserFacingException implements Exception {
+  final String message;
+
+  const UserFacingException(this.message);
+
+  @override
+  String toString() => message;
+}
+
+/// Helper class for converting exceptions to user-friendly messages
 class NetworkErrorHelper {
-  /// Convert any network-related exception to a user-friendly message
+  /// Converts [error] to a message for the user, prefixed with [context]
+  /// (e.g. "Failed to play album"). Show errors through this rather than
+  /// their `toString()`.
   static String getErrorMessage(Object error, {String? context}) {
     final baseContext = context != null ? '$context: ' : '';
+
+    if (error is UserFacingException) {
+      return '$baseContext${error.message}';
+    }
+
+    if (error is SubsonicException) {
+      return error.isAuthError
+          ? '${baseContext}Wrong username or password.'
+          : '${baseContext}The server reported an error: ${error.message}';
+    }
+
+    if (error is ArgumentError && error.message is String) {
+      return '$baseContext${error.message}';
+    }
 
     if (error is NetworkTimeoutException) {
       return _getTimeoutMessage(error, baseContext);
@@ -23,6 +52,14 @@ class NetworkErrorHelper {
       return _getHttpExceptionMessage(error, baseContext);
     }
 
+    if (error is TlsException) {
+      return '${baseContext}Secure connection failed. Please check that the server has a valid certificate.';
+    }
+
+    if (error is XmlException) {
+      return '${baseContext}The server sent an unexpected response. Please check your server URL.';
+    }
+
     // Handle generic timeout errors
     final errorString = error.toString().toLowerCase();
     if (errorString.contains('timeout') || errorString.contains('timed out')) {
@@ -36,8 +73,7 @@ class NetworkErrorHelper {
       return '${baseContext}Unable to connect to server. Please check your internet connection.';
     }
 
-    // Generic network error
-    return '${baseContext}Network error occurred. Please try again.';
+    return '${baseContext}Something went wrong. Please try again.';
   }
 
   static String _getTimeoutMessage(

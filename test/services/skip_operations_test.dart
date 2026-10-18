@@ -3,6 +3,8 @@ import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/audio_player_service.dart';
+import 'package:voidweaver/services/network_config.dart';
+import 'package:voidweaver/services/network_errors.dart';
 import 'package:voidweaver/services/settings_service.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 
@@ -81,6 +83,27 @@ void main() {
   tearDown(() async {
     service.dispose();
     await player.dispose();
+  });
+
+  group('starting playback', () {
+    test('passes on the error of a failed load unchanged', () async {
+      when(mockApi.getRandomSongs(any)).thenThrow(
+          const NetworkConnectionException('offline', attemptsMade: 3));
+
+      await expectLater(service.playRandomSongs(),
+          throwsA(isA<NetworkConnectionException>()));
+      expect(service.playbackState, PlaybackState.stopped);
+    });
+
+    test('reports an album without songs with a message for the user',
+        () async {
+      when(mockApi.getAlbum('album1')).thenAnswer((_) async => album(0));
+
+      await expectLater(
+          service.playAlbum(album(0)),
+          throwsA(isA<UserFacingException>()
+              .having((e) => e.message, 'message', 'Album has no songs')));
+    });
   });
 
   group('next()', () {

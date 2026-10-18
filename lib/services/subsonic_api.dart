@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -6,6 +7,7 @@ import 'package:http_plus/http_plus.dart' as http_plus;
 import 'package:xml/xml.dart';
 import 'api_cache.dart';
 import 'network_config.dart';
+import 'network_errors.dart';
 import 'network_retry.dart';
 import 'replaygain_debug_logger.dart';
 import '../utils/redact.dart';
@@ -132,7 +134,8 @@ class SubsonicApi {
         }
         return parseResponse(responseBody);
       } else {
-        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+        // Not the body: it can be a whole HTML error page
+        throw HttpException('HTTP ${response.statusCode}');
       }
     } on SubsonicException {
       rethrow;
@@ -140,18 +143,26 @@ class SubsonicApi {
       if (kDebugMode) {
         debugPrint(redactCredentials('Request timeout: $uri - $e'));
       }
-      throw Exception(
-          'Request timed out after ${e.attemptsMade} attempts: ${e.message}');
+      rethrow;
     } on NetworkConnectionException catch (e) {
       if (kDebugMode) {
         debugPrint(redactCredentials('Connection error: $uri - $e'));
       }
-      throw Exception(
-          'Connection failed after ${e.attemptsMade} attempts: ${e.message}');
+      rethrow;
+    } on HttpException catch (e) {
+      // Without its URL, which carries the credentials
+      throw HttpException(e.message);
+    } on SocketException {
+      rethrow;
+    } on TlsException {
+      rethrow;
+    } on XmlException {
+      rethrow;
     } catch (e) {
       if (kDebugMode) {
         debugPrint(redactCredentials('Network request failed: $uri - $e'));
       }
+      // Other errors (e.g. the client's) can contain the request URL
       throw Exception(redactCredentials('Network error: $e'));
     }
   }
@@ -222,7 +233,7 @@ class SubsonicApi {
           if (albumElements.isEmpty) {
             // Debug: log the full response to understand the structure
             debugPrint('getAlbum response for ID $id: ${doc.toXmlString()}');
-            throw Exception('Album not found: $id');
+            throw const UserFacingException('Album not found');
           }
           return Album.fromXml(albumElements.first);
         } catch (e) {

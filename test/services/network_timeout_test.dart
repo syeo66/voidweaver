@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:xml/xml.dart';
 
 import 'package:voidweaver/services/network_config.dart';
 import 'package:voidweaver/services/network_errors.dart';
 import 'package:voidweaver/services/settings_service.dart';
+import 'package:voidweaver/services/subsonic_api.dart';
 
 void main() {
   group('NetworkConfig', () {
@@ -159,6 +161,45 @@ void main() {
 
       expect(message, contains('Server refused connection'));
       expect(message, contains('server URL'));
+    });
+
+    test('should explain wrong credentials', () {
+      final message = NetworkErrorHelper.getErrorMessage(
+          const SubsonicException(40, 'Wrong username or password'),
+          context: 'Login failed');
+
+      expect(message, 'Login failed: Wrong username or password.');
+    });
+
+    test('should show the server\'s message for other Subsonic errors', () {
+      final message = NetworkErrorHelper.getErrorMessage(
+          const SubsonicException(70, 'Album not found'));
+
+      expect(message, contains('Album not found'));
+    });
+
+    test('should show user-facing messages as they are', () {
+      final message = NetworkErrorHelper.getErrorMessage(
+          const UserFacingException('Album has no songs'),
+          context: 'Failed to play album');
+
+      expect(message, 'Failed to play album: Album has no songs');
+    });
+
+    test('should point to the server URL for responses that aren\'t XML', () {
+      final message = NetworkErrorHelper.getErrorMessage(
+          XmlParserException('Expected a single root element'));
+
+      expect(message, contains('server URL'));
+      expect(message, isNot(contains('XmlParserException')));
+    });
+
+    test('should not show the type of unknown errors', () {
+      final message = NetworkErrorHelper.getErrorMessage(StateError('boom'),
+          context: 'Failed to play song');
+
+      expect(message,
+          'Failed to play song: Something went wrong. Please try again.');
     });
 
     test('should provide suggestions based on error type', () {
