@@ -12,7 +12,6 @@ Three caches keep the app fast and usable offline. All of them can be cleared fr
 | `getAlbum`, `getArtistAlbums` | 10 min | yes |
 | `getArtists` | 15 min | yes |
 | `search` | 5 min | yes |
-| `getRandomSongs` | 1 min | no |
 
 - **Keys** are the endpoint plus sorted query parameters, e.g. `getAlbumList2?size=500&type=recent`.
 - **Deduplication**: concurrent identical calls share one request.
@@ -20,7 +19,7 @@ Three caches keep the app fast and usable offline. All of them can be cleared fr
 - **Forced refresh**: `getOrFetch(forceRefresh: true)` fetches even if the entry hasn't expired, and still falls back to it offline. Pull-to-refresh on the album list uses it (`getAlbumList(forceRefresh: true)`).
 - **Invalidation**: `invalidateAlbumCache()`, `invalidateArtistCache()` and `invalidateSearchCache()` clear by prefix.
 
-`getRandomSongs` isn't persisted and expires quickly, so each shuffle gets a fresh pick from subsoxy.
+`getRandomSongs` isn't cached, so each shuffle gets a fresh pick from subsoxy.
 
 ## Audio files (Media3 cache)
 

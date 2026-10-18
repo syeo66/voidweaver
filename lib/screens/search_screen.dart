@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -20,6 +21,10 @@ class _SearchScreenState extends State<SearchScreen>
   bool _isLoading = false;
   String _errorMessage = '';
   late TabController _tabController;
+  // Runs the search once typing pauses, see _onQueryChanged()
+  Timer? _debounce;
+  // Incremented for every search; a response to an older one is dropped
+  int _searchGeneration = 0;
 
   @override
   void initState() {
@@ -29,16 +34,27 @@ class _SearchScreenState extends State<SearchScreen>
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.dispose();
     _tabController.dispose();
     super.dispose();
   }
 
+  void _onQueryChanged(String query) {
+    _debounce?.cancel();
+    _debounce =
+        Timer(const Duration(milliseconds: 500), () => _performSearch(query));
+  }
+
   Future<void> _performSearch(String query) async {
+    _debounce?.cancel();
+    final generation = ++_searchGeneration;
     if (query.trim().isEmpty) {
       setState(() {
         _searchResult = null;
         _errorMessage = '';
+        // A search still running is dropped, see _searchGeneration
+        _isLoading = false;
       });
       return;
     }
@@ -53,7 +69,7 @@ class _SearchScreenState extends State<SearchScreen>
       final api = appState.api;
       if (api != null) {
         final result = await api.search(query.trim());
-        if (mounted) {
+        if (mounted && generation == _searchGeneration) {
           setState(() {
             _searchResult = result;
             _isLoading = false;
@@ -66,7 +82,7 @@ class _SearchScreenState extends State<SearchScreen>
         }
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && generation == _searchGeneration) {
         setState(() {
           _isLoading = false;
           _errorMessage =
@@ -114,14 +130,7 @@ class _SearchScreenState extends State<SearchScreen>
                     filled: true,
                     fillColor: Theme.of(context).colorScheme.surface,
                   ),
-                  onChanged: (value) {
-                    // Debounce search to avoid too many requests
-                    Future.delayed(const Duration(milliseconds: 500), () {
-                      if (_searchController.text == value) {
-                        _performSearch(value);
-                      }
-                    });
-                  },
+                  onChanged: _onQueryChanged,
                   onSubmitted: _performSearch,
                 ),
               ),

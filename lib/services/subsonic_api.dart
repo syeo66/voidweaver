@@ -248,26 +248,14 @@ class SubsonicApi {
     );
   }
 
+  /// A fresh pick of random songs on every call. Not cached: subsoxy weights
+  /// each pick by the listening history, so a repeated call must reach it.
   Future<List<Song>> getRandomSongs([int count = 50]) async {
-    return await _cache.getOrFetch<List<Song>>(
-      'getRandomSongs',
-      {'size': count.toString()},
-      () async {
-        final doc =
-            await _makeRequest('getRandomSongs', {'size': count.toString()});
-        final songs = <Song>[];
-
-        final songElements = doc.findAllElements('song');
-        for (final element in songElements) {
-          songs.add(Song.fromXml(element));
-        }
-
-        return songs;
-      },
-      cacheDuration:
-          const Duration(minutes: 1), // Random songs cache for shorter time
-      usePersistentCache: false, // Don't persist random songs
-    );
+    final doc =
+        await _makeRequest('getRandomSongs', {'size': count.toString()});
+    return [
+      for (final element in doc.findAllElements('song')) Song.fromXml(element)
+    ];
   }
 
   String getStreamUrl(String id) {
