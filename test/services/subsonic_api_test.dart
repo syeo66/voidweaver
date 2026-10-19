@@ -125,6 +125,31 @@ void main() {
     });
   });
 
+  group('SubsonicApi.libraryVersionFrom', () {
+    String? versionOf(String scanStatus) =>
+        SubsonicApi.libraryVersionFrom(SubsonicApi.parseResponse(
+            '<subsonic-response xmlns="http://subsonic.org/restapi" '
+            'status="ok" version="1.16.1">$scanStatus</subsonic-response>'));
+
+    test('combines the last scan and the song count', () {
+      expect(
+          versionOf('<scanStatus scanning="false" count="1234" '
+              'folderCount="12" lastScan="2026-10-19T08:00:00Z"/>'),
+          '2026-10-19T08:00:00Z/1234');
+    });
+
+    test('is unknown while scanning', () {
+      expect(
+          versionOf('<scanStatus scanning="true" count="1000" '
+              'lastScan="2026-10-19T08:00:00Z"/>'),
+          isNull);
+    });
+
+    test('is unknown without the last scan', () {
+      expect(versionOf('<scanStatus scanning="false" count="1234"/>'), isNull);
+    });
+  });
+
   group('SubsonicApi.parseResponse', () {
     test('returns the document for an ok response', () {
       final doc = SubsonicApi.parseResponse(

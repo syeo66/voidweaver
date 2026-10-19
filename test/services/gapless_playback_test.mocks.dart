@@ -153,6 +153,15 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
       ) as _i5.Future<List<_i3.Album>>);
 
   @override
+  _i5.Future<String?> getLibraryVersion() => (super.noSuchMethod(
+        Invocation.method(
+          #getLibraryVersion,
+          [],
+        ),
+        returnValue: _i5.Future<String?>.value(),
+      ) as _i5.Future<String?>);
+
+  @override
   _i5.Future<_i3.Album> getAlbum(String? id) => (super.noSuchMethod(
         Invocation.method(
           #getAlbum,

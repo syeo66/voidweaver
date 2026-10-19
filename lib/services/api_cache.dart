@@ -9,10 +9,15 @@ class CacheEntry<T> {
   final DateTime expiresAt;
   final String key;
 
+  /// The version of the server's data this was fetched at, see
+  /// [ApiCache.getOrFetch]
+  final String? version;
+
   CacheEntry({
     required this.data,
     required this.expiresAt,
     required this.key,
+    this.version,
   });
 
   bool get isExpired => DateTime.now().isAfter(expiresAt);
@@ -22,6 +27,7 @@ class CacheEntry<T> {
         'data': data,
         'expiresAt': expiresAt.toIso8601String(),
         'key': key,
+        if (version != null) 'version': version,
       };
 
   factory CacheEntry.fromJson(
@@ -30,6 +36,7 @@ class CacheEntry<T> {
       data: fromJsonData(json['data']),
       expiresAt: DateTime.parse(json['expiresAt'] as String),
       key: json['key'] as String,
+      version: json['version'] as String?,
     );
   }
 }
@@ -74,6 +81,11 @@ class ApiCache {
   ///
   /// With [forceRefresh] the data is fetched even if the cached entry hasn't
   /// expired yet; it's still the fallback if the fetch fails.
+  ///
+  /// [version], if given, is a cheap request for the version of the data on
+  /// the server. An expired entry fetched at the same version is kept for
+  /// another [cacheDuration] instead of being fetched again. A null version
+  /// means unknown, and the data is fetched.
   Future<T> getOrFetch<T>(
     String endpoint,
     Map<String, String>? params,
@@ -83,6 +95,7 @@ class ApiCache {
     bool forceRefresh = false,
     Object? Function(T data)? toJson,
     T Function(dynamic json)? fromJson,
+    Future<String?> Function()? version,
   }) async {
     final key = _generateKey(endpoint, params);
 
@@ -122,20 +135,42 @@ class ApiCache {
     _ongoingRequests[key] = completer;
 
     try {
-      debugPrint('Cache MISS: $key');
-      final result = await fetcher();
+      // Asked before fetching, so a change during the fetch shows up as a
+      // new version next time
+      final currentVersion = await version?.call();
+      final cached = memoryCached ?? persistentCached;
+      final T result;
+      if (!forceRefresh &&
+          currentVersion != null &&
+          cached != null &&
+          cached.version == currentVersion) {
+        debugPrint('Cache RENEWED (unchanged on the server): $key');
+        result = cached.data as T;
+        // Only in memory: rewriting the persistent entry just for its expiry
+        // isn't worth it. After a restart the version is checked again.
+        _memoryCache[key] = CacheEntry<T>(
+          data: result,
+          expiresAt: DateTime.now().add(cacheDuration),
+          key: key,
+          version: currentVersion,
+        );
+      } else {
+        debugPrint('Cache MISS: $key');
+        result = await fetcher();
 
-      // Store in memory cache
-      final entry = CacheEntry<T>(
-        data: result,
-        expiresAt: DateTime.now().add(cacheDuration),
-        key: key,
-      );
-      _memoryCache[key] = entry;
+        // Store in memory cache
+        final entry = CacheEntry<T>(
+          data: result,
+          expiresAt: DateTime.now().add(cacheDuration),
+          key: key,
+          version: currentVersion,
+        );
+        _memoryCache[key] = entry;
 
-      // Store in persistent cache if enabled
-      if (usePersistentCache) {
-        await _setPersistentCache(key, entry, toJson);
+        // Store in persistent cache if enabled
+        if (usePersistentCache) {
+          await _setPersistentCache(key, entry, toJson);
+        }
       }
 
       completer.complete(result);

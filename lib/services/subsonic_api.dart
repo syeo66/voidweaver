@@ -201,31 +201,66 @@ class SubsonicApi {
 
   /// All albums, most recently added first, fetched page by page. With
   /// [forceRefresh] they're fetched from the server even if the cached list
-  /// hasn't expired yet.
+  /// hasn't expired yet. Otherwise an expired list is only fetched again if
+  /// the server scanned the library since, see [getLibraryVersion].
   Future<List<Album>> getAlbumList({bool forceRefresh = false}) async {
     return await _cache.getOrFetch<List<Album>>(
       'getAlbumList2',
-      {'type': 'recent', 'size': '$_albumPageSize'},
-      () => fetchAllAlbumPages((offset) async {
-        final doc = await _makeRequest(
-            'getAlbumList2',
-            {
-              'type': 'recent',
-              'size': '$_albumPageSize',
-              'offset': '$offset',
-            },
-            NetworkRequestType.metadata);
-        return [
-          for (final element in doc.findAllElements('album'))
-            Album.fromXml(element)
-        ];
-      }),
+      {'type': 'newest', 'size': '$_albumPageSize'},
+      () {
+        // The list used to be fetched sorted by last play (type=recent)
+        _cache.clearEntry(
+            'getAlbumList2', {'type': 'recent', 'size': '$_albumPageSize'});
+        return fetchAllAlbumPages((offset) async {
+          final doc = await _makeRequest(
+              'getAlbumList2',
+              {
+                'type': 'newest',
+                'size': '$_albumPageSize',
+                'offset': '$offset',
+              },
+              NetworkRequestType.metadata);
+          return [
+            for (final element in doc.findAllElements('album'))
+              Album.fromXml(element)
+          ];
+        });
+      },
       cacheDuration: const Duration(minutes: 3),
       usePersistentCache: true,
       forceRefresh: forceRefresh,
       toJson: _albumsToJson,
       fromJson: _albumsFromJson,
+      version: getLibraryVersion,
     );
+  }
+
+  /// Identifies the state of the library on the server; it changes whenever
+  /// a scan finishes. Null if the server doesn't tell (only Navidrome and
+  /// some others report the last scan) or is scanning right now.
+  Future<String?> getLibraryVersion() async {
+    final XmlDocument doc;
+    try {
+      doc = await _makeRequest(
+          'getScanStatus', null, NetworkRequestType.metadata);
+    } on SubsonicException catch (e) {
+      // Not supported, or not allowed for this user
+      debugPrint('getScanStatus failed: $e');
+      return null;
+    }
+    return libraryVersionFrom(doc);
+  }
+
+  @visibleForTesting
+  static String? libraryVersionFrom(XmlDocument doc) {
+    final status = doc.findAllElements('scanStatus').firstOrNull;
+    final lastScan = status?.getAttribute('lastScan');
+    if (status == null ||
+        lastScan == null ||
+        status.getAttribute('scanning') == 'true') {
+      return null;
+    }
+    return '$lastScan/${status.getAttribute('count')}';
   }
 
   /// Requests pages of albums from [fetchPage] (given the offset) until one

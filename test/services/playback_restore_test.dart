@@ -69,7 +69,9 @@ void main() {
       await persistence.initialize();
 
       service = AudioPlayerService(mockApi, mockSettingsService,
-          audioPlayer: mockAudioPlayer, persistence: persistence);
+          audioPlayer: mockAudioPlayer,
+          persistence: persistence,
+          clock: mockAudioPlayer.clock);
       expect(await service.restorePlaybackState(), isTrue);
       await Future.delayed(const Duration(milliseconds: 250));
     }
@@ -92,7 +94,7 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 250));
       verify(mockApi.scrobbleNowPlaying('song1')).called(1);
 
-      mockAudioPlayer.simulatePositionChange(const Duration(seconds: 150));
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 150));
       await Future.delayed(const Duration(milliseconds: 250));
       verify(mockApi.scrobbleSubmission('song1',
               playedAt: anyNamed('playedAt')))

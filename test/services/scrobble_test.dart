@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:voidweaver/services/audio_player_service.dart';
+import 'package:voidweaver_player/voidweaver_player.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 import 'package:voidweaver/services/settings_service.dart';
 
@@ -43,7 +44,7 @@ void main() {
       when(mockApi.getStreamUrl(any)).thenReturn('https://example.com/stream');
 
       audioPlayerService = AudioPlayerService(mockApi, mockSettingsService,
-          audioPlayer: mockAudioPlayer);
+          audioPlayer: mockAudioPlayer, clock: mockAudioPlayer.clock);
     });
 
     tearDown(() async {
@@ -106,7 +107,7 @@ void main() {
       clearInteractions(mockApi);
 
       // Simulate playback to 50% (2 minutes)
-      mockAudioPlayer.simulatePositionChange(const Duration(seconds: 120));
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 120));
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Verify scrobble was submitted
@@ -145,7 +146,7 @@ void main() {
 
       // Simulate playback to 2 minutes (which is > 50% for a 3-minute song)
       // So the 2-minute rule should trigger first
-      mockAudioPlayer.simulatePositionChange(const Duration(seconds: 120));
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 120));
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Verify scrobble was submitted
@@ -182,7 +183,7 @@ void main() {
       clearInteractions(mockApi);
 
       // Simulate playback to only 1 minute (less than 2 minutes and less than 50%)
-      mockAudioPlayer.simulatePositionChange(const Duration(seconds: 60));
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 60));
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Verify scrobble was NOT submitted
@@ -218,14 +219,14 @@ void main() {
       clearInteractions(mockApi);
 
       // Simulate playback past 50%
-      mockAudioPlayer.simulatePositionChange(const Duration(seconds: 120));
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 120));
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Continue playback (simulate more position updates)
-      mockAudioPlayer.simulatePositionChange(const Duration(seconds: 130));
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 130));
       await Future.delayed(const Duration(milliseconds: 100));
 
-      mockAudioPlayer.simulatePositionChange(const Duration(seconds: 140));
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 140));
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Verify scrobble was submitted only once
@@ -234,42 +235,110 @@ void main() {
           .called(1);
     });
 
-    test('should scrobble when song completes', () async {
-      // Create a test album
-      final album = Album(
-        id: 'album1',
-        name: 'Test Album',
-        artist: 'Test Artist',
-        songs: [
-          Song(
-            id: 'song1',
-            title: 'Test Song',
-            artist: 'Test Artist',
-            album: 'Test Album',
-            duration: 180, // 3 minutes
-          ),
-        ],
-      );
+    Album threeMinuteAlbum() => Album(
+          id: 'album1',
+          name: 'Test Album',
+          artist: 'Test Artist',
+          songs: [
+            Song(
+              id: 'song1',
+              title: 'Test Song',
+              artist: 'Test Artist',
+              album: 'Test Album',
+              duration: 180,
+            ),
+            Song(
+              id: 'song2',
+              title: 'Test Song 2',
+              artist: 'Test Artist',
+              album: 'Test Album',
+              duration: 180,
+            ),
+          ],
+        );
 
-      // Set up mock duration
+    test('should scrobble a song played to its end at a 100% threshold',
+        () async {
+      when(mockSettingsService.scrobbleMinPlayTimeMinutes).thenReturn(10.0);
+      when(mockSettingsService.scrobbleThresholdPercent).thenReturn(100.0);
       mockAudioPlayer.simulateDurationChange(const Duration(seconds: 180));
-
-      // Play the album
-      await audioPlayerService.playAlbum(album);
+      await audioPlayerService.playAlbum(threeMinuteAlbum());
       await Future.delayed(const Duration(milliseconds: 100));
-
-      // Reset the mock to clear the nowPlaying call
       clearInteractions(mockApi);
 
-      // Simulate song completion without reaching scrobble criteria during playback
-      // (e.g., user skipped to end)
-      mockAudioPlayer.simulatePositionChange(const Duration(seconds: 30));
+      // The last position update comes shortly before the end
+      mockAudioPlayer.simulatePlayingTo(const Duration(milliseconds: 179800));
+      await Future.delayed(const Duration(milliseconds: 50));
+      verifyNever(
+          mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')));
+
+      mockAudioPlayer.simulateCompletion();
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      verify(mockApi.scrobbleSubmission('song1',
+              playedAt: anyNamed('playedAt')))
+          .called(1);
+    });
+
+    test('should NOT scrobble a song seeked to its end', () async {
+      mockAudioPlayer.simulateDurationChange(const Duration(seconds: 180));
+      await audioPlayerService.playAlbum(threeMinuteAlbum());
+      await Future.delayed(const Duration(milliseconds: 100));
+      clearInteractions(mockApi);
+
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 30));
+      await Future.delayed(const Duration(milliseconds: 50));
+      await audioPlayerService.seekTo(const Duration(seconds: 175));
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 178));
       await Future.delayed(const Duration(milliseconds: 50));
 
       mockAudioPlayer.simulateCompletion();
       await Future.delayed(const Duration(milliseconds: 100));
 
-      // Verify scrobble was submitted on completion
+      verifyNever(
+          mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')));
+    });
+
+    test('should NOT scrobble when skipping after seeking past the threshold',
+        () async {
+      mockAudioPlayer.simulateDurationChange(const Duration(seconds: 180));
+      await audioPlayerService.playAlbum(threeMinuteAlbum());
+      await Future.delayed(const Duration(milliseconds: 100));
+      clearInteractions(mockApi);
+
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 10));
+      // A seek from the notification or a Bluetooth device
+      mockAudioPlayer.simulateSystemCommand(
+          SystemCommandType.seek, const Duration(seconds: 150));
+      await Future.delayed(const Duration(milliseconds: 50));
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 155));
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      await audioPlayerService.next();
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      verifyNever(
+          mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')));
+    });
+
+    test('should count playback after a seek toward the threshold', () async {
+      mockAudioPlayer.simulateDurationChange(const Duration(seconds: 180));
+      await audioPlayerService.playAlbum(threeMinuteAlbum());
+      await Future.delayed(const Duration(milliseconds: 100));
+      clearInteractions(mockApi);
+
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 40));
+      await audioPlayerService.seekTo(const Duration(seconds: 100));
+      await Future.delayed(const Duration(milliseconds: 50));
+      // 40 s before the seek and 50 s after it: 50% of 3 minutes
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 149));
+      await Future.delayed(const Duration(milliseconds: 50));
+      verifyNever(
+          mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')));
+
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 150));
+      await Future.delayed(const Duration(milliseconds: 50));
+
       verify(mockApi.scrobbleSubmission('song1',
               playedAt: anyNamed('playedAt')))
           .called(1);
@@ -311,7 +380,7 @@ void main() {
       clearInteractions(mockApi);
 
       // Simulate playback to 50%
-      mockAudioPlayer.simulatePositionChange(const Duration(seconds: 120));
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 120));
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Verify first scrobble was submitted
@@ -357,7 +426,7 @@ void main() {
 
       // Reset and simulate playback to trigger scrobble
       clearInteractions(mockApi);
-      mockAudioPlayer.simulatePositionChange(const Duration(seconds: 120));
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 120));
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Verify scrobble
@@ -391,7 +460,7 @@ void main() {
 
       // Simulate playback to 50% again
       clearInteractions(mockApi);
-      mockAudioPlayer.simulatePositionChange(const Duration(seconds: 120));
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 120));
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Verify scrobble was submitted AGAIN (because tracking was reset)
@@ -429,7 +498,7 @@ void main() {
 
       // Simulate playback to 2 minutes (which meets the 2-minute criteria)
       // Note: For songs longer than 4 minutes, the 2-minute rule applies first
-      mockAudioPlayer.simulatePositionChange(const Duration(seconds: 120));
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 120));
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Should scrobble at 2 minutes (whichever comes first: 50% or 2 minutes)
@@ -472,7 +541,7 @@ void main() {
       clearInteractions(mockApi);
 
       // Simulate playback to trigger scrobble
-      mockAudioPlayer.simulatePositionChange(const Duration(seconds: 120));
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 120));
       await Future.delayed(const Duration(milliseconds: 100));
 
       // Verify scrobble submission was called when criteria was met

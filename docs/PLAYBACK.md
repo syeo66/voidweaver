@@ -13,7 +13,7 @@ At the end of the playlist the player stays `completed` with `playing` still set
 Earlier versions loaded one track at a time and advanced on `completed`. That event sometimes didn't fire, which needed fallbacks (near the end, stuck playhead, paused near the end), which in turn caused double skips and skips on pause. Don't bring them back: within a sequence the player advances without them.
 
 - Every source is tagged with a `_QueueEntry` (generation and playlist index). `_followPlayer()` maps the player's current index to its entry, so a sequence position always resolves to the right song. Entries of an older generation (a replaced sequence) are ignored.
-- Only an advance by one counts as the player moving on (`_followPlayer()`): it scrobbles the finished track, then sends "now playing", and starts the next downloads. Index events can repeat or arrive late, so repeated and backwards events are ignored.
+- Only an advance by one counts as the player moving on (`_followPlayer()`): it scrobbles the finished track if it was heard past the threshold, then sends "now playing", and starts the next downloads. Index events can repeat or arrive late, so repeated and backwards events are ignored.
 - Changes to the player's index or sequence go through `_playerOp()`, one at a time. Index events are ignored while one runs, and the service catches up with the player afterwards.
 - After a skip, `_awaitedIndex` holds the target until the player reports it. Until then an event can still be from before the seek; after Previous, the old track's index would look like an advance.
 
@@ -77,7 +77,7 @@ Don't request focus anywhere else, including native code. Android treats each fo
 
 ## Scrobbling
 
-A song is scrobbled once it has played for the minimum play time (default 2 min) or the percentage threshold (default 50%), whichever comes first. Both are configurable in Settings. If neither is reached, the song is still scrobbled when it completes.
+A song is scrobbled once it has been heard for the minimum play time (default 2 min) or the percentage threshold (default 50%), whichever comes first. Both are configurable in Settings. What counts is the time actually listened (`_listened`), not the position: `_trackListening()` adds up the position updates while playing, and skips any update where the position moved more than the time that passed (plus a second), i.e. a seek. Otherwise seeking to the end and skipping, or letting the track finish, would scrobble it, and subsoxy would take a skip for a play. When a track completes, the rest after the last position update is counted (`_listenedToEnd()`), so a track played through reaches even a 100% threshold. A restored song counts as heard up to its restored position.
 
 Each play is scrobbled at most once, tracked by `_currentSongScrobbled`. The flag is reset whenever a song starts (`_setCurrentTrack()`), so replaying a song (e.g. with Previous) scrobbles it again. Completion checks the flag too, so a song that passed the threshold isn't submitted a second time when it ends. A song restored at a position already past the threshold counts as scrobbled, since that happened in the previous session and the queue persisted it.
 

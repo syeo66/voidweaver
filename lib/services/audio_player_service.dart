@@ -38,6 +38,10 @@ class AudioPlayerService extends ChangeNotifier {
 
   static const _skipDebounceMs = 200;
 
+  /// How far the position may move beyond the time that passed between two
+  /// position updates and still count as listening, see _trackListening()
+  static const _seekTolerance = Duration(seconds: 1);
+
   /// Retries of a failed download, see _preloadUpcomingSongs(). The delay
   /// before each retry doubles: 5 s, 10 s, ... about 2.5 minutes in all.
   static const _maxDownloadRetries = 5;
@@ -49,6 +53,7 @@ class AudioPlayerService extends ChangeNotifier {
   final ScrobbleQueue _scrobbleQueue;
   final AudioCache _audioCache;
   final Duration _downloadRetryDelay;
+  final DateTime Function() _clock;
 
   PlaybackState _playbackState = PlaybackState.stopped;
   List<Song> _playlist = [];
@@ -95,6 +100,13 @@ class AudioPlayerService extends ChangeNotifier {
   DateTime? _currentSongStartTime;
   // Whether the current play of the current song has been scrobbled
   bool _currentSongScrobbled = false;
+  // How long the current play of the current song has actually been heard,
+  // without seeks; the scrobble threshold applies to this, see
+  // _trackListening()
+  Duration _listened = Duration.zero;
+  // The last position the player reported, and when
+  Duration _lastPosition = Duration.zero;
+  DateTime? _lastPositionTime;
 
   // Sleep timer state
   Timer? _sleepTimer;
@@ -122,9 +134,11 @@ class AudioPlayerService extends ChangeNotifier {
       ScrobbleQueue? scrobbleQueue,
       AudioCache? audioCache,
       @visibleForTesting
-      Duration downloadRetryDelay = const Duration(seconds: 5)})
+      Duration downloadRetryDelay = const Duration(seconds: 5),
+      @visibleForTesting DateTime Function() clock = DateTime.now})
       : _audioPlayer = audioPlayer ?? VoidweaverPlayer(),
         _downloadRetryDelay = downloadRetryDelay,
+        _clock = clock,
         _persistence = persistence,
         _scrobbleQueue = scrobbleQueue ?? ScrobbleQueue(_api),
         _audioCache = audioCache ?? AudioCache() {
@@ -170,6 +184,7 @@ class AudioPlayerService extends ChangeNotifier {
   void _initializePlayer() {
     _positionSubscription = _audioPlayer.positionStream.listen((position) {
       _currentPosition = position;
+      _trackListening(position);
       if (_playbackState == PlaybackState.playing) {
         _scrobbleCurrentSongIfEligible();
         _schedulePositionSave();
@@ -533,8 +548,8 @@ class AudioPlayerService extends ChangeNotifier {
     if (entry == null || entry.index != _currentIndex + 1) return;
 
     debugPrint('[audio_player] Player advanced to index ${entry.index}');
-    // The previous track played to the end
-    _scrobbleCurrentSong();
+    _listenedToEnd();
+    _scrobbleCurrentSongIfEligible();
     _setCurrentTrack(entry.index, playing: true);
     unawaited(_loadReplayGain(entry.index));
     _onTrackStarted();
@@ -561,6 +576,10 @@ class AudioPlayerService extends ChangeNotifier {
     _currentSongScrobbled = position > Duration.zero &&
         _hasReachedScrobbleThreshold(
             position, Duration(seconds: _currentSong!.duration ?? 0));
+    // A song resumed from an earlier session counts as heard up to there
+    _listened = position;
+    _lastPosition = position;
+    _lastPositionTime = _clock();
     notifyListeners();
   }
 
@@ -578,7 +597,8 @@ class AudioPlayerService extends ChangeNotifier {
   /// replays it, as a new play (like a restored song, see play()).
   void _onQueueCompleted() {
     debugPrint('[audio_player] End of playlist reached');
-    _scrobbleCurrentSong();
+    _listenedToEnd();
+    _scrobbleCurrentSongIfEligible();
     _setCurrentTrack(_currentIndex, playing: false);
     _playbackState = PlaybackState.paused;
     notifyListeners();
@@ -738,18 +758,51 @@ class AudioPlayerService extends ChangeNotifier {
     }
   }
 
-  /// Checks if the current song should be scrobbled based on progress.
-  /// A song should be scrobbled if it has been played to the configured
-  /// percentage threshold or the configured minimum play time, whichever
-  /// comes first (see [SettingsService.scrobbleMinPlayTimeMinutes] and
-  /// [SettingsService.scrobbleThresholdPercent]).
+  /// Adds the playback since the last position update to [_listened]. Only
+  /// counts while playing, and only if the position moved by about the time
+  /// that passed: a bigger jump is a seek, which isn't listening. Otherwise
+  /// seeking to the end of a track and skipping would scrobble it, and
+  /// subsoxy would take a skip for a play.
+  void _trackListening(Duration position) {
+    final now = _clock();
+    final last = _lastPositionTime;
+    final advanced = position - _lastPosition;
+    if (_playbackState == PlaybackState.playing &&
+        last != null &&
+        advanced > Duration.zero &&
+        advanced <= now.difference(last) + _seekTolerance) {
+      _listened += advanced;
+    }
+    _lastPosition = position;
+    _lastPositionTime = now;
+  }
+
+  /// The current song played to its end: counts the rest after the last
+  /// position update as heard.
+  void _listenedToEnd() {
+    final duration = _currentSongDuration;
+    if (duration > _lastPosition) _listened += duration - _lastPosition;
+    _lastPosition = duration;
+  }
+
+  /// The length of the current song: as the player reports it, or from the
+  /// server's metadata until it does.
+  Duration get _currentSongDuration => _totalDuration > Duration.zero
+      ? _totalDuration
+      : Duration(seconds: _currentSong?.duration ?? 0);
+
+  /// Whether the current song should be scrobbled: once it has been heard
+  /// for the configured minimum play time or percentage, whichever comes
+  /// first (see [SettingsService.scrobbleMinPlayTimeMinutes] and
+  /// [SettingsService.scrobbleThresholdPercent]). Seeked-over parts don't
+  /// count, see _trackListening().
   bool _shouldScrobbleCurrentSong() {
     if (_currentSong == null || _currentSongStartTime == null) return false;
 
     // Don't scrobble if already scrobbled
     if (_currentSongScrobbled) return false;
 
-    return _hasReachedScrobbleThreshold(_currentPosition, _totalDuration);
+    return _hasReachedScrobbleThreshold(_listened, _currentSongDuration);
   }
 
   bool _hasReachedScrobbleThreshold(
@@ -765,9 +818,8 @@ class AudioPlayerService extends ChangeNotifier {
 
     // Check if we've played for at least the configured percentage of the song
     final thresholdFraction = _settingsService.scrobbleThresholdPercent / 100;
-    if (songDuration.inSeconds > 0 &&
-        playedDuration.inSeconds >=
-            songDuration.inSeconds * thresholdFraction) {
+    if (songDuration > Duration.zero &&
+        playedDuration >= songDuration * thresholdFraction) {
       return true;
     }
 

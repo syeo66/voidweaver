@@ -312,6 +312,80 @@ void main() {
       expect(result, 'cached');
     });
 
+    group('with a version', () {
+      const expired = Duration(milliseconds: -1);
+      var fetches = 0;
+      var serverVersion = 'v1';
+
+      Future<String> get({bool forceRefresh = false}) =>
+          cache.getOrFetch<String>(
+            'versioned',
+            null,
+            () async => 'data ${++fetches}',
+            cacheDuration: expired,
+            usePersistentCache: true,
+            forceRefresh: forceRefresh,
+            version: () async => serverVersion,
+          );
+
+      setUp(() {
+        fetches = 0;
+        serverVersion = 'v1';
+      });
+
+      test('keeps an expired entry while the version is unchanged', () async {
+        expect(await get(), 'data 1');
+        expect(await get(), 'data 1');
+        expect(fetches, 1);
+      });
+
+      test('fetches again once the version changes', () async {
+        await get();
+        serverVersion = 'v2';
+        expect(await get(), 'data 2');
+        expect(await get(), 'data 2');
+        expect(fetches, 2);
+      });
+
+      test('keeps an unchanged persistent entry after a restart', () async {
+        await get();
+        cache = ApiCache.forTesting();
+        await cache.initialize();
+        expect(await get(), 'data 1');
+        expect(fetches, 1);
+      });
+
+      test('fetches when the version is unknown', () async {
+        Future<String> getUnversioned() => cache.getOrFetch<String>(
+              'unversioned',
+              null,
+              () async => 'data ${++fetches}',
+              cacheDuration: expired,
+              version: () async => null,
+            );
+        await getUnversioned();
+        expect(await getUnversioned(), 'data 2');
+      });
+
+      test('fetches despite an unchanged version with forceRefresh', () async {
+        await get();
+        expect(await get(forceRefresh: true), 'data 2');
+      });
+
+      test('serves the stale entry when the version check fails', () async {
+        await get();
+        final result = await cache.getOrFetch<String>(
+          'versioned',
+          null,
+          () async => 'data ${++fetches}',
+          cacheDuration: expired,
+          version: () async => throw Exception('offline'),
+        );
+        expect(result, 'data 1');
+        expect(fetches, 1);
+      });
+    });
+
     test('should rethrow when fetch fails and nothing is cached', () async {
       expect(
         cache.getOrFetch<String>(

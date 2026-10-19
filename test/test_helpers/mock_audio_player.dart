@@ -238,9 +238,23 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
   /// streams.
   void simulateLoadError() => _failCurrent();
 
+  /// A position update without time passing, like after a seek. See
+  /// [simulatePlayingTo] for playback.
   void simulatePositionChange(Duration position) {
     _position = position;
     _positionController.add(_position);
+  }
+
+  /// The time for the service under test; pass [clock] as its `clock`.
+  /// [simulatePlayingTo] advances it.
+  DateTime now = DateTime(2026);
+  DateTime clock() => now;
+
+  /// Playback continuing to [position]: [clock] advances by as much as the
+  /// position does, so the service counts it as listened to.
+  void simulatePlayingTo(Duration position) {
+    if (position > _position) now = now.add(position - _position);
+    simulatePositionChange(position);
   }
 
   void simulateDurationChange(Duration? duration) {
