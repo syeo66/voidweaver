@@ -182,7 +182,15 @@ class PlaybackPersistenceService {
     }
   }
 
-  void dispose() {
+  /// Writes a position save that's waiting for its timer right away.
+  void flushPendingPositionSave() {
+    final pending = _pendingPositionState;
     _cancelPendingPositionSave();
+    if (pending != null) unawaited(_writePlaybackState(pending));
+  }
+
+  /// Writes a pending position save instead of dropping it.
+  void dispose() {
+    flushPendingPositionSave();
   }
 }

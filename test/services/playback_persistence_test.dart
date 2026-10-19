@@ -63,6 +63,15 @@ void main() {
       expect(saved.currentPosition, Duration.zero);
     });
 
+    test('dispose writes a pending position save', () async {
+      persistence.schedulePositionSave(stateAt(0, 42));
+      persistence.dispose();
+      await Future<void>.delayed(Duration.zero);
+
+      final saved = await persistence.loadPlaybackState();
+      expect(saved!.currentPosition, const Duration(seconds: 42));
+    });
+
     test('clear discards a pending position save', () async {
       persistence.schedulePositionSave(stateAt(0, 42));
       await persistence.clearPlaybackState();

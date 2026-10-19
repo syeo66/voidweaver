@@ -302,67 +302,6 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
       ) as _i5.Future<void>);
 
   @override
-  void clearCacheEntry(
-    String? endpoint, [
-    Map<String, String>? params,
-  ]) =>
-      super.noSuchMethod(
-        Invocation.method(
-          #clearCacheEntry,
-          [
-            endpoint,
-            params,
-          ],
-        ),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  void clearExpiredCache() => super.noSuchMethod(
-        Invocation.method(
-          #clearExpiredCache,
-          [],
-        ),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  Map<String, dynamic> getCacheStats() => (super.noSuchMethod(
-        Invocation.method(
-          #getCacheStats,
-          [],
-        ),
-        returnValue: <String, dynamic>{},
-      ) as Map<String, dynamic>);
-
-  @override
-  void invalidateAlbumCache() => super.noSuchMethod(
-        Invocation.method(
-          #invalidateAlbumCache,
-          [],
-        ),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  void invalidateArtistCache() => super.noSuchMethod(
-        Invocation.method(
-          #invalidateArtistCache,
-          [],
-        ),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  void invalidateSearchCache() => super.noSuchMethod(
-        Invocation.method(
-          #invalidateSearchCache,
-          [],
-        ),
-        returnValueForMissingStub: null,
-      );
-
-  @override
   void dispose() => super.noSuchMethod(
         Invocation.method(
           #dispose,
@@ -557,54 +496,6 @@ class MockSettingsService extends _i1.Mock implements _i6.SettingsService {
         Invocation.method(
           #setNetworkConfigToSlow,
           [],
-        ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
-
-  @override
-  _i5.Future<void> updateTimeouts({
-    Duration? connectionTimeout,
-    Duration? requestTimeout,
-    Duration? metadataTimeout,
-    Duration? streamingTimeout,
-  }) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #updateTimeouts,
-          [],
-          {
-            #connectionTimeout: connectionTimeout,
-            #requestTimeout: requestTimeout,
-            #metadataTimeout: metadataTimeout,
-            #streamingTimeout: streamingTimeout,
-          },
-        ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
-
-  @override
-  _i5.Future<void> updateRetrySettings({
-    int? maxRetryAttempts,
-    Duration? initialRetryDelay,
-    double? retryBackoffMultiplier,
-    Duration? maxRetryDelay,
-    bool? enableRetryOnTimeout,
-    bool? enableRetryOnConnectionError,
-  }) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #updateRetrySettings,
-          [],
-          {
-            #maxRetryAttempts: maxRetryAttempts,
-            #initialRetryDelay: initialRetryDelay,
-            #retryBackoffMultiplier: retryBackoffMultiplier,
-            #maxRetryDelay: maxRetryDelay,
-            #enableRetryOnTimeout: enableRetryOnTimeout,
-            #enableRetryOnConnectionError: enableRetryOnConnectionError,
-          },
         ),
         returnValue: _i5.Future<void>.value(),
         returnValueForMissingStub: _i5.Future<void>.value(),

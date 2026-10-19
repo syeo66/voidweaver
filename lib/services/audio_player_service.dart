@@ -1122,7 +1122,8 @@ class AudioPlayerService extends ChangeNotifier {
     unawaited(_errorSubscription?.cancel());
     unawaited(_commandSubscription?.cancel());
     _sleepTimer?.cancel();
-    _persistence?.dispose();
+    // Not disposed here: AppState owns it and keeps it across logins
+    _persistence?.flushPendingPositionSave();
     _scrobbleQueue.dispose();
     unawaited(_audioPlayer.dispose().catchError((Object e) {
       debugPrint('[audio_player] Could not release the player: $e');

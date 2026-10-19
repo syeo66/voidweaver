@@ -58,7 +58,6 @@ class AppState extends ChangeNotifier {
 
   // Enhanced loading states
   LoadingState _configurationLoadingState = LoadingState.idle;
-  LoadingState _albumLoadingState = LoadingState.idle;
   String? _configurationError;
   String? _albumError;
 
@@ -74,7 +73,6 @@ class AppState extends ChangeNotifier {
 
   // Enhanced loading state getters
   LoadingState get configurationLoadingState => _configurationLoadingState;
-  LoadingState get albumLoadingState => _albumLoadingState;
   String? get configurationError => _configurationError;
   String? get albumError => _albumError;
 
@@ -183,20 +181,17 @@ class AppState extends ChangeNotifier {
     if (_api == null) return;
 
     _isLoading = true;
-    _albumLoadingState = LoadingState.loading;
     _error = null;
     _albumError = null;
     notifyListeners();
 
     try {
       _albums = await _api!.getAlbumList(forceRefresh: forceRefresh);
-      _albumLoadingState = LoadingState.success;
       _lastSyncTime = DateTime.now();
     } catch (e) {
       _error = NetworkErrorHelper.getErrorMessage(e,
           context: 'Failed to load albums');
       _albumError = _error;
-      _albumLoadingState = LoadingState.error;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -345,7 +340,6 @@ class AppState extends ChangeNotifier {
 
     // Reset loading states
     _configurationLoadingState = LoadingState.idle;
-    _albumLoadingState = LoadingState.idle;
     _configurationError = null;
     _albumError = null;
 

@@ -299,67 +299,6 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
       ) as _i5.Future<void>);
 
   @override
-  void clearCacheEntry(
-    String? endpoint, [
-    Map<String, String>? params,
-  ]) =>
-      super.noSuchMethod(
-        Invocation.method(
-          #clearCacheEntry,
-          [
-            endpoint,
-            params,
-          ],
-        ),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  void clearExpiredCache() => super.noSuchMethod(
-        Invocation.method(
-          #clearExpiredCache,
-          [],
-        ),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  Map<String, dynamic> getCacheStats() => (super.noSuchMethod(
-        Invocation.method(
-          #getCacheStats,
-          [],
-        ),
-        returnValue: <String, dynamic>{},
-      ) as Map<String, dynamic>);
-
-  @override
-  void invalidateAlbumCache() => super.noSuchMethod(
-        Invocation.method(
-          #invalidateAlbumCache,
-          [],
-        ),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  void invalidateArtistCache() => super.noSuchMethod(
-        Invocation.method(
-          #invalidateArtistCache,
-          [],
-        ),
-        returnValueForMissingStub: null,
-      );
-
-  @override
-  void invalidateSearchCache() => super.noSuchMethod(
-        Invocation.method(
-          #invalidateSearchCache,
-          [],
-        ),
-        returnValueForMissingStub: null,
-      );
-
-  @override
   void dispose() => super.noSuchMethod(
         Invocation.method(
           #dispose,

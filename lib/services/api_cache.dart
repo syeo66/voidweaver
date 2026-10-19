@@ -226,72 +226,36 @@ class ApiCache {
     }
   }
 
+  /// Removes the persisted entries whose keys pass [test]. Initializes the
+  /// storage first, so entries that were never loaded are removed too.
+  Future<void> _removePersisted(bool Function(String key) test) async {
+    try {
+      await initialize();
+      final keys = _prefs!
+          .getKeys()
+          .where((k) => k.startsWith('cache_') && test(k.substring(6)))
+          .toList();
+      for (final key in keys) {
+        await _prefs!.remove(key);
+      }
+    } catch (e) {
+      debugPrint('Error removing persistent cache entries: $e');
+    }
+  }
+
   /// Clear specific cache entry
   void clearEntry(String endpoint, [Map<String, String>? params]) {
     final key = _generateKey(endpoint, params);
     _memoryCache.remove(key);
-    unawaited(_prefs?.remove('cache_$key'));
+    unawaited(_removePersisted((k) => k == key));
     debugPrint('Cache CLEARED: $key');
   }
 
   /// Clear all cache entries
   Future<void> clearAll() async {
     _memoryCache.clear();
-
-    if (_prefs != null) {
-      final keys = _prefs!.getKeys().where((key) => key.startsWith('cache_'));
-      for (final key in keys) {
-        await _prefs!.remove(key);
-      }
-    }
+    await _removePersisted((_) => true);
 
     debugPrint('Cache CLEARED ALL');
-  }
-
-  /// Clear expired entries from memory cache
-  void clearExpired() {
-    final expiredKeys = _memoryCache.entries
-        .where((entry) => entry.value.isExpired)
-        .map((entry) => entry.key)
-        .toList();
-
-    for (final key in expiredKeys) {
-      _memoryCache.remove(key);
-    }
-
-    if (expiredKeys.isNotEmpty) {
-      debugPrint('Cache CLEARED EXPIRED: ${expiredKeys.length} entries');
-    }
-  }
-
-  /// Get cache statistics
-  Map<String, dynamic> getStats() {
-    final total = _memoryCache.length;
-    final expired =
-        _memoryCache.values.where((entry) => entry.isExpired).length;
-    final valid = total - expired;
-
-    return {
-      'total': total,
-      'valid': valid,
-      'expired': expired,
-      'ongoingRequests': _ongoingRequests.length,
-    };
-  }
-
-  /// Invalidate cache entries matching a pattern
-  void invalidatePattern(String pattern) {
-    final keysToRemove =
-        _memoryCache.keys.where((key) => key.contains(pattern)).toList();
-
-    for (final key in keysToRemove) {
-      _memoryCache.remove(key);
-      unawaited(_prefs?.remove('cache_$key'));
-    }
-
-    if (keysToRemove.isNotEmpty) {
-      debugPrint(
-          'Cache INVALIDATED pattern "$pattern": ${keysToRemove.length} entries');
-    }
   }
 }

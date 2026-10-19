@@ -177,60 +177,6 @@ void main() {
       expect(callCount, 2);
     });
 
-    test('should provide cache statistics', () async {
-      const endpoint = 'test_endpoint';
-      const params = {'param1': 'value1'};
-
-      await cache.getOrFetch<String>(
-        endpoint,
-        params,
-        () async => 'result',
-        cacheDuration: const Duration(seconds: 10),
-      );
-
-      final stats = cache.getStats();
-      expect(stats['total'], 1);
-      expect(stats['valid'], 1);
-      expect(stats['expired'], 0);
-      expect(stats['ongoingRequests'], 0);
-    });
-
-    test('should invalidate cache by pattern', () async {
-      const endpoint1 = 'getAlbumList';
-      const endpoint2 = 'getAlbum';
-      const endpoint3 = 'getArtist';
-      const params = {'param1': 'value1'};
-
-      var callCount = 0;
-      Future<String> fetchData() async {
-        callCount++;
-        return 'result_$callCount';
-      }
-
-      // Cache multiple endpoints
-      await cache.getOrFetch<String>(endpoint1, params, fetchData,
-          cacheDuration: const Duration(seconds: 10));
-      await cache.getOrFetch<String>(endpoint2, params, fetchData,
-          cacheDuration: const Duration(seconds: 10));
-      await cache.getOrFetch<String>(endpoint3, params, fetchData,
-          cacheDuration: const Duration(seconds: 10));
-
-      expect(callCount, 3);
-
-      // Invalidate album-related cache
-      cache.invalidatePattern('getAlbum');
-
-      // getAlbumList and getAlbum should be cleared, getArtist should remain
-      await cache.getOrFetch<String>(endpoint1, params, fetchData,
-          cacheDuration: const Duration(seconds: 10));
-      await cache.getOrFetch<String>(endpoint2, params, fetchData,
-          cacheDuration: const Duration(seconds: 10));
-      await cache.getOrFetch<String>(endpoint3, params, fetchData,
-          cacheDuration: const Duration(seconds: 10));
-
-      expect(callCount, 5); // 2 new fetches for album endpoints
-    });
-
     test('should persist typed data across instances using codecs', () async {
       final albums = [
         Album(id: 'a1', name: 'First', artist: 'Artist', songs: [
@@ -258,6 +204,19 @@ void main() {
 
       expect(fetched, isFalse);
       expect(result, albums);
+    });
+
+    test('clearAll removes persisted entries before the cache was used',
+        () async {
+      await cache.getOrFetch<String>('endpoint', null, () async => 'saved',
+          usePersistentCache: true);
+
+      // Not initialized and nothing loaded, as right after a restart
+      final restarted = ApiCache.forTesting();
+      await restarted.clearAll();
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getKeys().where((k) => k.startsWith('cache_')), isEmpty);
     });
 
     test('should serve stale memory data when fetch fails', () async {

@@ -29,21 +29,6 @@ class NetworkRetryService {
     );
   }
 
-  /// Execute an HTTP POST request with retry logic and timeout handling
-  Future<http.Response> postWithRetry(
-    Uri uri, {
-    Map<String, String>? headers,
-    Object? body,
-    NetworkRequestType requestType = NetworkRequestType.general,
-    String? contextDescription,
-  }) async {
-    return _executeWithRetry(
-      () => _httpClient.post(uri, headers: headers, body: body),
-      requestType: requestType,
-      contextDescription: contextDescription ?? 'POST $uri',
-    );
-  }
-
   /// Execute any HTTP request with retry logic and timeout handling
   Future<http.Response> _executeWithRetry(
     Future<http.Response> Function() request, {
@@ -184,31 +169,5 @@ class NetworkRetryService {
   /// Dispose resources
   void dispose() {
     // HttpPlusClient disposal is handled by the caller (SubsonicApi)
-  }
-}
-
-/// Mixin to add retry capabilities to any service
-mixin NetworkRetryMixin {
-  NetworkRetryService? _retryService;
-
-  /// Initialize the retry service
-  void initializeRetryService(
-      NetworkConfig config, http_plus.HttpPlusClient httpClient) {
-    _retryService = NetworkRetryService(config: config, httpClient: httpClient);
-  }
-
-  /// Get the retry service (must be initialized first)
-  NetworkRetryService get retryService {
-    if (_retryService == null) {
-      throw StateError(
-          'NetworkRetryService not initialized. Call initializeRetryService first.');
-    }
-    return _retryService!;
-  }
-
-  /// Dispose the retry service
-  void disposeRetryService() {
-    _retryService?.dispose();
-    _retryService = null;
   }
 }

@@ -162,47 +162,6 @@ void main() {
     });
   });
 
-  group('AsyncErrorBoundary Tests', () {
-    testWidgets('should display child when no error',
-        (WidgetTester tester) async {
-      const testText = 'Async Child';
-
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: AsyncErrorBoundary(
-            child: Text(testText),
-          ),
-        ),
-      );
-
-      expect(find.text(testText), findsOneWidget);
-    });
-
-    testWidgets('should show retry functionality', (WidgetTester tester) async {
-      bool retryAttempted = false;
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: AsyncErrorBoundary(
-            errorMessage: 'Async operation failed',
-            onRetry: () async {
-              retryAttempted = true;
-            },
-            child: const Text('Content'),
-          ),
-        ),
-      );
-
-      expect(find.text('Content'), findsOneWidget);
-      expect(retryAttempted, isFalse);
-
-      // Note: In a real-world scenario, the error would be triggered by
-      // actual async operations failing. For this test, we verify the
-      // widget can be created and displays the retry functionality
-      // when an error occurs through normal operation.
-    });
-  });
-
   group('ErrorBoundary Extension Tests', () {
     testWidgets('withErrorBoundary extension should wrap widget',
         (WidgetTester tester) async {
@@ -216,21 +175,6 @@ void main() {
 
       expect(find.text('Test Widget'), findsOneWidget);
       expect(find.byType(ErrorBoundary), findsOneWidget);
-    });
-
-    testWidgets('withAsyncErrorBoundary extension should wrap widget',
-        (WidgetTester tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: const Text('Test').withAsyncErrorBoundary(
-            errorMessage: 'Async extension error',
-            onRetry: () async {},
-          ),
-        ),
-      );
-
-      expect(find.text('Test'), findsOneWidget);
-      expect(find.byType(AsyncErrorBoundary), findsOneWidget);
     });
   });
 }

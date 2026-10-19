@@ -183,42 +183,6 @@ class SettingsService extends ChangeNotifier {
     await setNetworkConfig(NetworkConfig.slowConfig);
   }
 
-  /// Update specific timeout values while keeping other settings
-  Future<void> updateTimeouts({
-    Duration? connectionTimeout,
-    Duration? requestTimeout,
-    Duration? metadataTimeout,
-    Duration? streamingTimeout,
-  }) async {
-    final updatedConfig = _networkConfig.copyWith(
-      connectionTimeout: connectionTimeout,
-      requestTimeout: requestTimeout,
-      metadataTimeout: metadataTimeout,
-      streamingTimeout: streamingTimeout,
-    );
-    await setNetworkConfig(updatedConfig);
-  }
-
-  /// Update retry settings while keeping other settings
-  Future<void> updateRetrySettings({
-    int? maxRetryAttempts,
-    Duration? initialRetryDelay,
-    double? retryBackoffMultiplier,
-    Duration? maxRetryDelay,
-    bool? enableRetryOnTimeout,
-    bool? enableRetryOnConnectionError,
-  }) async {
-    final updatedConfig = _networkConfig.copyWith(
-      maxRetryAttempts: maxRetryAttempts,
-      initialRetryDelay: initialRetryDelay,
-      retryBackoffMultiplier: retryBackoffMultiplier,
-      maxRetryDelay: maxRetryDelay,
-      enableRetryOnTimeout: enableRetryOnTimeout,
-      enableRetryOnConnectionError: enableRetryOnConnectionError,
-    );
-    await setNetworkConfig(updatedConfig);
-  }
-
   /// Set the minimum play time (in minutes) required before a song can be
   /// scrobbled, regardless of how much of the song has played.
   Future<void> setScrobbleMinPlayTimeMinutes(double minutes) async {

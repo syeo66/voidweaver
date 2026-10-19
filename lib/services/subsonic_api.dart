@@ -54,7 +54,6 @@ class SubsonicApi {
       throw ArgumentError('Server URL must use HTTPS protocol for security');
     }
 
-    unawaited(_cache.initialize());
     _initializeHttpClient();
   }
 
@@ -480,37 +479,6 @@ class SubsonicApi {
   /// Clear all cached data
   Future<void> clearCache() async {
     await _cache.clearAll();
-  }
-
-  /// Clear specific cache entry
-  void clearCacheEntry(String endpoint, [Map<String, String>? params]) {
-    _cache.clearEntry(endpoint, params);
-  }
-
-  /// Clear expired cache entries
-  void clearExpiredCache() {
-    _cache.clearExpired();
-  }
-
-  /// Get cache statistics
-  Map<String, dynamic> getCacheStats() {
-    return _cache.getStats();
-  }
-
-  /// Invalidate all album-related cache entries
-  void invalidateAlbumCache() {
-    _cache.invalidatePattern('getAlbumList');
-    _cache.invalidatePattern('getAlbum');
-  }
-
-  /// Invalidate all artist-related cache entries
-  void invalidateArtistCache() {
-    _cache.invalidatePattern('getArtist');
-  }
-
-  /// Invalidate search cache entries
-  void invalidateSearchCache() {
-    _cache.invalidatePattern('search');
   }
 
   /// Timeouts and retry settings of the requests

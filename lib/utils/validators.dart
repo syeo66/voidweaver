@@ -146,16 +146,6 @@ class Validators {
     return null;
   }
 
-  static bool isValidUrl(String? url) {
-    if (url == null || url.trim().isEmpty) return false;
-
-    final uri = Uri.tryParse(url.trim());
-    return uri != null &&
-        uri.isAbsolute &&
-        uri.scheme.toLowerCase() == 'https' &&
-        uri.host.isNotEmpty;
-  }
-
   static String sanitizeInput(String? input) {
     if (input == null) return '';
 
@@ -163,41 +153,5 @@ class Validators {
         .replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]'), '')
         .replaceAll(RegExp(r'[\n\r\t]'), ' ')
         .trim();
-  }
-
-  static String? validateNonEmpty(String? value, String fieldName) {
-    if (value == null || value.trim().isEmpty) {
-      return '$fieldName is required';
-    }
-    return null;
-  }
-
-  static String? validateLength(
-      String? value, int maxLength, String fieldName) {
-    if (value != null && value.length > maxLength) {
-      return '$fieldName is too long (max $maxLength characters)';
-    }
-    return null;
-  }
-
-  static String? validateRange(
-      double? value, double min, double max, String fieldName) {
-    if (value == null) {
-      return '$fieldName is required';
-    }
-
-    if (value.isNaN || value.isInfinite) {
-      return 'Invalid $fieldName value';
-    }
-
-    if (value < min) {
-      return '$fieldName cannot be less than $min';
-    }
-
-    if (value > max) {
-      return '$fieldName cannot be greater than $max';
-    }
-
-    return null;
   }
 }

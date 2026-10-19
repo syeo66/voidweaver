@@ -201,53 +201,6 @@ void main() {
       expect(message,
           'Failed to play song: Something went wrong. Please try again.');
     });
-
-    test('should provide suggestions based on error type', () {
-      final timeoutError = NetworkTimeoutException(
-        'Request timed out',
-        attemptsMade: 3,
-        totalDuration: const Duration(seconds: 90),
-      );
-
-      final suggestions = NetworkErrorHelper.getSuggestions(timeoutError);
-
-      expect(suggestions, isNotEmpty);
-      expect(suggestions.any((s) => s.contains('Slow Connection')), true);
-      expect(suggestions.length, lessThanOrEqualTo(4));
-    });
-
-    test('should recommend network config based on error patterns', () {
-      final slowTimeoutErrors = List.generate(
-          5,
-          (i) => NetworkTimeoutException(
-                'timeout',
-                attemptsMade: 1,
-                totalDuration: const Duration(seconds: 60),
-              ));
-
-      final recommendedConfig =
-          NetworkErrorHelper.getRecommendedConfig(slowTimeoutErrors);
-
-      expect(recommendedConfig, NetworkConfig.slowConfig);
-    });
-
-    test('should format errors for logging with detailed information', () {
-      final error = NetworkTimeoutException(
-        'Request timed out',
-        attemptsMade: 3,
-        totalDuration: const Duration(seconds: 45),
-        originalError: TimeoutException('inner timeout', Duration.zero),
-      );
-
-      final logMessage =
-          NetworkErrorHelper.formatErrorForLogging(error, StackTrace.current);
-
-      expect(logMessage, contains('NetworkTimeoutException'));
-      expect(logMessage, contains('Attempts: 3'));
-      expect(logMessage, contains('Total Duration'));
-      expect(logMessage, contains('Original Error'));
-      expect(logMessage, contains('Stack Trace'));
-    });
   });
 
   group('SettingsService Network Integration', () {
@@ -272,34 +225,6 @@ void main() {
       expect(settingsService.networkConfig.connectionTimeout,
           const Duration(seconds: 20));
       expect(settingsService.networkConfig.maxRetryAttempts, 5);
-    });
-
-    test('should update specific timeout values', () async {
-      await settingsService.updateTimeouts(
-        connectionTimeout: const Duration(seconds: 25),
-        requestTimeout: const Duration(seconds: 45),
-      );
-
-      expect(settingsService.networkConfig.connectionTimeout,
-          const Duration(seconds: 25));
-      expect(settingsService.networkConfig.requestTimeout,
-          const Duration(seconds: 45));
-      // Other values should remain unchanged
-      expect(settingsService.networkConfig.maxRetryAttempts,
-          NetworkConfig.defaultConfig.maxRetryAttempts);
-    });
-
-    test('should update retry settings', () async {
-      await settingsService.updateRetrySettings(
-        maxRetryAttempts: 7,
-        enableRetryOnTimeout: false,
-      );
-
-      expect(settingsService.networkConfig.maxRetryAttempts, 7);
-      expect(settingsService.networkConfig.enableRetryOnTimeout, false);
-      // Other values should remain unchanged
-      expect(settingsService.networkConfig.connectionTimeout,
-          NetworkConfig.defaultConfig.connectionTimeout);
     });
 
     test('should set preset configurations', () async {

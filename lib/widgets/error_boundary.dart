@@ -193,111 +193,6 @@ class ErrorDisplay extends StatelessWidget {
   }
 }
 
-/// A specialized error boundary for async operations like network requests.
-class AsyncErrorBoundary extends StatefulWidget {
-  final Widget child;
-  final Future<void> Function()? onRetry;
-  final String? errorMessage;
-
-  const AsyncErrorBoundary({
-    super.key,
-    required this.child,
-    this.onRetry,
-    this.errorMessage,
-  });
-
-  @override
-  State<AsyncErrorBoundary> createState() => _AsyncErrorBoundaryState();
-}
-
-class _AsyncErrorBoundaryState extends State<AsyncErrorBoundary> {
-  bool _hasError = false;
-  Object? _error;
-  bool _isRetrying = false;
-
-  void _handleError(Object error) {
-    if (mounted) {
-      setState(() {
-        _hasError = true;
-        _error = error;
-        _isRetrying = false;
-      });
-    }
-  }
-
-  Future<void> _retry() async {
-    if (widget.onRetry == null) return;
-
-    setState(() {
-      _isRetrying = true;
-    });
-
-    try {
-      await widget.onRetry!();
-      if (mounted) {
-        setState(() {
-          _hasError = false;
-          _error = null;
-          _isRetrying = false;
-        });
-      }
-    } catch (error) {
-      _handleError(error);
-    }
-  }
-
-  Widget _buildErrorUI() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.error_outline,
-            size: 48,
-            color: Theme.of(context).colorScheme.error,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            widget.errorMessage ?? 'Failed to load data',
-            style: Theme.of(context).textTheme.bodyLarge,
-            textAlign: TextAlign.center,
-          ),
-          if (kDebugMode && _error != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              _error.toString(),
-              style: Theme.of(context).textTheme.bodySmall,
-              textAlign: TextAlign.center,
-            ),
-          ],
-          const SizedBox(height: 16),
-          if (widget.onRetry != null)
-            ElevatedButton.icon(
-              onPressed: _isRetrying ? null : _retry,
-              icon: _isRetrying
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.refresh),
-              label: Text(_isRetrying ? 'Retrying...' : 'Try Again'),
-            ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_hasError) {
-      return _buildErrorUI();
-    }
-
-    return widget.child;
-  }
-}
-
 /// Extension to easily wrap widgets with error boundaries
 extension ErrorBoundaryExtension on Widget {
   Widget withErrorBoundary({
@@ -308,17 +203,6 @@ extension ErrorBoundaryExtension on Widget {
     return ErrorBoundary(
       fallbackBuilder: fallbackBuilder,
       onError: onError,
-      errorMessage: errorMessage,
-      child: this,
-    );
-  }
-
-  Widget withAsyncErrorBoundary({
-    Future<void> Function()? onRetry,
-    String? errorMessage,
-  }) {
-    return AsyncErrorBoundary(
-      onRetry: onRetry,
       errorMessage: errorMessage,
       child: this,
     );

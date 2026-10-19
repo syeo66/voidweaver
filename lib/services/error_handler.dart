@@ -58,11 +58,6 @@ class ErrorHandler {
     _reporters.add(reporter);
   }
 
-  /// Remove an error reporter
-  void removeReporter(ErrorReporter reporter) {
-    _reporters.remove(reporter);
-  }
-
   void _handleFlutterError(FlutterErrorDetails details) {
     // Always log to console in debug mode
     if (kDebugMode) {

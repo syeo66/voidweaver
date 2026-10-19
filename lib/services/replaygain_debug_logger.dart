@@ -22,19 +22,13 @@ class ReplayGainDebugLogger extends ChangeNotifier {
   static const String _enabledPrefKey = 'replayGainDebugLoggingEnabled';
   static const String _logFileName = 'replaygain_debug.log';
   static const int _maxLogBytes = 5 * 1024 * 1024; // 5MB
-  static const int _maxMemoryLines = 500;
 
   bool _enabled = false;
   File? _logFile;
   int _bytesWritten = 0;
   Future<void> _writeQueue = Future.value();
-  final List<String> _memoryBuffer = [];
 
   bool get enabled => _enabled;
-
-  /// Most recent log lines, newest last. Kept in memory for a quick
-  /// in-app preview without reading the file back from disk.
-  List<String> get recentEntries => List.unmodifiable(_memoryBuffer);
 
   Future<void> initialize() async {
     try {
@@ -98,11 +92,6 @@ class ReplayGainDebugLogger extends ChangeNotifier {
 
     final line = '${DateTime.now().toIso8601String()}  $message';
 
-    _memoryBuffer.add(line);
-    if (_memoryBuffer.length > _maxMemoryLines) {
-      _memoryBuffer.removeAt(0);
-    }
-
     _writeQueue = _writeQueue.then((_) => _appendLine(line)).catchError((e) {
       debugPrint('[ReplayGainDebugLogger] Write failed: $e');
     });
@@ -142,10 +131,9 @@ class ReplayGainDebugLogger extends ChangeNotifier {
     }
   }
 
-  /// Clears the log file and in-memory buffer.
+  /// Clears the log file.
   Future<void> clear() async {
     await _writeQueue;
-    _memoryBuffer.clear();
     _bytesWritten = 0;
     try {
       final file = await _ensureLogFile();

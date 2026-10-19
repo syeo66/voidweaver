@@ -239,9 +239,6 @@ class ScrobbleQueue {
   /// Get current queue size
   int get queueSize => _queue.length;
 
-  /// Check if queue is currently processing
-  bool get isProcessing => _isProcessing;
-
   /// Manually trigger queue processing (useful for testing or when network becomes available)
   Future<void> processQueue() async {
     await _processQueue();

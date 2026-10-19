@@ -208,26 +208,6 @@ void main() {
     });
   });
 
-  group('URL Validation Helper', () {
-    test('should correctly identify valid URLs', () {
-      expect(Validators.isValidUrl('https://example.com'), isTrue);
-      expect(Validators.isValidUrl('https://localhost:8080'), isTrue);
-      expect(Validators.isValidUrl('https://music.mydomain.org'), isTrue);
-    });
-
-    test('should correctly identify invalid URLs', () {
-      expect(Validators.isValidUrl(null), isFalse);
-      expect(Validators.isValidUrl(''), isFalse);
-      expect(Validators.isValidUrl('not-a-url'), isFalse);
-      expect(Validators.isValidUrl('ftp://example.com'), isFalse);
-      expect(Validators.isValidUrl('example.com'), isFalse);
-      expect(Validators.isValidUrl('http://example.com'),
-          isFalse); // HTTP should be rejected
-      expect(Validators.isValidUrl('http://localhost:8080'),
-          isFalse); // HTTP should be rejected
-    });
-  });
-
   group('Input Sanitization', () {
     test('should remove control characters', () {
       expect(Validators.sanitizeInput('test\x00string'), 'teststring');
@@ -260,36 +240,6 @@ void main() {
       expect(Validators.sanitizeInput('Valid String 123 !@#'),
           'Valid String 123 !@#');
       expect(Validators.sanitizeInput('user@example.com'), 'user@example.com');
-    });
-  });
-
-  group('Generic Validation Helpers', () {
-    test('validateNonEmpty should work correctly', () {
-      expect(Validators.validateNonEmpty('valid', 'Field'), isNull);
-      expect(Validators.validateNonEmpty(null, 'Field'), 'Field is required');
-      expect(Validators.validateNonEmpty('', 'Field'), 'Field is required');
-      expect(Validators.validateNonEmpty('   ', 'Field'), 'Field is required');
-    });
-
-    test('validateLength should work correctly', () {
-      expect(Validators.validateLength('short', 10, 'Field'), isNull);
-      expect(Validators.validateLength('toolongstring', 5, 'Field'),
-          'Field is too long (max 5 characters)');
-      expect(Validators.validateLength(null, 10, 'Field'), isNull);
-    });
-
-    test('validateRange should work correctly', () {
-      expect(Validators.validateRange(5.0, 0.0, 10.0, 'Value'), isNull);
-      expect(Validators.validateRange(0.0, 0.0, 10.0, 'Value'), isNull);
-      expect(Validators.validateRange(10.0, 0.0, 10.0, 'Value'), isNull);
-      expect(Validators.validateRange(-1.0, 0.0, 10.0, 'Value'),
-          'Value cannot be less than 0.0');
-      expect(Validators.validateRange(11.0, 0.0, 10.0, 'Value'),
-          'Value cannot be greater than 10.0');
-      expect(Validators.validateRange(null, 0.0, 10.0, 'Value'),
-          'Value is required');
-      expect(Validators.validateRange(double.nan, 0.0, 10.0, 'Value'),
-          'Invalid Value value');
     });
   });
 }
