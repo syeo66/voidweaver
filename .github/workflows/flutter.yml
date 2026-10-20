@@ -43,6 +43,9 @@ jobs:
     
     steps:
     - uses: actions/checkout@v7
+      with:
+        # Full history: the build number is the commit count
+        fetch-depth: 0
     
     - name: Setup Flutter
       uses: subosito/flutter-action@v2

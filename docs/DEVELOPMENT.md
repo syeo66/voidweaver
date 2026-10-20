@@ -60,6 +60,7 @@ How the player's queue is followed, downloads swapped in, load errors, skips, sy
 
 - `MainActivity` keeps its `FlutterEngine` cached so Dart keeps running without the activity (see [PLAYBACK.md](PLAYBACK.md#bluetooth-and-system-controls)). It must not request audio focus (see [PLAYBACK.md](PLAYBACK.md#audio-focus)).
 - The plugin's manifest declares `PlaybackService` (`foregroundServiceType="mediaPlayback"`) and its permissions; it's merged into the app's.
+- Versioning: the version name (`1.1.0`) comes from `pubspec.yaml` and is bumped by hand. The build number (`versionCode`) is the git commit count, set in `android/app/build.gradle.kts`, so it rises with every commit; the pubspec's `+N` or `--build-number` only wins if it's higher. CI checks out the full history for this. Settings shows both at the bottom.
 
 ## Tests
 

@@ -5,6 +5,7 @@ import '../services/settings_service.dart';
 import '../services/app_state.dart';
 import '../services/replaygain_debug_logger.dart';
 import '../utils/validators.dart';
+import '../widgets/app_version.dart';
 import 'advanced_network_dialog.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -58,6 +59,9 @@ class _SettingsContent extends StatelessWidget {
             const _ReplayGainDebugLogSection(),
             const SizedBox(height: 16),
             _buildScrobblingSection(context, settingsService),
+            const SizedBox(height: 24),
+            const AppVersion(),
+            const SizedBox(height: 8),
           ],
         );
       },

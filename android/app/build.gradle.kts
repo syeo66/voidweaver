@@ -5,6 +5,16 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// The build number is the number of commits, so every commit raises the
+// versionCode without editing pubspec.yaml. The pubspec's build number (or
+// --build-number) still wins if it's higher. Null outside a git checkout.
+val gitCommitCount: Int? = try {
+    providers.exec { commandLine("git", "rev-list", "--count", "HEAD") }
+        .standardOutput.asText.get().trim().toInt()
+} catch (e: Exception) {
+    null
+}
+
 android {
     namespace = "com.example.voidweaver"
     compileSdk = flutter.compileSdkVersion
@@ -28,7 +38,7 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
+        versionCode = maxOf(flutter.versionCode, gitCommitCount ?: 0)
         versionName = flutter.versionName
     }
 
