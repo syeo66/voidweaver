@@ -17,6 +17,8 @@ void main() async {
 
       // Initialize global error handling
       ErrorHandler.instance.initialize();
+      // Build errors also show the nearest ErrorBoundary's fallback
+      ErrorBoundary.install();
 
       // Add error reporters
       ErrorHandler.instance.addReporter(ConsoleErrorReporter());
@@ -41,16 +43,10 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Errors are reported by ErrorHandler through FlutterError.onError
     return ErrorBoundary(
       errorMessage:
           'The app encountered a critical error and needs to restart.',
-      onError: (error) {
-        ErrorHandler.instance.reportError(
-          error.exception,
-          error.stack,
-          context: 'App-level error boundary',
-        );
-      },
       child: ChangeNotifierProvider(
         create: (context) => AppState(),
         // Rebuilds only when the settings change, not on every AppState

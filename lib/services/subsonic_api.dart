@@ -619,10 +619,15 @@ class Album {
   }
 }
 
-/// Logs to both the console (debug builds) and the persistent ReplayGain
+/// Whether ReplayGain parsing is logged: in debug builds, or when the user
+/// has enabled the ReplayGain debug log in Settings. Parsing runs for every
+/// song, so the messages aren't even built otherwise.
+bool get _rgLogging => kDebugMode || ReplayGainDebugLogger.instance.enabled;
+
+/// Logs to the console (debug builds only) and the persistent ReplayGain
 /// debug log (only when the user has enabled it in Settings).
 void _rgLog(String message) {
-  debugPrint(message);
+  if (kDebugMode) debugPrint(message);
   ReplayGainDebugLogger.instance.log(message);
 }
 
@@ -706,29 +711,29 @@ class Song {
     final replayGainElement =
         replayGainElements.isNotEmpty ? replayGainElements.first : null;
 
-    // Debug logging for ReplayGain parsing (only recorded when the user has
-    // enabled ReplayGain debug logging in Settings)
-    _rgLog('[ReplayGain XML] Parsing song: $title (id=$songId)');
-    _rgLog(
-        '[ReplayGain XML] Found ${replayGainElements.length} replayGain elements');
-    if (replayGainElement != null) {
-      _rgLog('[ReplayGain XML] ReplayGain element attributes:');
+    if (_rgLogging) {
+      _rgLog('[ReplayGain XML] Parsing song: $title (id=$songId)');
       _rgLog(
-          '[ReplayGain XML]   trackGain=${replayGainElement.getAttribute('trackGain')}');
-      _rgLog(
-          '[ReplayGain XML]   albumGain=${replayGainElement.getAttribute('albumGain')}');
-      _rgLog(
-          '[ReplayGain XML]   trackPeak=${replayGainElement.getAttribute('trackPeak')}');
-      _rgLog(
-          '[ReplayGain XML]   albumPeak=${replayGainElement.getAttribute('albumPeak')}');
-    } else {
-      _rgLog('[ReplayGain XML] No nested <replayGain> element; flat attrs: '
-          'replayGainTrackGain=${element.getAttribute('replayGainTrackGain')}, '
-          'rgTrackGain=${element.getAttribute('rgTrackGain')}, '
-          'trackGain=${element.getAttribute('trackGain')}, '
-          'replayGainAlbumGain=${element.getAttribute('replayGainAlbumGain')}, '
-          'rgAlbumGain=${element.getAttribute('rgAlbumGain')}, '
-          'albumGain=${element.getAttribute('albumGain')}');
+          '[ReplayGain XML] Found ${replayGainElements.length} replayGain elements');
+      if (replayGainElement != null) {
+        _rgLog('[ReplayGain XML] ReplayGain element attributes:');
+        _rgLog(
+            '[ReplayGain XML]   trackGain=${replayGainElement.getAttribute('trackGain')}');
+        _rgLog(
+            '[ReplayGain XML]   albumGain=${replayGainElement.getAttribute('albumGain')}');
+        _rgLog(
+            '[ReplayGain XML]   trackPeak=${replayGainElement.getAttribute('trackPeak')}');
+        _rgLog(
+            '[ReplayGain XML]   albumPeak=${replayGainElement.getAttribute('albumPeak')}');
+      } else {
+        _rgLog('[ReplayGain XML] No nested <replayGain> element; flat attrs: '
+            'replayGainTrackGain=${element.getAttribute('replayGainTrackGain')}, '
+            'rgTrackGain=${element.getAttribute('rgTrackGain')}, '
+            'trackGain=${element.getAttribute('trackGain')}, '
+            'replayGainAlbumGain=${element.getAttribute('replayGainAlbumGain')}, '
+            'rgAlbumGain=${element.getAttribute('rgAlbumGain')}, '
+            'albumGain=${element.getAttribute('albumGain')}');
+      }
     }
 
     final song = Song(
@@ -766,11 +771,12 @@ class Song {
           double.tryParse(element.getAttribute('albumPeak') ?? ''),
     );
 
-    // Debug logging for final parsed values
-    _rgLog(
-        '[ReplayGain XML] Final parsed values for "${song.title}" (id=${song.id}): '
-        'trackGain=${song.replayGainTrackGain}, albumGain=${song.replayGainAlbumGain}, '
-        'trackPeak=${song.replayGainTrackPeak}, albumPeak=${song.replayGainAlbumPeak}');
+    if (_rgLogging) {
+      _rgLog(
+          '[ReplayGain XML] Final parsed values for "${song.title}" (id=${song.id}): '
+          'trackGain=${song.replayGainTrackGain}, albumGain=${song.replayGainAlbumGain}, '
+          'trackPeak=${song.replayGainTrackPeak}, albumPeak=${song.replayGainAlbumPeak}');
+    }
 
     return song;
   }
@@ -849,18 +855,22 @@ class Song {
       albumGain = (replayGain['albumGain'] as num?)?.toDouble();
       trackPeak = (replayGain['trackPeak'] as num?)?.toDouble();
       albumPeak = (replayGain['albumPeak'] as num?)?.toDouble();
-      _rgLog(
-          '[ReplayGain JSON] "${json['title']}" (id=${json['id']}): nested replayGain='
-          '{trackGain: $trackGain, albumGain: $albumGain, trackPeak: $trackPeak, albumPeak: $albumPeak}');
+      if (_rgLogging) {
+        _rgLog(
+            '[ReplayGain JSON] "${json['title']}" (id=${json['id']}): nested replayGain='
+            '{trackGain: $trackGain, albumGain: $albumGain, trackPeak: $trackPeak, albumPeak: $albumPeak}');
+      }
     } else {
       // Fallback to flat format for backwards compatibility
       trackGain = (json['replayGainTrackGain'] as num?)?.toDouble();
       albumGain = (json['replayGainAlbumGain'] as num?)?.toDouble();
       trackPeak = (json['replayGainTrackPeak'] as num?)?.toDouble();
       albumPeak = (json['replayGainAlbumPeak'] as num?)?.toDouble();
-      _rgLog(
-          '[ReplayGain JSON] "${json['title']}" (id=${json['id']}): flat fields='
-          '{trackGain: $trackGain, albumGain: $albumGain, trackPeak: $trackPeak, albumPeak: $albumPeak}');
+      if (_rgLogging) {
+        _rgLog(
+            '[ReplayGain JSON] "${json['title']}" (id=${json['id']}): flat fields='
+            '{trackGain: $trackGain, albumGain: $albumGain, trackPeak: $trackPeak, albumPeak: $albumPeak}');
+      }
     }
 
     return Song(

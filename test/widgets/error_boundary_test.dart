@@ -46,28 +46,123 @@ void main() {
       expect(find.text('Custom error message'), findsOneWidget);
       expect(find.byIcon(Icons.error_outline), findsOneWidget);
     });
+  });
 
-    testWidgets('should test fallback builder functionality',
-        (WidgetTester tester) async {
-      const customErrorText = 'Custom Error Widget';
+  group('ErrorBoundary with build errors', () {
+    /// Installs the boundaries' error widget for the test body; the test
+    /// binding requires the original builder back at the end.
+    Future<void> withBoundaries(Future<void> Function() body) async {
+      final builder = ErrorWidget.builder;
+      ErrorBoundary.install();
+      try {
+        await body();
+      } finally {
+        ErrorWidget.builder = builder;
+      }
+    }
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: ErrorBoundary(
-            fallbackBuilder: (error) => const Text(customErrorText),
-            child: const Text('This won\'t be shown'),
+    /// Lets the boundary switch to its fallback (after the frame), and
+    /// consumes the build error, which the test binding records.
+    Future<void> pumpError(WidgetTester tester) async {
+      await tester.pump();
+      await tester.pump();
+      expect(tester.takeException(), isA<StateError>());
+    }
+
+    testWidgets('shows its fallback when a widget in it fails', (tester) async {
+      await withBoundaries(() async {
+        await tester.pumpWidget(const MaterialApp(
+          home: Scaffold(
+            body: ErrorBoundary(
+              errorMessage: 'Albums failed',
+              child: _Thrower(),
+            ),
           ),
-        ),
-      );
+        ));
+        await pumpError(tester);
 
-      // Test fallback builder by directly showing error state
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Text(customErrorText),
-        ),
-      );
+        expect(find.text('Albums failed'), findsOneWidget);
+      });
+    });
 
-      expect(find.text(customErrorText), findsOneWidget);
+    testWidgets('leaves the rest of the app and FlutterError.onError alone',
+        (tester) async {
+      await withBoundaries(() async {
+        final onError = FlutterError.onError;
+        await tester.pumpWidget(const MaterialApp(
+          home: Scaffold(
+            body: Column(children: [
+              ErrorBoundary(errorMessage: 'First failed', child: _Thrower()),
+              ErrorBoundary(
+                  errorMessage: 'Second failed', child: Text('Second')),
+              Text('Outside'),
+            ]),
+          ),
+        ));
+        await pumpError(tester);
+
+        expect(find.text('First failed'), findsOneWidget);
+        expect(find.text('Second'), findsOneWidget);
+        expect(find.text('Second failed'), findsNothing);
+        expect(find.text('Outside'), findsOneWidget);
+        expect(FlutterError.onError, same(onError));
+      });
+    });
+
+    testWidgets('the innermost boundary takes the error', (tester) async {
+      await withBoundaries(() async {
+        await tester.pumpWidget(const MaterialApp(
+          home: Scaffold(
+            body: ErrorBoundary(
+              errorMessage: 'Outer failed',
+              child: ErrorBoundary(
+                errorMessage: 'Inner failed',
+                child: _Thrower(),
+              ),
+            ),
+          ),
+        ));
+        await pumpError(tester);
+
+        expect(find.text('Inner failed'), findsOneWidget);
+        expect(find.text('Outer failed'), findsNothing);
+      });
+    });
+
+    testWidgets('reports the error once and uses the fallback builder',
+        (tester) async {
+      await withBoundaries(() async {
+        final reported = <FlutterErrorDetails>[];
+        await tester.pumpWidget(MaterialApp(
+          home: ErrorBoundary(
+            onError: reported.add,
+            fallbackBuilder: (error) => Text('Fallback: ${error.exception}'),
+            child: const _Thrower(),
+          ),
+        ));
+        await pumpError(tester);
+
+        expect(reported, hasLength(1));
+        expect(find.text('Fallback: Bad state: broken'), findsOneWidget);
+      });
+    });
+
+    testWidgets('Try Again builds the child again', (tester) async {
+      await withBoundaries(() async {
+        _Thrower.broken = true;
+        addTearDown(() => _Thrower.broken = true);
+        await tester.pumpWidget(const MaterialApp(
+          home: Scaffold(body: ErrorBoundary(child: _Thrower())),
+        ));
+        await pumpError(tester);
+
+        _Thrower.broken = false;
+        await tester.tap(find.text('Try Again'));
+        await tester.pump();
+
+        expect(find.text('Working'), findsOneWidget);
+        expect(find.byType(ErrorDisplay), findsNothing);
+      });
     });
   });
 
@@ -177,4 +272,17 @@ void main() {
       expect(find.byType(ErrorBoundary), findsOneWidget);
     });
   });
+}
+
+/// Fails to build while [broken] is set.
+class _Thrower extends StatelessWidget {
+  static bool broken = true;
+
+  const _Thrower();
+
+  @override
+  Widget build(BuildContext context) {
+    if (broken) throw StateError('broken');
+    return const Text('Working');
+  }
 }

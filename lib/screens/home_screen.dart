@@ -344,35 +344,52 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
     if (_currentPlaylist.isEmpty) return const SizedBox.shrink();
 
     if (widget.isCompact) {
-      // Compact mode for landscape - smaller height and items
-      return Column(
-        children: [
-          Text(
-            'Playlist: ${_currentIndex + 1} of ${_currentPlaylist.length}',
-            style: TextStyle(color: Colors.grey[600], fontSize: 12),
-          ),
-          const SizedBox(height: 4),
-          SizedBox(
-            height: 60,
-            child: ListView.builder(
-              controller: _scrollController,
-              scrollDirection: Axis.horizontal,
-              itemCount: _currentPlaylist.length,
-              itemBuilder: (context, index) {
-                final song = _currentPlaylist[index];
-                final isCurrentSong = index == _currentIndex;
+      // Compact mode for landscape: covers only. A phone in landscape leaves
+      // little height, so the label goes first and then the covers, rather
+      // than overflowing.
+      const labelFontSize = 12.0;
+      final labelHeight =
+          MediaQuery.textScalerOf(context).scale(labelFontSize) * 1.5 + 4;
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final height = constraints.maxHeight;
+          if (height < _PlaylistItem.compactHeight) {
+            return const SizedBox.shrink();
+          }
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (height >= _PlaylistItem.compactHeight + labelHeight) ...[
+                Text(
+                  'Playlist: ${_currentIndex + 1} of ${_currentPlaylist.length}',
+                  style: TextStyle(
+                      color: Colors.grey[600], fontSize: labelFontSize),
+                ),
+                const SizedBox(height: 4),
+              ],
+              SizedBox(
+                height: _PlaylistItem.compactHeight,
+                child: ListView.builder(
+                  controller: _scrollController,
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _currentPlaylist.length,
+                  itemBuilder: (context, index) {
+                    final song = _currentPlaylist[index];
+                    final isCurrentSong = index == _currentIndex;
 
-                return _PlaylistItem(
-                  key: ValueKey('playlist-item-${song.id}'),
-                  song: song,
-                  isCurrentSong: isCurrentSong,
-                  api: widget.api,
-                  isCompact: true,
-                );
-              },
-            ),
-          ),
-        ],
+                    return _PlaylistItem(
+                      key: ValueKey('playlist-item-${song.id}'),
+                      song: song,
+                      isCurrentSong: isCurrentSong,
+                      api: widget.api,
+                      isCompact: true,
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        },
       );
     }
 
@@ -411,6 +428,9 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
 }
 
 class _PlaylistItem extends StatelessWidget {
+  /// Height of a compact item: just its cover
+  static const compactHeight = 40.0;
+
   final Song song;
   final bool isCurrentSong;
   final SubsonicApi api;
@@ -426,7 +446,7 @@ class _PlaylistItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final itemSize = isCompact ? 40.0 : 60.0;
+    final itemSize = isCompact ? compactHeight : 60.0;
     final containerWidth = isCompact ? 60.0 : 80.0;
     final fontSize = isCompact ? 8.0 : 10.0;
     final iconSize = isCompact ? 16.0 : 24.0;

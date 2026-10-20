@@ -1,8 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-/// A widget that catches errors in its child widgets and displays a fallback UI.
-/// This prevents the entire app from crashing when a widget throws an error.
+/// Shows a fallback UI in place of [child] when building a widget in it
+/// fails, so the rest of the app keeps working.
+///
+/// Flutter reports a failed build through [FlutterError.onError] (see
+/// ErrorHandler) and puts the widget from [ErrorWidget.builder] in place of
+/// the failing widget. [install] sets that builder to one that hands the
+/// error to the nearest boundary above it. Each boundary only reacts to
+/// errors in its own subtree, and [FlutterError.onError] is left alone.
 class ErrorBoundary extends StatefulWidget {
   final Widget child;
   final Widget Function(FlutterErrorDetails error)? fallbackBuilder;
@@ -17,6 +23,14 @@ class ErrorBoundary extends StatefulWidget {
     this.errorMessage,
   });
 
+  /// Routes build errors to the boundaries. Call once at startup; widgets
+  /// outside any boundary still get the previous [ErrorWidget.builder].
+  static void install() {
+    final outside = ErrorWidget.builder;
+    ErrorWidget.builder =
+        (details) => _BoundaryErrorWidget(details: details, outside: outside);
+  }
+
   @override
   State<ErrorBoundary> createState() => _ErrorBoundaryState();
 }
@@ -24,27 +38,13 @@ class ErrorBoundary extends StatefulWidget {
 class _ErrorBoundaryState extends State<ErrorBoundary> {
   FlutterErrorDetails? _error;
 
-  @override
-  void initState() {
-    super.initState();
-
-    // Set up error handling for this widget's context
-    FlutterError.onError = (FlutterErrorDetails details) {
-      // Log the error
-      if (kDebugMode) {
-        FlutterError.presentError(details);
-      }
-
-      // Call the onError callback if provided
-      widget.onError?.call(details);
-
-      // Set the error state to show fallback UI
-      if (mounted) {
-        setState(() {
-          _error = details;
-        });
-      }
-    };
+  /// A widget in the subtree failed to build. Called after the frame, since
+  /// it happens while the subtree builds.
+  void _onDescendantError(FlutterErrorDetails details) {
+    // The fallback itself failing doesn't replace the first error
+    if (!mounted || _error != null) return;
+    widget.onError?.call(details);
+    setState(() => _error = details);
   }
 
   Widget _buildFallbackUI(FlutterErrorDetails error) {
@@ -68,35 +68,41 @@ class _ErrorBoundaryState extends State<ErrorBoundary> {
     if (_error != null) {
       return _buildFallbackUI(_error!);
     }
-
-    // Wrap child in a Builder to catch build-time errors
-    return Builder(
-      builder: (context) {
-        try {
-          return widget.child;
-        } catch (error, stackTrace) {
-          final details = FlutterErrorDetails(
-            exception: error,
-            stack: stackTrace,
-            library: 'error_boundary',
-            context: ErrorDescription('Error caught by ErrorBoundary'),
-          );
-
-          widget.onError?.call(details);
-
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              setState(() {
-                _error = details;
-              });
-            }
-          });
-
-          return _buildFallbackUI(details);
-        }
-      },
-    );
+    return widget.child;
   }
+}
+
+/// Takes the place of a widget that failed to build (see
+/// [ErrorBoundary.install]) and switches the nearest [ErrorBoundary] to its
+/// fallback. Empty until then; outside a boundary, shows [outside]'s widget.
+class _BoundaryErrorWidget extends StatefulWidget {
+  final FlutterErrorDetails details;
+  final ErrorWidgetBuilder outside;
+
+  const _BoundaryErrorWidget({required this.details, required this.outside});
+
+  @override
+  State<_BoundaryErrorWidget> createState() => _BoundaryErrorWidgetState();
+}
+
+class _BoundaryErrorWidgetState extends State<_BoundaryErrorWidget> {
+  _ErrorBoundaryState? _boundary;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _boundary = context.findAncestorStateOfType<_ErrorBoundaryState>();
+    final boundary = _boundary;
+    if (boundary != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+          (_) => boundary._onDescendantError(widget.details));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => _boundary == null
+      ? widget.outside(widget.details)
+      : const SizedBox.shrink();
 }
 
 /// A standardized error display widget that shows error information
