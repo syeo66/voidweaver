@@ -83,13 +83,29 @@ class PersistedPlaybackState {
   Song? get currentSong => hasValidIndex ? playlist[currentIndex] : null;
 }
 
+/// Saves the queue and the playback position, so they're restored on the
+/// next start.
+///
+/// The queue and the position are stored under separate keys: the position is
+/// saved every few seconds while playing, and SharedPreferences on Android
+/// rewrites its whole file on every change, so those saves leave out the
+/// queue unless it changed.
 class PlaybackPersistenceService {
-  static const String _playbackStateKey = 'playbackState';
+  static const String _queueKey = 'playbackQueue';
+  static const String _positionKey = 'playbackPosition';
+  // Queue and position together, as saved by older versions
+  static const String _legacyKey = 'playbackState';
   final Duration _positionSaveInterval;
 
   SharedPreferences? _prefs;
   Timer? _positionSaveTimer;
   PersistedPlaybackState? _pendingPositionState;
+
+  // The queue last saved; the player service replaces its playlist list
+  // whenever the queue changes, so identity tells whether it needs saving
+  List<Song>? _savedPlaylist;
+  String? _savedPlaylistSource;
+  String? _savedSourceId;
 
   PlaybackPersistenceService({
     Duration positionSaveInterval = const Duration(seconds: 5),
@@ -113,10 +129,30 @@ class PlaybackPersistenceService {
     }
 
     try {
-      final json = jsonEncode(state.toJson());
-      await _prefs!.setString(_playbackStateKey, json);
-      debugPrint(
-          'Saved playback state: ${state.playlist.length} songs, index ${state.currentIndex}');
+      if (!identical(state.playlist, _savedPlaylist) ||
+          state.playlistSource != _savedPlaylistSource ||
+          state.sourceId != _savedSourceId) {
+        await _prefs!.setString(
+            _queueKey,
+            jsonEncode({
+              'playlist': state.playlist.map((s) => s.toJson()).toList(),
+              'playlistSource': state.playlistSource,
+              'sourceId': state.sourceId,
+            }));
+        _savedPlaylist = state.playlist;
+        _savedPlaylistSource = state.playlistSource;
+        _savedSourceId = state.sourceId;
+        if (_prefs!.containsKey(_legacyKey)) await _prefs!.remove(_legacyKey);
+        debugPrint('Saved playback queue: ${state.playlist.length} songs');
+      }
+      await _prefs!.setString(
+          _positionKey,
+          jsonEncode({
+            'currentIndex': state.currentIndex,
+            'currentPositionMs': state.currentPosition.inMilliseconds,
+            'isPlaying': state.isPlaying,
+            'lastUpdated': state.lastUpdated.millisecondsSinceEpoch,
+          }));
     } catch (e) {
       debugPrint('Failed to save playback state: $e');
     }
@@ -129,13 +165,21 @@ class PlaybackPersistenceService {
     }
 
     try {
-      final json = _prefs!.getString(_playbackStateKey);
-      if (json == null) {
+      final queue = _prefs!.getString(_queueKey);
+      final position = _prefs!.getString(_positionKey);
+      final Map<String, dynamic> map;
+      if (queue != null && position != null) {
+        map = {
+          ...jsonDecode(queue) as Map<String, dynamic>,
+          ...jsonDecode(position) as Map<String, dynamic>,
+        };
+      } else if (_prefs!.getString(_legacyKey) case final legacy?) {
+        map = jsonDecode(legacy) as Map<String, dynamic>;
+      } else {
         debugPrint('No saved playback state found');
         return null;
       }
 
-      final map = jsonDecode(json) as Map<String, dynamic>;
       final state = PersistedPlaybackState.fromJson(map);
 
       if (state != null) {
@@ -175,7 +219,10 @@ class PlaybackPersistenceService {
     if (_prefs == null) return;
 
     try {
-      await _prefs!.remove(_playbackStateKey);
+      _savedPlaylist = null;
+      for (final key in [_queueKey, _positionKey, _legacyKey]) {
+        await _prefs!.remove(key);
+      }
       debugPrint('Cleared saved playback state');
     } catch (e) {
       debugPrint('Failed to clear playback state: $e');

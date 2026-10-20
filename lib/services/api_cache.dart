@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Cache entry with expiration and data
@@ -41,23 +44,71 @@ class CacheEntry<T> {
   }
 }
 
-/// Request deduplication and caching service
+/// Request deduplication and caching service.
+///
+/// Persistent entries are JSON files in `api_cache/` in the app cache
+/// directory, one per key. They used to be kept in SharedPreferences, which
+/// Android loads whole at startup and rewrites whole on every change (also on
+/// each playback position save); see [_migrateFromSharedPreferences].
 class ApiCache {
   static final ApiCache _instance = ApiCache._internal();
   factory ApiCache() => _instance;
-  ApiCache._internal();
+  ApiCache._internal() : _directoryProvider = _defaultDirectory;
 
-  /// Constructor for testing purposes
+  /// Keeps persistent entries in [directory]; without one, only in memory.
   @visibleForTesting
-  ApiCache.forTesting();
+  ApiCache.forTesting({Directory? directory})
+      : _directoryProvider = (() async => directory);
+
+  // Old SharedPreferences entries are prefixed with this, see
+  // _migrateFromSharedPreferences()
+  static const _legacyPrefix = 'cache_';
 
   final Map<String, CacheEntry<Object?>> _memoryCache = {};
   final Map<String, Completer<Object?>> _ongoingRequests = {};
-  SharedPreferences? _prefs;
+  final Future<Directory?> Function() _directoryProvider;
+  Future<Directory?>? _directory;
 
-  /// Initialize persistent storage
-  Future<void> initialize() async {
-    _prefs ??= await SharedPreferences.getInstance();
+  static Future<Directory?> _defaultDirectory() async =>
+      Directory('${(await getApplicationCacheDirectory()).path}/api_cache');
+
+  /// Prepares the persistent storage. Called by every operation that needs
+  /// it; persistence is off if it fails (e.g. in tests without plugins).
+  Future<void> initialize() => _storage();
+
+  Future<Directory?> _storage() => _directory ??= () async {
+        try {
+          final directory = await _directoryProvider();
+          if (directory == null) return null;
+          await directory.create(recursive: true);
+          await _migrateFromSharedPreferences(directory);
+          return directory;
+        } catch (e) {
+          debugPrint('API cache is not persisted: $e');
+          return null;
+        }
+      }();
+
+  static File _fileFor(Directory directory, String key) =>
+      File('${directory.path}/${md5.convert(utf8.encode(key))}.json');
+
+  /// Moves entries saved in SharedPreferences by older versions to files, so
+  /// the library stays browsable offline after the update. Search results
+  /// aren't persisted anymore and are dropped.
+  static Future<void> _migrateFromSharedPreferences(Directory directory) async {
+    final prefs = await SharedPreferences.getInstance();
+    final keys =
+        prefs.getKeys().where((k) => k.startsWith(_legacyPrefix)).toList();
+    if (keys.isEmpty) return;
+    for (final prefKey in keys) {
+      final key = prefKey.substring(_legacyPrefix.length);
+      final json = prefs.getString(prefKey);
+      if (json != null && !key.startsWith('search3?')) {
+        await _fileFor(directory, key).writeAsString(json);
+      }
+      await prefs.remove(prefKey);
+    }
+    debugPrint('Moved ${keys.length} API cache entries to files');
   }
 
   /// Generate cache key from request parameters
@@ -109,8 +160,7 @@ class ApiCache {
     // Check persistent cache if enabled
     CacheEntry<T>? persistentCached;
     if (usePersistentCache) {
-      await initialize();
-      persistentCached = _getPersistentCache<T>(key, fromJson);
+      persistentCached = await _getPersistentCache<T>(key, fromJson);
       if (!forceRefresh &&
           persistentCached != null &&
           persistentCached.isValid) {
@@ -192,20 +242,21 @@ class ApiCache {
   }
 
   /// Get data from persistent cache, including expired entries
-  CacheEntry<T>? _getPersistentCache<T>(
-      String key, T Function(dynamic json)? fromJson) {
-    if (_prefs == null) return null;
+  Future<CacheEntry<T>?> _getPersistentCache<T>(
+      String key, T Function(dynamic json)? fromJson) async {
+    final directory = await _storage();
+    if (directory == null) return null;
+    final file = _fileFor(directory, key);
 
     try {
-      final jsonString = _prefs!.getString('cache_$key');
-      if (jsonString == null) return null;
-
-      final json = jsonDecode(jsonString) as Map<String, dynamic>;
+      if (!await file.exists()) return null;
+      final json =
+          jsonDecode(await file.readAsString()) as Map<String, dynamic>;
       return CacheEntry<T>.fromJson(json, fromJson ?? (data) => data as T);
     } catch (e) {
       debugPrint('Error reading persistent cache for $key: $e');
       // Remove corrupted entry
-      unawaited(_prefs!.remove('cache_$key'));
+      unawaited(_delete(file));
       return null;
     }
   }
@@ -213,33 +264,30 @@ class ApiCache {
   /// Set data in persistent cache
   Future<void> _setPersistentCache<T>(
       String key, CacheEntry<T> entry, Object? Function(T data)? toJson) async {
-    if (_prefs == null) return;
+    final directory = await _storage();
+    if (directory == null) return;
+    final file = _fileFor(directory, key);
 
     try {
       final jsonString = jsonEncode({
         ...entry.toJson(),
         'data': toJson != null ? toJson(entry.data) : entry.data,
       });
-      await _prefs!.setString('cache_$key', jsonString);
+      // Written next to it and renamed, so a crash mid-write can't leave a
+      // truncated entry
+      final temp = File('${file.path}.tmp');
+      await temp.writeAsString(jsonString, flush: true);
+      await temp.rename(file.path);
     } catch (e) {
       debugPrint('Error writing persistent cache for $key: $e');
     }
   }
 
-  /// Removes the persisted entries whose keys pass [test]. Initializes the
-  /// storage first, so entries that were never loaded are removed too.
-  Future<void> _removePersisted(bool Function(String key) test) async {
+  static Future<void> _delete(File file) async {
     try {
-      await initialize();
-      final keys = _prefs!
-          .getKeys()
-          .where((k) => k.startsWith('cache_') && test(k.substring(6)))
-          .toList();
-      for (final key in keys) {
-        await _prefs!.remove(key);
-      }
+      if (await file.exists()) await file.delete();
     } catch (e) {
-      debugPrint('Error removing persistent cache entries: $e');
+      debugPrint('Error removing persistent cache entry: $e');
     }
   }
 
@@ -247,14 +295,25 @@ class ApiCache {
   void clearEntry(String endpoint, [Map<String, String>? params]) {
     final key = _generateKey(endpoint, params);
     _memoryCache.remove(key);
-    unawaited(_removePersisted((k) => k == key));
+    unawaited(_storage().then((directory) async {
+      if (directory != null) await _delete(_fileFor(directory, key));
+    }));
     debugPrint('Cache CLEARED: $key');
   }
 
-  /// Clear all cache entries
+  /// Clear all cache entries, also those persisted and never loaded
   Future<void> clearAll() async {
     _memoryCache.clear();
-    await _removePersisted((_) => true);
+    final directory = await _storage();
+    if (directory != null) {
+      try {
+        await for (final entity in directory.list()) {
+          await entity.delete(recursive: true);
+        }
+      } catch (e) {
+        debugPrint('Error removing persistent cache entries: $e');
+      }
+    }
 
     debugPrint('Cache CLEARED ALL');
   }

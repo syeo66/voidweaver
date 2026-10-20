@@ -405,10 +405,9 @@ class SubsonicApi {
           rethrow;
         }
       },
+      // Only in memory: every query would add an entry that's never read
+      // again
       cacheDuration: const Duration(minutes: 5),
-      usePersistentCache: true,
-      toJson: (result) => result.toJson(),
-      fromJson: (json) => SearchResult.fromJson(json as Map<String, dynamic>),
     );
   }
 
@@ -1005,26 +1004,6 @@ class SearchResult {
     }
 
     return result;
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'artists': artists.map((a) => a.toJson()).toList(),
-      'albums': albums.map((a) => a.toJson()).toList(),
-      'songs': songs.map((s) => s.toJson()).toList(),
-    };
-  }
-
-  static SearchResult fromJson(Map<String, dynamic> json) {
-    List<T> parse<T>(String key, T Function(Map<String, dynamic>) f) =>
-        (json[key] as List<dynamic>? ?? [])
-            .map((e) => f(e as Map<String, dynamic>))
-            .toList();
-    return SearchResult(
-      artists: parse('artists', Artist.fromJson),
-      albums: parse('albums', Album.fromJson),
-      songs: parse('songs', Song.fromJson),
-    );
   }
 
   bool get isEmpty => artists.isEmpty && albums.isEmpty && songs.isEmpty;

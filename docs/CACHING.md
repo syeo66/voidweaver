@@ -4,14 +4,16 @@ Three caches keep the app fast and usable offline. All of them can be cleared fr
 
 ## API responses (`ApiCache`)
 
-`SubsonicApi` wraps read calls in `ApiCache`, which keeps entries in memory and in SharedPreferences. Typed data is stored through `toJson`/`fromJson` codecs.
+`SubsonicApi` wraps read calls in `ApiCache`, which keeps entries in memory and, for persistent ones, as JSON files in `api_cache/` in the app cache directory (one file per key, named by its MD5). Typed data is stored through `toJson`/`fromJson` codecs.
+
+Older versions kept persistent entries in SharedPreferences. On Android that's a single XML file, loaded whole at startup and rewritten whole on every change, including each playback position save, so a large library slowed both down. The first time the cache is used, those entries are moved to files (search results are dropped). Files are written to a temporary name and then renamed, and a corrupted file is deleted and fetched again.
 
 | Call | TTL | Persistent |
 |------|-----|------------|
 | `getAlbumList` | 3 min | yes |
 | `getAlbum`, `getArtistAlbums` | 10 min | yes |
 | `getArtists` | 15 min | yes |
-| `search` | 5 min | yes |
+| `search` | 5 min | no (each query would leave an entry behind) |
 
 - **Keys** are the endpoint plus sorted query parameters, e.g. `getAlbumList2?size=500&type=newest`. The album list is one entry holding every page (`getAlbumList2` returns at most 500 albums per request, so `getAlbumList` follows `offset` until a page comes back short).
 - **Deduplication**: concurrent identical calls share one request.

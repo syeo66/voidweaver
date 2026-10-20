@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/api_cache.dart';
@@ -6,12 +9,16 @@ import 'package:voidweaver/services/subsonic_api.dart';
 void main() {
   group('API Cache Tests', () {
     late ApiCache cache;
+    late Directory directory;
 
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
-      cache = ApiCache.forTesting();
+      directory = await Directory.systemTemp.createTemp('api_cache_test');
+      cache = ApiCache.forTesting(directory: directory);
       await cache.initialize();
     });
+
+    tearDown(() => directory.delete(recursive: true));
 
     test('should cache and retrieve values', () async {
       const endpoint = 'test_endpoint';
@@ -193,7 +200,7 @@ void main() {
           usePersistentCache: true, toJson: toJson, fromJson: fromJson);
 
       // A fresh instance (e.g. after app restart) has an empty memory cache
-      final restarted = ApiCache.forTesting();
+      final restarted = ApiCache.forTesting(directory: directory);
       await restarted.initialize();
       var fetched = false;
       final result = await restarted
@@ -212,11 +219,63 @@ void main() {
           usePersistentCache: true);
 
       // Not initialized and nothing loaded, as right after a restart
-      final restarted = ApiCache.forTesting();
+      final restarted = ApiCache.forTesting(directory: directory);
       await restarted.clearAll();
 
+      expect(directory.listSync(), isEmpty);
+    });
+
+    test('moves entries from SharedPreferences to files, except searches',
+        () async {
+      String entry(String data) => jsonEncode({
+            'data': data,
+            'expiresAt': DateTime.now()
+                .add(const Duration(minutes: 5))
+                .toIso8601String(),
+            'key': 'unused',
+          });
+      SharedPreferences.setMockInitialValues({
+        'cache_getArtists?': entry('artists'),
+        'cache_search3?query=x': entry('search'),
+        'themeMode': 1,
+      });
+      final fresh = await Directory.systemTemp.createTemp('api_cache_test');
+      addTearDown(() => fresh.delete(recursive: true));
+
+      final migrated = ApiCache.forTesting(directory: fresh);
+      final result = await migrated.getOrFetch<String>(
+          'getArtists', null, () async => 'fetched',
+          usePersistentCache: true);
+
+      expect(result, 'artists');
+      expect(fresh.listSync(), hasLength(1));
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getKeys().where((k) => k.startsWith('cache_')), isEmpty);
+      expect(prefs.getKeys(), {'themeMode'});
+    });
+
+    test('a corrupted file is dropped and fetched again', () async {
+      await cache.getOrFetch<String>('endpoint', null, () async => 'saved',
+          usePersistentCache: true);
+      final file = directory.listSync().single as File;
+      file.writeAsStringSync('{not json');
+
+      final restarted = ApiCache.forTesting(directory: directory);
+      final result = await restarted.getOrFetch<String>(
+          'endpoint', null, () async => 'fetched',
+          usePersistentCache: true);
+
+      expect(result, 'fetched');
+    });
+
+    test('works in memory when the storage is unavailable', () async {
+      final memoryOnly = ApiCache.forTesting();
+      await memoryOnly.getOrFetch<String>('endpoint', null, () async => 'a',
+          usePersistentCache: true);
+      final result = await memoryOnly.getOrFetch<String>(
+          'endpoint', null, () async => 'b',
+          usePersistentCache: true);
+
+      expect(result, 'a');
     });
 
     test('should serve stale memory data when fetch fails', () async {
@@ -236,7 +295,7 @@ void main() {
           cacheDuration: Duration.zero, usePersistentCache: true);
       await Future.delayed(const Duration(milliseconds: 5));
 
-      final restarted = ApiCache.forTesting();
+      final restarted = ApiCache.forTesting(directory: directory);
       await restarted.initialize();
       final result = await restarted.getOrFetch<String>(
           'endpoint', null, () async => throw Exception('offline'),
@@ -308,7 +367,7 @@ void main() {
 
       test('keeps an unchanged persistent entry after a restart', () async {
         await get();
-        cache = ApiCache.forTesting();
+        cache = ApiCache.forTesting(directory: directory);
         await cache.initialize();
         expect(await get(), 'data 1');
         expect(fetches, 1);
