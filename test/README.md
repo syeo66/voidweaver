@@ -8,6 +8,15 @@ flutter test --coverage
 
 Tests need no device, network or platform plugins.
 
+The player plugin (`packages/voidweaver_player`) has its own tests:
+
+```bash
+cd packages/voidweaver_player && flutter test        # Dart API over a mocked method/event channel
+cd android && ./gradlew :voidweaver_player:testDebugUnitTest   # Java, on the JVM with Robolectric
+```
+
+The Java tests (`packages/voidweaver_player/android/src/test/`) cover `GainAudioProcessor` (gain per item, switched at the item boundary, clipping), `SessionPlayer` (commands forwarded to Dart, the offered commands, idle after an error shown as paused) and `MediaCache.ErrorDocumentGuard`. `FakePlayer` stands in for the ExoPlayer. They need `JAVA_HOME` set (see CLAUDE.md) but no device; they don't replace testing in the emulator.
+
 ## Layout
 
 - `services/`: one file per service (API cache, audio cache, scrobble queue, playback restore, ReplayGain parsing, skips, gapless playback and system controls, timeouts, HTTPS enforcement, disposal)

@@ -7,6 +7,7 @@ import 'package:voidweaver/services/network_config.dart';
 import 'package:voidweaver/services/network_errors.dart';
 import 'package:voidweaver/services/settings_service.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
+import 'package:voidweaver/services/replaygain_reader.dart';
 
 import '../test_helpers/fake_audio_cache.dart';
 import '../test_helpers/mock_audio_player.dart';
@@ -75,6 +76,8 @@ void main() {
 
     when(mockApi.getStreamUrl(any)).thenAnswer(
         (invocation) => urlFor(invocation.positionalArguments.first as String));
+    when(mockApi.readReplayGain(any))
+        .thenAnswer((_) async => const ReplayGainData());
 
     service = AudioPlayerService(mockApi, mockSettings,
         audioPlayer: player, audioCache: cache);

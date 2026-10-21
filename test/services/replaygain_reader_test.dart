@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/replaygain_reader.dart';
 import 'package:voidweaver/services/settings_service.dart';
@@ -285,6 +286,10 @@ void main() {
 
     String urlOf(HttpServer server) => 'http://127.0.0.1:${server.port}/stream';
 
+    late http.Client client;
+    setUp(() => client = http.Client());
+    tearDown(() => client.close());
+
     test('reads the tags the server returns', () async {
       final server = await serve((request) async {
         request.response
@@ -292,7 +297,8 @@ void main() {
         await request.response.close();
       });
 
-      final data = await ReplayGainReader.readFromUrl(urlOf(server));
+      final data =
+          await ReplayGainReader.readFromUrl(urlOf(server), client: client);
       expect(data.trackGain, -6.5);
     });
 
@@ -302,7 +308,7 @@ void main() {
 
       final stopwatch = Stopwatch()..start();
       final data = await ReplayGainReader.readFromUrl(urlOf(server),
-          timeout: const Duration(milliseconds: 200));
+          client: client, timeout: const Duration(milliseconds: 200));
       expect(data.hasAnyData, isFalse);
       expect(stopwatch.elapsed, lessThan(const Duration(seconds: 2)));
     });

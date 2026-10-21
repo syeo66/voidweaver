@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
-import 'package:http_plus/http_plus.dart' as http;
+import 'package:http/http.dart' as http;
+import '../utils/redact.dart';
 import 'replaygain_debug_logger.dart';
 
 class ReplayGainData {
@@ -49,29 +50,33 @@ class ReplayGainReader {
   /// [readFromUrl].
   static const Duration defaultUrlTimeout = Duration(seconds: 3);
 
-  /// Reads ReplayGain metadata from the start of the file at [url]. Playback
-  /// waits for this, so after [timeout] it gives up and returns no data (the
-  /// fallback gain applies) rather than hold it up on a stalled connection.
+  /// Reads ReplayGain metadata from the start of the file at [url] through
+  /// [client] (see `SubsonicApi.readReplayGain`). Playback waits for this, so
+  /// after [timeout] it gives up and returns no data (the fallback gain
+  /// applies) rather than hold it up on a stalled connection.
   static Future<ReplayGainData> readFromUrl(String url,
-      {Duration timeout = defaultUrlTimeout}) async {
+      {required http.Client client,
+      Duration timeout = defaultUrlTimeout}) async {
     try {
-      return await _fetchFromUrl(url).timeout(timeout);
+      return await _fetchFromUrl(url, client).timeout(timeout);
     } on TimeoutException {
       _log('Reading ReplayGain metadata timed out after $timeout');
       return const ReplayGainData();
     } catch (e, stackTrace) {
-      _log('Error reading ReplayGain metadata: $e');
+      // Client errors can contain the URL with the credentials
+      _log('Error reading ReplayGain metadata: ${redactCredentials('$e')}');
       _log('Stack trace: $stackTrace');
       return const ReplayGainData();
     }
   }
 
-  static Future<ReplayGainData> _fetchFromUrl(String url) async {
+  static Future<ReplayGainData> _fetchFromUrl(
+      String url, http.Client client) async {
     _log(
         'Reading ReplayGain metadata from: ${ReplayGainDebugLogger.redact(url)}');
 
     // Make a range request to get just the beginning of the file
-    final response = await http.get(
+    final response = await client.get(
       Uri.parse(url),
       headers: {'Range': 'bytes=0-${_maxHeaderSize - 1}'},
     );
@@ -88,7 +93,7 @@ class ReplayGainReader {
       final required = requiredHeaderSize(bytes);
       if (response.statusCode == 206 && required > bytes.length) {
         _log('Metadata extends to $required bytes, fetching the rest');
-        final rest = await http.get(
+        final rest = await client.get(
           Uri.parse(url),
           headers: {'Range': 'bytes=${bytes.length}-${required - 1}'},
         );

@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/audio_player_service.dart';
 import 'package:voidweaver/services/settings_service.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
+import 'package:voidweaver/services/replaygain_reader.dart';
 import 'package:voidweaver/widgets/player_controls.dart';
 
 import '../test_helpers/fake_audio_cache.dart';
@@ -57,6 +58,8 @@ void main() {
     )).thenReturn(1.0);
     when(mockApi.getStreamUrl(any)).thenAnswer((invocation) =>
         'https://music.test/rest/stream?id=${invocation.positionalArguments.first}');
+    when(mockApi.readReplayGain(any))
+        .thenAnswer((_) async => const ReplayGainData());
 
     // Offline: preloading downloads nothing
     cache = FakeAudioCache()..reachable = false;

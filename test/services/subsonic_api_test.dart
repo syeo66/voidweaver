@@ -147,6 +147,17 @@ void main() {
       expect(apiFor('https://a.example.com').coverArtCacheKey('al-1'),
           isNot(apiFor('https://b.example.com').coverArtCacheKey('al-1')));
     });
+
+    test('differs between sizes, which the URL requests', () {
+      final api = apiFor('https://a.example.com');
+
+      expect(api.coverArtCacheKey('al-1', size: 150),
+          isNot(api.coverArtCacheKey('al-1', size: 600)));
+      expect(
+          Uri.parse(api.getCoverArtUrl('al-1', size: 600))
+              .queryParameters['size'],
+          '600');
+    });
   });
 
   group('SubsonicApi.libraryVersionFrom', () {

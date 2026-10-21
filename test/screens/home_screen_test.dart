@@ -10,6 +10,7 @@ import 'package:voidweaver/services/audio_player_service.dart';
 import 'package:voidweaver/services/network_errors.dart';
 import 'package:voidweaver/services/settings_service.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
+import 'package:voidweaver/services/replaygain_reader.dart';
 
 import '../test_helpers/fake_audio_cache.dart';
 import '../test_helpers/mock_audio_player.dart';
@@ -81,6 +82,8 @@ void main() {
     when(mockApi.getArtists()).thenAnswer((_) async => []);
     when(mockApi.getStreamUrl(any)).thenAnswer((invocation) =>
         'https://music.test/rest/stream?id=${invocation.positionalArguments.first}');
+    when(mockApi.readReplayGain(any))
+        .thenAnswer((_) async => const ReplayGainData());
 
     settings = SettingsService();
     await settings.initialize();

@@ -4,14 +4,15 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 
-import 'dart:async' as _i5;
-import 'dart:ui' as _i8;
+import 'dart:async' as _i6;
+import 'dart:ui' as _i9;
 
-import 'package:flutter/material.dart' as _i7;
+import 'package:flutter/material.dart' as _i8;
 import 'package:mockito/mockito.dart' as _i1;
-import 'package:mockito/src/dummies.dart' as _i4;
+import 'package:mockito/src/dummies.dart' as _i5;
 import 'package:voidweaver/services/network_config.dart' as _i2;
-import 'package:voidweaver/services/settings_service.dart' as _i6;
+import 'package:voidweaver/services/replaygain_reader.dart' as _i4;
+import 'package:voidweaver/services/settings_service.dart' as _i7;
 import 'package:voidweaver/services/subsonic_api.dart' as _i3;
 
 // ignore_for_file: type=lint
@@ -50,8 +51,19 @@ class _FakeAlbum_1 extends _i1.SmartFake implements _i3.Album {
         );
 }
 
-class _FakeSearchResult_2 extends _i1.SmartFake implements _i3.SearchResult {
-  _FakeSearchResult_2(
+class _FakeReplayGainData_2 extends _i1.SmartFake
+    implements _i4.ReplayGainData {
+  _FakeReplayGainData_2(
+    Object parent,
+    Invocation parentInvocation,
+  ) : super(
+          parent,
+          parentInvocation,
+        );
+}
+
+class _FakeSearchResult_3 extends _i1.SmartFake implements _i3.SearchResult {
+  _FakeSearchResult_3(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -71,7 +83,7 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
   @override
   String get serverUrl => (super.noSuchMethod(
         Invocation.getter(#serverUrl),
-        returnValue: _i4.dummyValue<String>(
+        returnValue: _i5.dummyValue<String>(
           this,
           Invocation.getter(#serverUrl),
         ),
@@ -80,7 +92,7 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
   @override
   String get username => (super.noSuchMethod(
         Invocation.getter(#username),
-        returnValue: _i4.dummyValue<String>(
+        returnValue: _i5.dummyValue<String>(
           this,
           Invocation.getter(#username),
         ),
@@ -89,7 +101,7 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
   @override
   String get password => (super.noSuchMethod(
         Invocation.getter(#password),
-        returnValue: _i4.dummyValue<String>(
+        returnValue: _i5.dummyValue<String>(
           this,
           Invocation.getter(#password),
         ),
@@ -98,7 +110,7 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
   @override
   String get clientName => (super.noSuchMethod(
         Invocation.getter(#clientName),
-        returnValue: _i4.dummyValue<String>(
+        returnValue: _i5.dummyValue<String>(
           this,
           Invocation.getter(#clientName),
         ),
@@ -107,7 +119,7 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
   @override
   String get version => (super.noSuchMethod(
         Invocation.getter(#version),
-        returnValue: _i4.dummyValue<String>(
+        returnValue: _i5.dummyValue<String>(
           this,
           Invocation.getter(#version),
         ),
@@ -132,59 +144,59 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
       );
 
   @override
-  _i5.Future<void> ping() => (super.noSuchMethod(
+  _i6.Future<void> ping() => (super.noSuchMethod(
         Invocation.method(
           #ping,
           [],
         ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
 
   @override
-  _i5.Future<List<_i3.Album>> getAlbumList({bool? forceRefresh = false}) =>
+  _i6.Future<List<_i3.Album>> getAlbumList({bool? forceRefresh = false}) =>
       (super.noSuchMethod(
         Invocation.method(
           #getAlbumList,
           [],
           {#forceRefresh: forceRefresh},
         ),
-        returnValue: _i5.Future<List<_i3.Album>>.value(<_i3.Album>[]),
-      ) as _i5.Future<List<_i3.Album>>);
+        returnValue: _i6.Future<List<_i3.Album>>.value(<_i3.Album>[]),
+      ) as _i6.Future<List<_i3.Album>>);
 
   @override
-  _i5.Future<String?> getLibraryVersion() => (super.noSuchMethod(
+  _i6.Future<String?> getLibraryVersion() => (super.noSuchMethod(
         Invocation.method(
           #getLibraryVersion,
           [],
         ),
-        returnValue: _i5.Future<String?>.value(),
-      ) as _i5.Future<String?>);
+        returnValue: _i6.Future<String?>.value(),
+      ) as _i6.Future<String?>);
 
   @override
-  _i5.Future<_i3.Album> getAlbum(String? id) => (super.noSuchMethod(
+  _i6.Future<_i3.Album> getAlbum(String? id) => (super.noSuchMethod(
         Invocation.method(
           #getAlbum,
           [id],
         ),
-        returnValue: _i5.Future<_i3.Album>.value(_FakeAlbum_1(
+        returnValue: _i6.Future<_i3.Album>.value(_FakeAlbum_1(
           this,
           Invocation.method(
             #getAlbum,
             [id],
           ),
         )),
-      ) as _i5.Future<_i3.Album>);
+      ) as _i6.Future<_i3.Album>);
 
   @override
-  _i5.Future<List<_i3.Song>> getRandomSongs([int? count = 50]) =>
+  _i6.Future<List<_i3.Song>> getRandomSongs([int? count = 50]) =>
       (super.noSuchMethod(
         Invocation.method(
           #getRandomSongs,
           [count],
         ),
-        returnValue: _i5.Future<List<_i3.Song>>.value(<_i3.Song>[]),
-      ) as _i5.Future<List<_i3.Song>>);
+        returnValue: _i6.Future<List<_i3.Song>>.value(<_i3.Song>[]),
+      ) as _i6.Future<List<_i3.Song>>);
 
   @override
   String getStreamUrl(String? id) => (super.noSuchMethod(
@@ -192,7 +204,7 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
           #getStreamUrl,
           [id],
         ),
-        returnValue: _i4.dummyValue<String>(
+        returnValue: _i5.dummyValue<String>(
           this,
           Invocation.method(
             #getStreamUrl,
@@ -202,47 +214,75 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
       ) as String);
 
   @override
-  String getCoverArtUrl(String? id) => (super.noSuchMethod(
+  _i6.Future<_i4.ReplayGainData> readReplayGain(String? id) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #readReplayGain,
+          [id],
+        ),
+        returnValue: _i6.Future<_i4.ReplayGainData>.value(_FakeReplayGainData_2(
+          this,
+          Invocation.method(
+            #readReplayGain,
+            [id],
+          ),
+        )),
+      ) as _i6.Future<_i4.ReplayGainData>);
+
+  @override
+  String getCoverArtUrl(
+    String? id, {
+    int? size = 300,
+  }) =>
+      (super.noSuchMethod(
         Invocation.method(
           #getCoverArtUrl,
           [id],
+          {#size: size},
         ),
-        returnValue: _i4.dummyValue<String>(
+        returnValue: _i5.dummyValue<String>(
           this,
           Invocation.method(
             #getCoverArtUrl,
             [id],
+            {#size: size},
           ),
         ),
       ) as String);
 
   @override
-  String coverArtCacheKey(String? id) => (super.noSuchMethod(
+  String coverArtCacheKey(
+    String? id, {
+    int? size = 300,
+  }) =>
+      (super.noSuchMethod(
         Invocation.method(
           #coverArtCacheKey,
           [id],
+          {#size: size},
         ),
-        returnValue: _i4.dummyValue<String>(
+        returnValue: _i5.dummyValue<String>(
           this,
           Invocation.method(
             #coverArtCacheKey,
             [id],
+            {#size: size},
           ),
         ),
       ) as String);
 
   @override
-  _i5.Future<void> scrobbleNowPlaying(String? songId) => (super.noSuchMethod(
+  _i6.Future<void> scrobbleNowPlaying(String? songId) => (super.noSuchMethod(
         Invocation.method(
           #scrobbleNowPlaying,
           [songId],
         ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
 
   @override
-  _i5.Future<void> scrobbleSubmission(
+  _i6.Future<void> scrobbleSubmission(
     String? songId, {
     DateTime? playedAt,
   }) =>
@@ -252,12 +292,12 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
           [songId],
           {#playedAt: playedAt},
         ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
 
   @override
-  _i5.Future<_i3.SearchResult> search(
+  _i6.Future<_i3.SearchResult> search(
     String? query, {
     int? artistCount = 20,
     int? albumCount = 20,
@@ -273,7 +313,7 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
             #songCount: songCount,
           },
         ),
-        returnValue: _i5.Future<_i3.SearchResult>.value(_FakeSearchResult_2(
+        returnValue: _i6.Future<_i3.SearchResult>.value(_FakeSearchResult_3(
           this,
           Invocation.method(
             #search,
@@ -285,36 +325,36 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
             },
           ),
         )),
-      ) as _i5.Future<_i3.SearchResult>);
+      ) as _i6.Future<_i3.SearchResult>);
 
   @override
-  _i5.Future<List<_i3.Artist>> getArtists() => (super.noSuchMethod(
+  _i6.Future<List<_i3.Artist>> getArtists() => (super.noSuchMethod(
         Invocation.method(
           #getArtists,
           [],
         ),
-        returnValue: _i5.Future<List<_i3.Artist>>.value(<_i3.Artist>[]),
-      ) as _i5.Future<List<_i3.Artist>>);
+        returnValue: _i6.Future<List<_i3.Artist>>.value(<_i3.Artist>[]),
+      ) as _i6.Future<List<_i3.Artist>>);
 
   @override
-  _i5.Future<List<_i3.Album>> getArtistAlbums(String? artistId) =>
+  _i6.Future<List<_i3.Album>> getArtistAlbums(String? artistId) =>
       (super.noSuchMethod(
         Invocation.method(
           #getArtistAlbums,
           [artistId],
         ),
-        returnValue: _i5.Future<List<_i3.Album>>.value(<_i3.Album>[]),
-      ) as _i5.Future<List<_i3.Album>>);
+        returnValue: _i6.Future<List<_i3.Album>>.value(<_i3.Album>[]),
+      ) as _i6.Future<List<_i3.Album>>);
 
   @override
-  _i5.Future<void> clearCache() => (super.noSuchMethod(
+  _i6.Future<void> clearCache() => (super.noSuchMethod(
         Invocation.method(
           #clearCache,
           [],
         ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
 
   @override
   void dispose() => super.noSuchMethod(
@@ -329,16 +369,16 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
 /// A class which mocks [SettingsService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockSettingsService extends _i1.Mock implements _i6.SettingsService {
+class MockSettingsService extends _i1.Mock implements _i7.SettingsService {
   MockSettingsService() {
     _i1.throwOnMissingStub(this);
   }
 
   @override
-  _i6.ReplayGainMode get replayGainMode => (super.noSuchMethod(
+  _i7.ReplayGainMode get replayGainMode => (super.noSuchMethod(
         Invocation.getter(#replayGainMode),
-        returnValue: _i6.ReplayGainMode.off,
-      ) as _i6.ReplayGainMode);
+        returnValue: _i7.ReplayGainMode.off,
+      ) as _i7.ReplayGainMode);
 
   @override
   double get replayGainPreamp => (super.noSuchMethod(
@@ -359,10 +399,10 @@ class MockSettingsService extends _i1.Mock implements _i6.SettingsService {
       ) as double);
 
   @override
-  _i7.ThemeMode get themeMode => (super.noSuchMethod(
+  _i8.ThemeMode get themeMode => (super.noSuchMethod(
         Invocation.getter(#themeMode),
-        returnValue: _i7.ThemeMode.system,
-      ) as _i7.ThemeMode);
+        returnValue: _i8.ThemeMode.system,
+      ) as _i8.ThemeMode);
 
   @override
   _i2.NetworkConfig get networkConfig => (super.noSuchMethod(
@@ -392,57 +432,57 @@ class MockSettingsService extends _i1.Mock implements _i6.SettingsService {
       ) as bool);
 
   @override
-  _i5.Future<void> initialize() => (super.noSuchMethod(
+  _i6.Future<void> initialize() => (super.noSuchMethod(
         Invocation.method(
           #initialize,
           [],
         ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
 
   @override
-  _i5.Future<void> setReplayGainMode(_i6.ReplayGainMode? mode) =>
+  _i6.Future<void> setReplayGainMode(_i7.ReplayGainMode? mode) =>
       (super.noSuchMethod(
         Invocation.method(
           #setReplayGainMode,
           [mode],
         ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
 
   @override
-  _i5.Future<void> setReplayGainPreamp(double? preamp) => (super.noSuchMethod(
+  _i6.Future<void> setReplayGainPreamp(double? preamp) => (super.noSuchMethod(
         Invocation.method(
           #setReplayGainPreamp,
           [preamp],
         ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
 
   @override
-  _i5.Future<void> setReplayGainPreventClipping(bool? prevent) =>
+  _i6.Future<void> setReplayGainPreventClipping(bool? prevent) =>
       (super.noSuchMethod(
         Invocation.method(
           #setReplayGainPreventClipping,
           [prevent],
         ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
 
   @override
-  _i5.Future<void> setReplayGainFallbackGain(double? gain) =>
+  _i6.Future<void> setReplayGainFallbackGain(double? gain) =>
       (super.noSuchMethod(
         Invocation.method(
           #setReplayGainFallbackGain,
           [gain],
         ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
 
   @override
   double calculateVolumeAdjustment({
@@ -466,80 +506,80 @@ class MockSettingsService extends _i1.Mock implements _i6.SettingsService {
       ) as double);
 
   @override
-  _i5.Future<void> setThemeMode(_i7.ThemeMode? mode) => (super.noSuchMethod(
+  _i6.Future<void> setThemeMode(_i8.ThemeMode? mode) => (super.noSuchMethod(
         Invocation.method(
           #setThemeMode,
           [mode],
         ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
 
   @override
-  _i5.Future<void> setNetworkConfig(_i2.NetworkConfig? config) =>
+  _i6.Future<void> setNetworkConfig(_i2.NetworkConfig? config) =>
       (super.noSuchMethod(
         Invocation.method(
           #setNetworkConfig,
           [config],
         ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
 
   @override
-  _i5.Future<void> resetNetworkConfigToDefault() => (super.noSuchMethod(
+  _i6.Future<void> resetNetworkConfigToDefault() => (super.noSuchMethod(
         Invocation.method(
           #resetNetworkConfigToDefault,
           [],
         ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
 
   @override
-  _i5.Future<void> setNetworkConfigToFast() => (super.noSuchMethod(
+  _i6.Future<void> setNetworkConfigToFast() => (super.noSuchMethod(
         Invocation.method(
           #setNetworkConfigToFast,
           [],
         ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
 
   @override
-  _i5.Future<void> setNetworkConfigToSlow() => (super.noSuchMethod(
+  _i6.Future<void> setNetworkConfigToSlow() => (super.noSuchMethod(
         Invocation.method(
           #setNetworkConfigToSlow,
           [],
         ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
 
   @override
-  _i5.Future<void> setScrobbleMinPlayTimeMinutes(double? minutes) =>
+  _i6.Future<void> setScrobbleMinPlayTimeMinutes(double? minutes) =>
       (super.noSuchMethod(
         Invocation.method(
           #setScrobbleMinPlayTimeMinutes,
           [minutes],
         ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
 
   @override
-  _i5.Future<void> setScrobbleThresholdPercent(double? percent) =>
+  _i6.Future<void> setScrobbleThresholdPercent(double? percent) =>
       (super.noSuchMethod(
         Invocation.method(
           #setScrobbleThresholdPercent,
           [percent],
         ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
 
   @override
-  void addListener(_i8.VoidCallback? listener) => super.noSuchMethod(
+  void addListener(_i9.VoidCallback? listener) => super.noSuchMethod(
         Invocation.method(
           #addListener,
           [listener],
@@ -548,7 +588,7 @@ class MockSettingsService extends _i1.Mock implements _i6.SettingsService {
       );
 
   @override
-  void removeListener(_i8.VoidCallback? listener) => super.noSuchMethod(
+  void removeListener(_i9.VoidCallback? listener) => super.noSuchMethod(
         Invocation.method(
           #removeListener,
           [listener],

@@ -30,6 +30,10 @@ jobs:
     
     - name: Run tests
       run: flutter test --coverage
+
+    - name: Run player plugin tests
+      working-directory: packages/voidweaver_player
+      run: flutter test
     
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v7
@@ -58,6 +62,11 @@ jobs:
 
     - name: Build Android APK
       run: flutter build apk --release
+
+    # After the build, which generates the Gradle wrapper
+    - name: Run player plugin JVM tests
+      working-directory: android
+      run: ./gradlew :voidweaver_player:testDebugUnitTest
     
     - name: Upload APK artifact
       uses: actions/upload-artifact@v7

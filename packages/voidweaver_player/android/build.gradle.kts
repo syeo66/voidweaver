@@ -44,4 +44,8 @@ android {
 dependencies {
     implementation("androidx.media3:media3-exoplayer:1.11.1")
     implementation("androidx.media3:media3-session:1.11.1")
+
+    // JVM tests (`./gradlew :voidweaver_player:testDebugUnitTest` in android/)
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.16")
 }

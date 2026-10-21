@@ -11,6 +11,7 @@ import 'network_config.dart';
 import 'network_errors.dart';
 import 'network_retry.dart';
 import 'replaygain_debug_logger.dart';
+import 'replaygain_reader.dart';
 import '../utils/redact.dart';
 
 /// An error the server reported in a `status="failed"` response. Subsonic
@@ -329,20 +330,29 @@ class SubsonicApi {
     return uri.toString();
   }
 
-  String getCoverArtUrl(String id) {
+  /// ReplayGain tags of the song [id], read from the start of its file, for
+  /// songs the server sends no ReplayGain data for. Through the API's client,
+  /// which already has a connection to the server open; no data after a few
+  /// seconds, see [ReplayGainReader.readFromUrl].
+  Future<ReplayGainData> readReplayGain(String id) =>
+      ReplayGainReader.readFromUrl(getStreamUrl(id), client: _httpClient);
+
+  /// URL of the cover art [id], scaled by the server to [size] pixels
+  String getCoverArtUrl(String id, {int size = 300}) {
     final params = _getAuthParams();
     params['id'] = id;
-    params['size'] = '300';
+    params['size'] = '$size';
 
     final uri = Uri.parse('$serverUrl/rest/getCoverArt')
         .replace(queryParameters: params);
     return uri.toString();
   }
 
-  /// Image cache key (disk and memory) for the cover art [id]. Not the URL,
-  /// whose token changes with every request, and not the id alone, because
-  /// ids like `al-1` repeat across servers.
-  String coverArtCacheKey(String id) => '$serverUrl#$id';
+  /// Image cache key (disk and memory) for the cover art [id] at [size]. Not
+  /// the URL, whose token changes with every request, and not the id alone,
+  /// because ids like `al-1` repeat across servers.
+  String coverArtCacheKey(String id, {int size = 300}) =>
+      '$serverUrl#$id@$size';
 
   /// Notifies the server that a song is now playing.
   /// This updates the "now playing" status but doesn't affect play counts.

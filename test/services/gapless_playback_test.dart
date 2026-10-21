@@ -81,6 +81,8 @@ void main() {
 
     when(mockApi.getStreamUrl(any)).thenAnswer(
         (invocation) => urlFor(invocation.positionalArguments.first as String));
+    when(mockApi.readReplayGain(any))
+        .thenAnswer((_) async => const ReplayGainData());
 
     service = AudioPlayerService(mockApi, mockSettings,
         audioPlayer: player,
@@ -190,6 +192,20 @@ void main() {
       await until(() => player.gainOfSource(urlFor('s2')) == 0.5,
           'the gain is read from the cache');
       expect(player.gainOfSource(urlFor('s1')), 0.7);
+    });
+
+    test('the start track gets a gain read from its file before it plays',
+        () async {
+      cache.reachable = false;
+      final untagged =
+          Song(id: 's1', title: 'Title s1', artist: 'Artist', album: 'Album');
+      when(mockApi.readReplayGain('s1'))
+          .thenAnswer((_) async => const ReplayGainData(trackGain: -6.0));
+
+      await service.playAlbum(album([untagged]));
+
+      expect(player.gainOfSource(urlFor('s1')), 0.5);
+      verify(mockApi.readReplayGain('s1')).called(1);
     });
 
     test('changed settings apply to every track', () async {

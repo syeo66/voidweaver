@@ -862,7 +862,7 @@ class AudioPlayerService extends ChangeNotifier {
           '[ReplayGain] Stream URL: ${ReplayGainDebugLogger.redact(streamUrl)}');
       try {
         final data = await _audioCache.readReplayGain(song.id) ??
-            await ReplayGainReader.readFromUrl(streamUrl);
+            await _api.readReplayGain(song.id);
         _rgLog('[ReplayGain] File reading complete: '
             'TrackGain=${data.trackGain?.toStringAsFixed(2) ?? "null"}, '
             'AlbumGain=${data.albumGain?.toStringAsFixed(2) ?? "null"}, '
