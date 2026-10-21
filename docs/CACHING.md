@@ -42,4 +42,4 @@ The Dart download cache used before (`audio_cache/`) is deleted when the Media3 
 
 ## Cover art (`ImageCacheManager`)
 
-Cover art URLs carry a new salt and token on every request, so every `CachedNetworkImage` passes the cover art id as `cacheKey`. Without it the disk cache would never hit. Images are limited to 800×800 on disk.
+Cover art URLs carry a new salt and token on every request, so the URL can't be the cache key; without a key the disk cache would never hit. All cover art goes through `ImageCacheManager.buildCoverArt()` / `coverArtProvider()`, which use `SubsonicApi.coverArtCacheKey()`: the server URL plus the cover art id, because ids like `al-1` repeat across servers. Don't use `CachedNetworkImage` directly. Images are limited to 800×800 on disk. Logout and Settings' clear cache empty the image cache.

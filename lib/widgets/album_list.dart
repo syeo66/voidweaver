@@ -125,10 +125,9 @@ class _AlbumTileState extends State<AlbumTile> {
                 ),
                 child: widget.album.coverArt != null
                     ? ImageCacheManager.buildAlbumArt(
-                        imageUrl: appState.api!
-                            .getCoverArtUrl(widget.album.coverArt!),
+                        api: appState.api!,
+                        coverArtId: widget.album.coverArt!,
                         size: 56,
-                        cacheKey: widget.album.coverArt,
                       )
                     : const Icon(Icons.album, color: Colors.grey),
               ),
@@ -270,10 +269,9 @@ class _AlbumGridTileState extends State<AlbumGridTile> {
                       ),
                       child: widget.album.coverArt != null
                           ? ImageCacheManager.buildAlbumArt(
-                              imageUrl: appState.api!
-                                  .getCoverArtUrl(widget.album.coverArt!),
+                              api: appState.api!,
+                              coverArtId: widget.album.coverArt!,
                               size: 120,
-                              cacheKey: widget.album.coverArt,
                             )
                           : const Icon(Icons.album,
                               color: Colors.grey, size: 48),

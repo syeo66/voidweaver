@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../services/app_state.dart';
+import '../services/image_cache_manager.dart';
 import '../services/subsonic_api.dart';
 import '../services/network_errors.dart';
 
@@ -220,10 +220,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
     if (artist.coverArt != null && api != null) {
       return CircleAvatar(
         backgroundColor: Colors.grey[300],
-        backgroundImage: CachedNetworkImageProvider(
-          api.getCoverArtUrl(artist.coverArt!),
-          cacheKey: artist.coverArt,
-        ),
+        backgroundImage:
+            ImageCacheManager.coverArtProvider(api, artist.coverArt!),
       );
     }
 
@@ -316,9 +314,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   ),
                 ),
                 child: album.coverArt != null && api != null
-                    ? CachedNetworkImage(
-                        imageUrl: api.getCoverArtUrl(album.coverArt!),
-                        cacheKey: album.coverArt,
+                    ? ImageCacheManager.buildCoverArt(
+                        api: api,
+                        coverArtId: album.coverArt!,
                         fit: BoxFit.cover,
                         placeholder: (context, url) => Container(
                           color: Colors.grey[300],

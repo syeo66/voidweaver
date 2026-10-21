@@ -125,6 +125,30 @@ void main() {
     });
   });
 
+  group('SubsonicApi.coverArtCacheKey', () {
+    SubsonicApi apiFor(String serverUrl) {
+      final api = SubsonicApi(
+        serverUrl: serverUrl,
+        username: 'testuser',
+        password: 'testpass',
+      );
+      addTearDown(api.dispose);
+      return api;
+    }
+
+    test('is stable although the URL changes with every request', () {
+      final api = apiFor('https://a.example.com');
+
+      expect(api.getCoverArtUrl('al-1'), isNot(api.getCoverArtUrl('al-1')));
+      expect(api.coverArtCacheKey('al-1'), api.coverArtCacheKey('al-1'));
+    });
+
+    test('differs between servers for the same id', () {
+      expect(apiFor('https://a.example.com').coverArtCacheKey('al-1'),
+          isNot(apiFor('https://b.example.com').coverArtCacheKey('al-1')));
+    });
+  });
+
   group('SubsonicApi.libraryVersionFrom', () {
     String? versionOf(String scanStatus) =>
         SubsonicApi.libraryVersionFrom(SubsonicApi.parseResponse(

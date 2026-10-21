@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../services/app_state.dart';
+import '../services/image_cache_manager.dart';
 import '../services/audio_player_service.dart';
 import '../services/subsonic_api.dart';
 import '../widgets/album_list.dart';
@@ -486,9 +486,9 @@ class _PlaylistItem extends StatelessWidget {
                 song.coverArt != null
                     ? ClipRRect(
                         borderRadius: BorderRadius.circular(isCompact ? 6 : 8),
-                        child: CachedNetworkImage(
-                          imageUrl: api.getCoverArtUrl(song.coverArt!),
-                          cacheKey: song.coverArt,
+                        child: ImageCacheManager.buildCoverArt(
+                          api: api,
+                          coverArtId: song.coverArt!,
                           key: ValueKey('playlist-${song.id}-${song.coverArt}'),
                           fit: BoxFit.cover,
                           placeholder: (context, url) => Icon(
@@ -673,14 +673,14 @@ class _StaticAlbumArt extends StatefulWidget {
 
 class _StaticAlbumArtState extends State<_StaticAlbumArt> {
   Song? _currentSong;
-  String? _currentCoverArtUrl;
+  String? _currentCoverArt;
   Widget? _cachedImageWidget;
 
   @override
   void initState() {
     super.initState();
     _currentSong = widget.playerService.currentSong;
-    _updateCoverArtUrl();
+    _updateCoverArt();
     widget.playerService.addListener(_onPlayerServiceChanged);
   }
 
@@ -690,14 +690,11 @@ class _StaticAlbumArtState extends State<_StaticAlbumArt> {
     super.dispose();
   }
 
-  void _updateCoverArtUrl() {
-    final newUrl = _currentSong?.coverArt != null
-        ? widget.api.getCoverArtUrl(_currentSong!.coverArt!)
-        : null;
-
-    if (newUrl != _currentCoverArtUrl) {
-      _currentCoverArtUrl = newUrl;
-      _cachedImageWidget = null; // Clear cache when URL changes
+  void _updateCoverArt() {
+    final newCoverArt = _currentSong?.coverArt;
+    if (newCoverArt != _currentCoverArt) {
+      _currentCoverArt = newCoverArt;
+      _cachedImageWidget = null; // Clear cache when the cover changes
     }
   }
 
@@ -710,7 +707,7 @@ class _StaticAlbumArtState extends State<_StaticAlbumArt> {
     if (songChanged) {
       setState(() {
         _currentSong = newSong;
-        _updateCoverArtUrl();
+        _updateCoverArt();
       });
     }
   }
@@ -736,7 +733,7 @@ class _StaticAlbumArtState extends State<_StaticAlbumArt> {
         borderRadius: BorderRadius.circular(12),
         color: Colors.grey[300],
       ),
-      child: _currentCoverArtUrl != null
+      child: _currentCoverArt != null
           ? _buildCachedImage()
           : const Icon(Icons.music_note, size: 64, color: Colors.grey),
     );
@@ -749,10 +746,10 @@ class _StaticAlbumArtState extends State<_StaticAlbumArt> {
 
     _cachedImageWidget = ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: CachedNetworkImage(
-        imageUrl: _currentCoverArtUrl!,
-        cacheKey: _currentSong?.coverArt,
-        key: ValueKey('main-$_currentCoverArtUrl'),
+      child: ImageCacheManager.buildCoverArt(
+        api: widget.api,
+        coverArtId: _currentCoverArt!,
+        key: ValueKey('main-$_currentCoverArt'),
         fit: BoxFit.cover,
         placeholder: (context, url) => Container(
           color: Colors.grey[300],

@@ -1,45 +1,59 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'subsonic_api.dart';
 
-/// Optimized image cache manager with consistent configuration
+/// Loads cover art with consistent caching: every image goes through here, so
+/// the cache key ([SubsonicApi.coverArtCacheKey]) is the same everywhere.
 class ImageCacheManager {
-  /// Create a cached network image with optimized settings
-  static Widget buildCachedImage({
-    required String imageUrl,
+  /// Cover art [coverArtId] of [api]'s server, decoded at the size in
+  /// physical pixels when [width] and [height] are given
+  static Widget buildCoverArt({
+    required SubsonicApi api,
+    required String coverArtId,
+    Key? key,
     double? width,
     double? height,
     BoxFit? fit,
     Widget Function(BuildContext, String)? placeholder,
     Widget Function(BuildContext, String, dynamic)? errorWidget,
-    String? cacheKey,
   }) {
-    return Builder(builder: (context) {
-      // Decode at the size in physical pixels, so images stay sharp
-      final pixelRatio = MediaQuery.devicePixelRatioOf(context);
-      return CachedNetworkImage(
-        imageUrl: imageUrl,
-        width: width,
-        height: height,
-        fit: fit ?? BoxFit.cover,
-        cacheKey: cacheKey,
-        placeholder: placeholder ?? (context, url) => _buildPlaceholder(),
-        errorWidget: errorWidget ??
-            (context, url, error) => _buildErrorWidget(context, url, error),
-        memCacheWidth: width == null ? null : (width * pixelRatio).round(),
-        memCacheHeight: height == null ? null : (height * pixelRatio).round(),
-        maxHeightDiskCache: 800, // Limit disk cache size
-        maxWidthDiskCache: 800,
-        fadeInDuration: const Duration(milliseconds: 200),
-        fadeOutDuration: const Duration(milliseconds: 100),
-      );
-    });
+    return Builder(
+        key: key,
+        builder: (context) {
+          final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+          return CachedNetworkImage(
+            imageUrl: api.getCoverArtUrl(coverArtId),
+            width: width,
+            height: height,
+            fit: fit ?? BoxFit.cover,
+            cacheKey: api.coverArtCacheKey(coverArtId),
+            placeholder: placeholder ?? (context, url) => _buildPlaceholder(),
+            errorWidget: errorWidget ??
+                (context, url, error) => _buildErrorWidget(context, url, error),
+            memCacheWidth: width == null ? null : (width * pixelRatio).round(),
+            memCacheHeight:
+                height == null ? null : (height * pixelRatio).round(),
+            maxHeightDiskCache: 800, // Limit disk cache size
+            maxWidthDiskCache: 800,
+            fadeInDuration: const Duration(milliseconds: 200),
+            fadeOutDuration: const Duration(milliseconds: 100),
+          );
+        });
   }
 
-  /// Build album art widget with consistent styling
+  /// Cover art as an [ImageProvider], e.g. for a [CircleAvatar]
+  static ImageProvider coverArtProvider(SubsonicApi api, String coverArtId) {
+    return CachedNetworkImageProvider(
+      api.getCoverArtUrl(coverArtId),
+      cacheKey: api.coverArtCacheKey(coverArtId),
+    );
+  }
+
+  /// Square album art with rounded corners
   static Widget buildAlbumArt({
-    required String imageUrl,
+    required SubsonicApi api,
+    required String coverArtId,
     double size = 60,
-    String? cacheKey,
   }) {
     return Container(
       width: size,
@@ -50,12 +64,12 @@ class ImageCacheManager {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: buildCachedImage(
-          imageUrl: imageUrl,
+        child: buildCoverArt(
+          api: api,
+          coverArtId: coverArtId,
           width: size,
           height: size,
           fit: BoxFit.cover,
-          cacheKey: cacheKey,
         ),
       ),
     );

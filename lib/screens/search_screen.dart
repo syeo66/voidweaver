@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../services/app_state.dart';
+import '../services/image_cache_manager.dart';
 import '../services/subsonic_api.dart';
 import 'artist_detail_screen.dart';
 import '../services/network_errors.dart';
@@ -306,10 +306,8 @@ class _SearchScreenState extends State<SearchScreen>
     return ListTile(
       leading: CircleAvatar(
         backgroundImage: artist.coverArt != null
-            ? CachedNetworkImageProvider(
-                context.read<AppState>().api!.getCoverArtUrl(artist.coverArt!),
-                cacheKey: artist.coverArt,
-              )
+            ? ImageCacheManager.coverArtProvider(
+                context.read<AppState>().api!, artist.coverArt!)
             : null,
         child: artist.coverArt == null ? const Icon(Icons.person) : null,
       ),
@@ -331,10 +329,9 @@ class _SearchScreenState extends State<SearchScreen>
   Widget _buildAlbumItem(Album album) {
     return ListTile(
       leading: album.coverArt != null
-          ? CachedNetworkImage(
-              imageUrl:
-                  context.read<AppState>().api!.getCoverArtUrl(album.coverArt!),
-              cacheKey: album.coverArt,
+          ? ImageCacheManager.buildCoverArt(
+              api: context.read<AppState>().api!,
+              coverArtId: album.coverArt!,
               width: 50,
               height: 50,
               fit: BoxFit.cover,
@@ -370,10 +367,9 @@ class _SearchScreenState extends State<SearchScreen>
   Widget _buildSongItem(Song song) {
     return ListTile(
       leading: song.coverArt != null
-          ? CachedNetworkImage(
-              imageUrl:
-                  context.read<AppState>().api!.getCoverArtUrl(song.coverArt!),
-              cacheKey: song.coverArt,
+          ? ImageCacheManager.buildCoverArt(
+              api: context.read<AppState>().api!,
+              coverArtId: song.coverArt!,
               width: 50,
               height: 50,
               fit: BoxFit.cover,

@@ -339,6 +339,11 @@ class SubsonicApi {
     return uri.toString();
   }
 
+  /// Image cache key (disk and memory) for the cover art [id]. Not the URL,
+  /// whose token changes with every request, and not the id alone, because
+  /// ids like `al-1` repeat across servers.
+  String coverArtCacheKey(String id) => '$serverUrl#$id';
+
   /// Notifies the server that a song is now playing.
   /// This updates the "now playing" status but doesn't affect play counts.
   /// Throws on failure; use [ScrobbleQueue] rather than calling this directly.

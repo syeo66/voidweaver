@@ -214,6 +214,21 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
       ) as String);
 
   @override
+  String coverArtCacheKey(String? id) => (super.noSuchMethod(
+        Invocation.method(
+          #coverArtCacheKey,
+          [id],
+        ),
+        returnValue: _i4.dummyValue<String>(
+          this,
+          Invocation.method(
+            #coverArtCacheKey,
+            [id],
+          ),
+        ),
+      ) as String);
+
+  @override
   _i5.Future<void> scrobbleNowPlaying(String? songId) => (super.noSuchMethod(
         Invocation.method(
           #scrobbleNowPlaying,

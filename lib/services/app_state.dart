@@ -307,8 +307,8 @@ class AppState extends ChangeNotifier {
   }
 
   /// Logs out: releases the services and removes the credentials and the
-  /// data that belongs to the server (library cache, pending scrobbles, saved
-  /// queue). Settings are kept.
+  /// data that belongs to the server (library cache, cover art, pending
+  /// scrobbles, saved queue). Settings are kept.
   Future<void> clearConfiguration() async {
     final api = _api;
     final scrobbleQueue = _scrobbleQueue;
@@ -322,6 +322,7 @@ class AppState extends ChangeNotifier {
         if (scrobbleQueue != null) scrobbleQueue.clear(),
         if (_persistenceService != null)
           _persistenceService!.clearPlaybackState(),
+        ImageCacheManager.clearCache(),
       ]);
 
       final prefs = await SharedPreferences.getInstance();

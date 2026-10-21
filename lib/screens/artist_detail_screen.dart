@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../services/app_state.dart';
+import '../services/image_cache_manager.dart';
 import '../services/subsonic_api.dart';
 import '../services/network_errors.dart';
 
@@ -181,9 +181,9 @@ class _ArtistDetailScreenState extends State<ArtistDetailScreen> {
                   ),
                 ),
                 child: album.coverArt != null && api != null
-                    ? CachedNetworkImage(
-                        imageUrl: api.getCoverArtUrl(album.coverArt!),
-                        cacheKey: album.coverArt,
+                    ? ImageCacheManager.buildCoverArt(
+                        api: api,
+                        coverArtId: album.coverArt!,
                         fit: BoxFit.cover,
                         placeholder: (context, url) => Container(
                           color: Colors.grey[300],
