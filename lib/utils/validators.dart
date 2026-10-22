@@ -146,6 +146,17 @@ class Validators {
     return null;
   }
 
+  /// The server URL as the app stores and uses it: sanitized, without
+  /// trailing slashes, so request paths and cache keys don't depend on how
+  /// it was typed (`https://host/` would request `https://host//rest/...`).
+  static String normalizeServerUrl(String? input) {
+    var url = sanitizeInput(input);
+    while (url.endsWith('/')) {
+      url = url.substring(0, url.length - 1);
+    }
+    return url;
+  }
+
   static String sanitizeInput(String? input) {
     if (input == null) return '';
 

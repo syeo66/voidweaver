@@ -180,7 +180,7 @@ class AudioPlayerService extends ChangeNotifier {
         _sleepTimerDuration == null) {
       return null;
     }
-    final elapsed = DateTime.now().difference(_sleepTimerStartTime!);
+    final elapsed = _clock().difference(_sleepTimerStartTime!);
     final remaining = _sleepTimerDuration! - elapsed;
     return remaining.isNegative ? Duration.zero : remaining;
   }
@@ -1047,7 +1047,7 @@ class AudioPlayerService extends ChangeNotifier {
     _sleepTimer?.cancel();
 
     _sleepTimerDuration = duration;
-    _sleepTimerStartTime = DateTime.now();
+    _sleepTimerStartTime = _clock();
     _isSleepTimerActive = true;
 
     _log.info('Sleep timer started for ${_formatDuration(duration)}');

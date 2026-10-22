@@ -12,6 +12,7 @@ import 'playback_persistence.dart';
 import 'replaygain_debug_logger.dart';
 import 'scrobble_queue.dart';
 import 'network_errors.dart';
+import '../utils/validators.dart';
 
 final _log = Logger('app_state');
 
@@ -100,6 +101,9 @@ class AppState extends ChangeNotifier {
   /// still starts offline.
   Future<void> configure(String serverUrl, String username, String password,
       {bool verifyCredentials = false}) async {
+    // Also for saved credentials: a URL saved with a trailing slash by an
+    // older version is saved again without it
+    serverUrl = Validators.normalizeServerUrl(serverUrl);
     _configurationLoadingState = LoadingState.loading;
     _configurationError = null;
     notifyListeners();

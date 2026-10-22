@@ -202,7 +202,8 @@ class _LoginScreenState extends State<LoginScreen> {
       await context.read<AppState>().configure(
             Validators.sanitizeInput(_serverUrlController.text),
             Validators.sanitizeInput(_usernameController.text),
-            _passwordController.text.trim(),
+            // Not trimmed: spaces at either end can be part of a password
+            _passwordController.text,
             verifyCredentials: true,
           );
     } catch (e) {

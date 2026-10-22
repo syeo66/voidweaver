@@ -86,6 +86,27 @@ void main() {
           greaterThan(initialRemaining!.inMinutes));
     });
 
+    test('remaining time follows the clock', () {
+      var now = DateTime(2026, 1, 1, 22);
+      final player = MockAudioPlayer();
+      final service = AudioPlayerService(mockApi, mockSettingsService,
+          audioPlayer: player, clock: () => now);
+      addTearDown(() async {
+        service.dispose();
+        await player.dispose();
+      });
+
+      service.startSleepTimer(const Duration(minutes: 30));
+      now = now.add(const Duration(minutes: 10));
+      expect(service.sleepTimerRemaining, const Duration(minutes: 20));
+
+      service.extendSleepTimer(const Duration(minutes: 5));
+      expect(service.sleepTimerRemaining, const Duration(minutes: 25));
+
+      now = now.add(const Duration(hours: 1));
+      expect(service.sleepTimerRemaining, Duration.zero);
+    });
+
     test('should not extend when timer is not active', () {
       const extension = Duration(minutes: 5);
 

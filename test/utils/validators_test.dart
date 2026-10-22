@@ -105,7 +105,30 @@ void main() {
     });
   });
 
+  group('Server URL Normalization', () {
+    test('removes trailing slashes', () {
+      expect(Validators.normalizeServerUrl('https://music.example.com/'),
+          'https://music.example.com');
+      expect(Validators.normalizeServerUrl('https://example.com/music//'),
+          'https://example.com/music');
+    });
+
+    test('trims and sanitizes', () {
+      expect(Validators.normalizeServerUrl('  https://example.com/ \n'),
+          'https://example.com');
+    });
+
+    test('keeps a URL without trailing slash as it is', () {
+      expect(Validators.normalizeServerUrl('https://example.com:4533/music'),
+          'https://example.com:4533/music');
+    });
+  });
+
   group('Password Validation', () {
+    test('accepts spaces at either end', () {
+      expect(Validators.validatePassword(' secret '), isNull);
+    });
+
     test('should accept valid passwords', () {
       expect(Validators.validatePassword('password'), isNull);
       expect(Validators.validatePassword('P@ssw0rd!'), isNull);
