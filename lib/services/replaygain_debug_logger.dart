@@ -6,6 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:logging/logging.dart';
+
+final _log = Logger('replaygain');
 
 /// Captures detailed ReplayGain diagnostic events (stream URLs, parsed
 /// metadata, computed volume, errors) to a log file on disk so playback
@@ -35,7 +38,7 @@ class ReplayGainDebugLogger extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       _enabled = prefs.getBool(_enabledPrefKey) ?? false;
     } catch (e) {
-      debugPrint('[ReplayGainDebugLogger] Failed to load settings: $e');
+      _log.warning('Debug log: Failed to load settings', e);
     }
 
     try {
@@ -44,7 +47,7 @@ class ReplayGainDebugLogger extends ChangeNotifier {
         _bytesWritten = await file.length();
       }
     } catch (e) {
-      debugPrint('[ReplayGainDebugLogger] Failed to access log file: $e');
+      _log.warning('Debug log: Failed to access log file', e);
     }
   }
 
@@ -57,7 +60,7 @@ class ReplayGainDebugLogger extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_enabledPrefKey, value);
     } catch (e) {
-      debugPrint('[ReplayGainDebugLogger] Failed to persist setting: $e');
+      _log.warning('Debug log: Failed to persist setting', e);
     }
 
     if (value) {
@@ -93,7 +96,7 @@ class ReplayGainDebugLogger extends ChangeNotifier {
     final line = '${DateTime.now().toIso8601String()}  $message';
 
     _writeQueue = _writeQueue.then((_) => _appendLine(line)).catchError((e) {
-      debugPrint('[ReplayGainDebugLogger] Write failed: $e');
+      _log.warning('Debug log: Write failed', e);
     });
   }
 
@@ -141,7 +144,7 @@ class ReplayGainDebugLogger extends ChangeNotifier {
         await file.writeAsString('');
       }
     } catch (e) {
-      debugPrint('[ReplayGainDebugLogger] Failed to clear log: $e');
+      _log.warning('Debug log: Failed to clear log', e);
     }
     notifyListeners();
   }
@@ -172,7 +175,7 @@ class ReplayGainDebugLogger extends ChangeNotifier {
       return result.status == ShareResultStatus.success ||
           result.status == ShareResultStatus.dismissed;
     } catch (e) {
-      debugPrint('[ReplayGainDebugLogger] Export failed: $e');
+      _log.warning('Debug log: Export failed', e);
       return false;
     }
   }

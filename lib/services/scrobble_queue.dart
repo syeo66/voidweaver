@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:logging/logging.dart';
 import 'subsonic_api.dart';
+
+final _log = Logger('scrobble');
 
 /// Type of scrobble operation
 enum ScrobbleType {
@@ -69,7 +71,7 @@ class ScrobbleQueue {
   Future<void> initialize() async {
     await _loadQueue();
     _startProcessingTimer();
-    debugPrint(
+    _log.info(
         'ScrobbleQueue initialized with ${_queue.length} pending requests');
   }
 
@@ -95,7 +97,7 @@ class ScrobbleQueue {
   /// Add a request to the queue (non-blocking)
   Future<void> _enqueue(ScrobbleRequest request) async {
     _queue.add(request);
-    debugPrint(
+    _log.fine(
         'Queued ${request.type.name} for song ${request.songId} (queue size: ${_queue.length})');
 
     // Save queue asynchronously without blocking
@@ -113,7 +115,7 @@ class ScrobbleQueue {
     if (_isProcessing || _queue.isEmpty || _disposed) return;
 
     _isProcessing = true;
-    debugPrint('Processing scrobble queue (${_queue.length} requests)');
+    _log.fine('Processing scrobble queue (${_queue.length} requests)');
 
     var blocked = false;
     try {
@@ -122,7 +124,7 @@ class ScrobbleQueue {
         final request = _queue.first;
 
         if (DateTime.now().difference(request.queuedAt) > _maxAge) {
-          debugPrint(
+          _log.info(
               'Dropping old scrobble request for song ${request.songId} (age: ${DateTime.now().difference(request.queuedAt).inDays} days)');
           _queue.remove(request);
           continue;
@@ -130,18 +132,20 @@ class ScrobbleQueue {
 
         try {
           await _sendScrobble(request);
-          debugPrint(
+          _log.fine(
               'Successfully sent ${request.type.name} for song ${request.songId}');
         } catch (e) {
           final rejected = e is SubsonicException && !e.isAuthError;
           if (request.type == ScrobbleType.submission && !rejected) {
-            debugPrint(
-                'Failed to send submission for song ${request.songId}, will retry: $e');
+            _log.warning(
+                'Failed to send submission for song ${request.songId}, will retry',
+                e);
             blocked = true;
             break;
           }
-          debugPrint(
-              'Failed to send ${request.type.name} for song ${request.songId}, dropping it: $e');
+          _log.warning(
+              'Failed to send ${request.type.name} for song ${request.songId}, dropping it',
+              e);
         }
         _queue.remove(request);
 
@@ -152,11 +156,11 @@ class ScrobbleQueue {
       }
 
       if (_queue.isNotEmpty) {
-        debugPrint(
+        _log.fine(
             'Scrobble queue processing stopped (${_queue.length} requests remaining)');
         await _saveQueue();
       } else {
-        debugPrint('Scrobble queue empty');
+        _log.fine('Scrobble queue empty');
         await _clearQueue();
       }
     } finally {
@@ -206,10 +210,10 @@ class ScrobbleQueue {
             .map((item) =>
                 ScrobbleRequest.fromJson(item as Map<String, dynamic>))
             .toList());
-        debugPrint('Loaded ${_queue.length} scrobble requests from storage');
+        _log.fine('Loaded ${_queue.length} scrobble requests from storage');
       }
     } catch (e) {
-      debugPrint('Error loading scrobble queue: $e');
+      _log.warning('Error loading scrobble queue', e);
       _queue.clear();
     }
   }
@@ -222,7 +226,7 @@ class ScrobbleQueue {
           json.encode(_queue.map((request) => request.toJson()).toList());
       await prefs.setString(_storageKey, queueJson);
     } catch (e) {
-      debugPrint('Error saving scrobble queue: $e');
+      _log.warning('Error saving scrobble queue', e);
     }
   }
 
@@ -232,7 +236,7 @@ class ScrobbleQueue {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_storageKey);
     } catch (e) {
-      debugPrint('Error clearing scrobble queue: $e');
+      _log.warning('Error clearing scrobble queue', e);
     }
   }
 
@@ -259,6 +263,6 @@ class ScrobbleQueue {
     _disposed = true;
     _processingTimer?.cancel();
     _processingTimer = null;
-    debugPrint('ScrobbleQueue disposed');
+    _log.fine('ScrobbleQueue disposed');
   }
 }

@@ -74,11 +74,6 @@ class _SearchScreenState extends State<SearchScreen>
             _searchResult = result;
             _isLoading = false;
           });
-
-          // Debug logging
-          debugPrint(
-              'Search completed. Result: ${result.artists.length} artists, ${result.albums.length} albums, ${result.songs.length} songs');
-          debugPrint('Result isEmpty: ${result.isEmpty}');
         }
       }
     } catch (e) {

@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:async';
-import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:logging/logging.dart';
 import 'subsonic_api.dart';
+
+final _log = Logger('playback_persistence');
 
 class PersistedPlaybackState {
   final List<Song> playlist;
@@ -53,7 +55,7 @@ class PersistedPlaybackState {
         sourceId: json['sourceId'] as String?,
       );
     } catch (e) {
-      debugPrint('Failed to deserialize PlaybackState: $e');
+      _log.warning('Failed to deserialize PlaybackState', e);
       return null;
     }
   }
@@ -124,7 +126,7 @@ class PlaybackPersistenceService {
 
   Future<void> _writePlaybackState(PersistedPlaybackState state) async {
     if (_prefs == null) {
-      debugPrint('SharedPreferences not initialized');
+      _log.warning('SharedPreferences not initialized');
       return;
     }
 
@@ -143,7 +145,7 @@ class PlaybackPersistenceService {
         _savedPlaylistSource = state.playlistSource;
         _savedSourceId = state.sourceId;
         if (_prefs!.containsKey(_legacyKey)) await _prefs!.remove(_legacyKey);
-        debugPrint('Saved playback queue: ${state.playlist.length} songs');
+        _log.fine('Saved playback queue: ${state.playlist.length} songs');
       }
       await _prefs!.setString(
           _positionKey,
@@ -154,13 +156,13 @@ class PlaybackPersistenceService {
             'lastUpdated': state.lastUpdated.millisecondsSinceEpoch,
           }));
     } catch (e) {
-      debugPrint('Failed to save playback state: $e');
+      _log.warning('Failed to save playback state', e);
     }
   }
 
   Future<PersistedPlaybackState?> loadPlaybackState() async {
     if (_prefs == null) {
-      debugPrint('SharedPreferences not initialized');
+      _log.warning('SharedPreferences not initialized');
       return null;
     }
 
@@ -176,20 +178,20 @@ class PlaybackPersistenceService {
       } else if (_prefs!.getString(_legacyKey) case final legacy?) {
         map = jsonDecode(legacy) as Map<String, dynamic>;
       } else {
-        debugPrint('No saved playback state found');
+        _log.fine('No saved playback state found');
         return null;
       }
 
       final state = PersistedPlaybackState.fromJson(map);
 
       if (state != null) {
-        debugPrint(
+        _log.fine(
             'Loaded playback state: ${state.playlist.length} songs, index ${state.currentIndex}');
       }
 
       return state;
     } catch (e) {
-      debugPrint('Failed to load playback state: $e');
+      _log.warning('Failed to load playback state', e);
       return null;
     }
   }
@@ -223,9 +225,9 @@ class PlaybackPersistenceService {
       for (final key in [_queueKey, _positionKey, _legacyKey]) {
         await _prefs!.remove(key);
       }
-      debugPrint('Cleared saved playback state');
+      _log.info('Cleared saved playback state');
     } catch (e) {
-      debugPrint('Failed to clear playback state: $e');
+      _log.warning('Failed to clear playback state', e);
     }
   }
 

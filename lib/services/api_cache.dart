@@ -5,6 +5,9 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:logging/logging.dart';
+
+final _log = Logger('api_cache');
 
 /// Cache entry with expiration and data
 class CacheEntry<T> {
@@ -84,7 +87,7 @@ class ApiCache {
           await _migrateFromSharedPreferences(directory);
           return directory;
         } catch (e) {
-          debugPrint('API cache is not persisted: $e');
+          _log.warning('API cache is not persisted', e);
           return null;
         }
       }();
@@ -108,7 +111,7 @@ class ApiCache {
       }
       await prefs.remove(prefKey);
     }
-    debugPrint('Moved ${keys.length} API cache entries to files');
+    _log.info('Moved ${keys.length} API cache entries to files');
   }
 
   /// Generate cache key from request parameters
@@ -153,7 +156,7 @@ class ApiCache {
     // Check memory cache first
     final memoryCached = _memoryCache[key];
     if (!forceRefresh && memoryCached != null && memoryCached.isValid) {
-      debugPrint('Cache HIT (memory): $key');
+      _log.fine('Cache HIT (memory): $key');
       return memoryCached.data as T;
     }
 
@@ -164,7 +167,7 @@ class ApiCache {
       if (!forceRefresh &&
           persistentCached != null &&
           persistentCached.isValid) {
-        debugPrint('Cache HIT (persistent): $key');
+        _log.fine('Cache HIT (persistent): $key');
         // Store in memory cache for faster access
         _memoryCache[key] = persistentCached;
         return persistentCached.data;
@@ -173,7 +176,7 @@ class ApiCache {
 
     // Check if request is already in progress (deduplication)
     if (_ongoingRequests.containsKey(key)) {
-      debugPrint('Request DEDUPLICATED: $key');
+      _log.fine('Request DEDUPLICATED: $key');
       return await _ongoingRequests[key]!.future as T;
     }
 
@@ -194,7 +197,7 @@ class ApiCache {
           currentVersion != null &&
           cached != null &&
           cached.version == currentVersion) {
-        debugPrint('Cache RENEWED (unchanged on the server): $key');
+        _log.fine('Cache RENEWED (unchanged on the server): $key');
         result = cached.data as T;
         // Only in memory: rewriting the persistent entry just for its expiry
         // isn't worth it. After a restart the version is checked again.
@@ -205,7 +208,7 @@ class ApiCache {
           version: currentVersion,
         );
       } else {
-        debugPrint('Cache MISS: $key');
+        _log.fine('Cache MISS: $key');
         result = await fetcher();
 
         // Store in memory cache
@@ -229,7 +232,7 @@ class ApiCache {
       // Fall back to stale data rather than failing outright
       final stale = memoryCached ?? persistentCached;
       if (stale != null) {
-        debugPrint('Cache STALE (fetch failed: $error): $key');
+        _log.warning('Cache STALE (fetch failed: $error): $key');
         _memoryCache[key] = stale;
         completer.complete(stale.data as T);
         return stale.data as T;
@@ -254,7 +257,7 @@ class ApiCache {
           jsonDecode(await file.readAsString()) as Map<String, dynamic>;
       return CacheEntry<T>.fromJson(json, fromJson ?? (data) => data as T);
     } catch (e) {
-      debugPrint('Error reading persistent cache for $key: $e');
+      _log.warning('Error reading persistent cache for $key', e);
       // Remove corrupted entry
       unawaited(_delete(file));
       return null;
@@ -279,7 +282,7 @@ class ApiCache {
       await temp.writeAsString(jsonString, flush: true);
       await temp.rename(file.path);
     } catch (e) {
-      debugPrint('Error writing persistent cache for $key: $e');
+      _log.warning('Error writing persistent cache for $key', e);
     }
   }
 
@@ -287,7 +290,7 @@ class ApiCache {
     try {
       if (await file.exists()) await file.delete();
     } catch (e) {
-      debugPrint('Error removing persistent cache entry: $e');
+      _log.warning('Error removing persistent cache entry', e);
     }
   }
 
@@ -298,7 +301,7 @@ class ApiCache {
     unawaited(_storage().then((directory) async {
       if (directory != null) await _delete(_fileFor(directory, key));
     }));
-    debugPrint('Cache CLEARED: $key');
+    _log.fine('Cache CLEARED: $key');
   }
 
   /// Clear all cache entries, also those persisted and never loaded
@@ -311,10 +314,10 @@ class ApiCache {
           await entity.delete(recursive: true);
         }
       } catch (e) {
-        debugPrint('Error removing persistent cache entries: $e');
+        _log.warning('Error removing persistent cache entries', e);
       }
     }
 
-    debugPrint('Cache CLEARED ALL');
+    _log.info('Cache CLEARED ALL');
   }
 }

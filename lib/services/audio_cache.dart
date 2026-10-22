@@ -1,7 +1,9 @@
-import 'package:flutter/foundation.dart';
 import 'package:voidweaver_player/voidweaver_player.dart';
+import 'package:logging/logging.dart';
 
 import 'replaygain_reader.dart';
+
+final _log = Logger('audio_cache');
 
 /// The player's audio cache, by song: downloads upcoming songs and tells
 /// which songs can play without the network.
@@ -26,10 +28,10 @@ class AudioCache {
   Future<bool> prefetch(String songId, String url) async {
     try {
       await _cache.prefetch(keyFor(songId), Uri.parse(url));
-      debugPrint('[audio_cache] Cached $songId');
+      _log.fine('Cached $songId');
       return true;
     } catch (e) {
-      debugPrint('[audio_cache] Download failed for $songId: $e');
+      _log.warning('Download failed for $songId', e);
       return false;
     }
   }

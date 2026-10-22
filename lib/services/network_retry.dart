@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_plus/http_plus.dart' as http_plus;
+import 'package:logging/logging.dart';
 import 'network_config.dart';
+
+final _log = Logger('network');
 
 /// Service for handling network requests with timeout and retry logic
 class NetworkRetryService {
@@ -43,32 +45,25 @@ class NetworkRetryService {
       attemptNumber++;
 
       try {
-        if (kDebugMode) {
-          debugPrint(
-              'Network request attempt $attemptNumber/${config.maxRetryAttempts}: $contextDescription');
-        }
+        _log.fine(
+            'Network request attempt $attemptNumber/${config.maxRetryAttempts}: $contextDescription');
 
         final response = await _executeWithTimeout(request, requestType);
 
-        if (kDebugMode) {
-          debugPrint(
-              'Network request succeeded on attempt $attemptNumber: $contextDescription (${response.statusCode})');
-        }
+        _log.fine(
+            'Network request succeeded on attempt $attemptNumber: $contextDescription (${response.statusCode})');
 
         return response;
       } catch (error) {
         lastError = error;
 
-        if (kDebugMode) {
-          debugPrint(
-              'Network request failed on attempt $attemptNumber: $contextDescription - $error');
-        }
+        _log.warning(
+            'Network request failed on attempt $attemptNumber: $contextDescription',
+            error);
 
         // Check if we should retry this error
         if (!config.shouldRetry(error, attemptNumber)) {
-          if (kDebugMode) {
-            debugPrint('Not retrying error: $error');
-          }
+          _log.fine('Not retrying error', error);
           break;
         }
 
@@ -76,9 +71,7 @@ class NetworkRetryService {
         if (attemptNumber < config.maxRetryAttempts) {
           final retryDelay = config.calculateRetryDelay(attemptNumber);
 
-          if (kDebugMode) {
-            debugPrint('Retrying in ${retryDelay.inMilliseconds}ms...');
-          }
+          _log.fine('Retrying in ${retryDelay.inMilliseconds}ms...');
 
           await Future.delayed(retryDelay);
         }

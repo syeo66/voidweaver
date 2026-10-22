@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:voidweaver_player/voidweaver_player.dart';
+import 'package:logging/logging.dart';
 import 'subsonic_api.dart';
 import 'settings_service.dart';
 import 'replaygain_reader.dart';
@@ -9,6 +10,9 @@ import 'playback_persistence.dart';
 import 'scrobble_queue.dart';
 import 'audio_cache.dart';
 import 'network_errors.dart';
+
+final _log = Logger('audio_player');
+final _rgLogger = Logger('replaygain');
 
 enum PlaybackState {
   stopped,
@@ -204,7 +208,7 @@ class AudioPlayerService extends ChangeNotifier {
     _commandSubscription = _audioPlayer.commandStream.listen(_onSystemCommand);
 
     _playerStateSubscription = _audioPlayer.playerStateStream.listen((state) {
-      debugPrint('[audio_player] State changed to: $state');
+      _log.fine('State changed to: $state');
       switch (state.processingState) {
         case ProcessingState.completed:
           // Not again after _onQueueCompleted() paused the player
@@ -231,7 +235,7 @@ class AudioPlayerService extends ChangeNotifier {
   /// A command from the notification, lock screen, Bluetooth or media
   /// buttons. They go through the same methods as the app's own controls.
   void _onSystemCommand(SystemCommand command) {
-    debugPrint('[native_controls] $command');
+    _log.fine('[native_controls] $command');
     final Future<void> result = switch (command.type) {
       SystemCommandType.play => play(),
       SystemCommandType.pause => pause(),
@@ -241,26 +245,26 @@ class AudioPlayerService extends ChangeNotifier {
       SystemCommandType.seek => seekTo(command.position ?? Duration.zero),
     };
     unawaited(result.catchError((Object e) {
-      debugPrint('[native_controls] $command failed: $e');
+      _log.warning('[native_controls] $command failed', e);
     }));
   }
 
   // Persistence methods
   Future<bool> restorePlaybackState() async {
     if (_persistence == null) {
-      debugPrint('Persistence service not available, skipping restoration');
+      _log.fine('Persistence service not available, skipping restoration');
       return false;
     }
 
     try {
       final savedState = await _persistence!.loadPlaybackState();
       if (savedState == null || savedState.isEmpty) {
-        debugPrint('No saved playback state to restore');
+        _log.fine('No saved playback state to restore');
         return false;
       }
       if (!savedState.hasValidIndex) return false;
 
-      debugPrint(
+      _log.fine(
           'Attempting to restore playlist with ${savedState.playlist.length} songs');
 
       _playlist = savedState.playlist;
@@ -274,19 +278,19 @@ class AudioPlayerService extends ChangeNotifier {
         await _loadQueue(savedState.currentIndex,
             position: resumeAt, play: false);
       } catch (e) {
-        debugPrint('Could not load restored song, will retry on play: $e');
+        _log.warning('Could not load restored song, will retry on play', e);
         _needsSourceReload = true;
         _pendingResumePosition = resumeAt;
       }
       _currentPosition = resumeAt;
       _playbackState = PlaybackState.paused; // User must manually resume
 
-      debugPrint(
+      _log.info(
           'Successfully restored playback state: ${_currentSong?.title} at $resumeAt');
       notifyListeners();
       return true;
     } catch (e) {
-      debugPrint('Failed to restore playback state: $e');
+      _log.warning('Failed to restore playback state', e);
       // Clear invalid saved state
       await _persistence?.clearPlaybackState();
     }
@@ -321,13 +325,13 @@ class AudioPlayerService extends ChangeNotifier {
 
       var songs = album.songs;
       if (songs.isEmpty) {
-        debugPrint(
+        _log.fine(
             'Album ${album.name} has no songs, trying to fetch from API...');
         songs = (await _api.getAlbum(album.id)).songs;
       }
       if (songs.isEmpty) throw const UserFacingException('Album has no songs');
 
-      debugPrint('Playing album: ${album.name} with ${songs.length} songs');
+      _log.info('Playing album: ${album.name} with ${songs.length} songs');
       _playlist = List.of(songs);
       _playlistSource = 'album';
       _sourceId = album.id;
@@ -348,7 +352,7 @@ class AudioPlayerService extends ChangeNotifier {
         throw const UserFacingException('No random songs available');
       }
 
-      debugPrint('Playing random songs: ${songs.length} songs loaded');
+      _log.info('Playing random songs: ${songs.length} songs loaded');
       _playlist = List.of(songs);
       _playlistSource = 'random';
       _sourceId = count.toString();
@@ -372,7 +376,7 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   void _onLoadFailed(String message) {
-    debugPrint(message);
+    _log.warning(message);
     // Otherwise the player stays idle with `playing` set, which the system
     // controls show as still loading
     if (_audioPlayer.playing) {
@@ -385,7 +389,7 @@ class AudioPlayerService extends ChangeNotifier {
   /// Starts playback; errors show up on the player's error stream.
   void _startPlayback() {
     unawaited(_audioPlayer.play().catchError((Object e) {
-      debugPrint('[audio_player] Playback error: $e');
+      _log.warning('Playback error', e);
     }));
   }
 
@@ -466,7 +470,7 @@ class AudioPlayerService extends ChangeNotifier {
       final next = play ? await _nextCachedIndex(startIndex) : null;
       if (generation != _generation) return;
       if (next == null) rethrow;
-      debugPrint(
+      _log.warning(
           '[offline] Could not load index $startIndex, continuing at cached index $next');
       return _loadQueue(next);
     }
@@ -547,7 +551,7 @@ class AudioPlayerService extends ChangeNotifier {
     }
     if (entry == null || entry.index != _currentIndex + 1) return;
 
-    debugPrint('[audio_player] Player advanced to index ${entry.index}');
+    _log.fine('Player advanced to index ${entry.index}');
     _listenedToEnd();
     _scrobbleCurrentSongIfEligible();
     _setCurrentTrack(entry.index, playing: true);
@@ -596,7 +600,7 @@ class AudioPlayerService extends ChangeNotifier {
   /// does nothing in that state. So pause at the start of the last track: Play
   /// replays it, as a new play (like a restored song, see play()).
   void _onQueueCompleted() {
-    debugPrint('[audio_player] End of playlist reached');
+    _log.info('End of playlist reached');
     _listenedToEnd();
     _scrobbleCurrentSongIfEligible();
     _setCurrentTrack(_currentIndex, playing: false);
@@ -606,7 +610,7 @@ class AudioPlayerService extends ChangeNotifier {
       await _audioPlayer.pause();
       await _audioPlayer.seek(Duration.zero);
     }).catchError((Object e) {
-      debugPrint('[audio_player] Could not rewind after the last track: $e');
+      _log.warning('Could not rewind after the last track', e);
     }));
   }
 
@@ -619,7 +623,7 @@ class AudioPlayerService extends ChangeNotifier {
     }
 
     final failedIndex = _entryAt(error.index)?.index ?? _currentIndex;
-    debugPrint('[audio_player] Playback error at index $failedIndex: $error');
+    _log.warning('Playback error at index $failedIndex', error);
     // The player is idle after an error: whatever plays next loads the queue
     // again. Set right away, so _jumpTo() doesn't take its target for started.
     _needsSourceReload = true;
@@ -637,7 +641,7 @@ class AudioPlayerService extends ChangeNotifier {
       return;
     }
     if (next != null) {
-      debugPrint('[offline] Continuing at cached index $next');
+      _log.info('[offline] Continuing at cached index $next');
       try {
         await _jumpTo(next);
       } catch (e) {
@@ -664,14 +668,14 @@ class AudioPlayerService extends ChangeNotifier {
       final next = playlist.indexWhere((song) => song.id == id, index + 1);
       return next < 0 ? null : next;
     } catch (e) {
-      debugPrint('[audio_cache] Could not check the cache: $e');
+      _log.warning('[audio_cache] Could not check the cache', e);
       return null;
     }
   }
 
   Future<void> play() async {
-    debugPrint(
-        '[audio_player] Play requested - currentSong: ${_currentSong?.title}, state: $_playbackState');
+    _log.fine(
+        'Play requested - currentSong: ${_currentSong?.title}, state: $_playbackState');
     if (_playlist.isEmpty) return;
 
     if (_currentSong == null ||
@@ -723,7 +727,7 @@ class AudioPlayerService extends ChangeNotifier {
   Future<void> _skip(int target, String source) async {
     if (target < 0 || target >= _playlist.length) return;
     if (!_canSkip() || _skipOperationInProgress) {
-      debugPrint('[$source] Skip ignored');
+      _log.fine('[$source] Skip ignored');
       return;
     }
 
@@ -733,7 +737,7 @@ class AudioPlayerService extends ChangeNotifier {
       _scrobbleCurrentSongIfEligible();
       await _jumpTo(target);
     } catch (e) {
-      debugPrint('[$source] Error during skip: $e');
+      _log.warning('[$source] Error during skip', e);
       _onLoadFailed('Failed to play song: $e');
     } finally {
       _skipOperationInProgress = false;
@@ -838,10 +842,11 @@ class AudioPlayerService extends ChangeNotifier {
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
-  /// Logs to both the console (debug builds) and the persistent ReplayGain
-  /// debug log (only when the user has enabled it in Settings).
+  /// Logs to both the console (debug builds, see setUpLogging()) and the
+  /// persistent ReplayGain debug log (only when the user has enabled it in
+  /// Settings).
   void _rgLog(String message) {
-    debugPrint(message);
+    _rgLogger.fine(message);
     ReplayGainDebugLogger.instance.log(message);
   }
 
@@ -922,7 +927,7 @@ class AudioPlayerService extends ChangeNotifier {
       unawaited(_audioPlayer
           .setGain(source, _gainFor(_playlist[tag.index]))
           .catchError((Object e) {
-        debugPrint('[ReplayGain] Could not set gain: $e');
+        _rgLogger.warning('Could not set gain', e);
       }));
     }
   }
@@ -1045,7 +1050,7 @@ class AudioPlayerService extends ChangeNotifier {
     _sleepTimerStartTime = DateTime.now();
     _isSleepTimerActive = true;
 
-    debugPrint('Sleep timer started for ${_formatDuration(duration)}');
+    _log.info('Sleep timer started for ${_formatDuration(duration)}');
 
     // Start the timer
     _sleepTimer = Timer(duration, () {
@@ -1063,7 +1068,7 @@ class AudioPlayerService extends ChangeNotifier {
     _sleepTimerStartTime = null;
     _isSleepTimerActive = false;
 
-    debugPrint('Sleep timer canceled');
+    _log.info('Sleep timer canceled');
     notifyListeners();
   }
 
@@ -1079,7 +1084,7 @@ class AudioPlayerService extends ChangeNotifier {
       final newDuration = currentRemaining + extension;
       _sleepTimerDuration = _sleepTimerDuration! + extension;
 
-      debugPrint(
+      _log.info(
           'Sleep timer extended by ${_formatDuration(extension)}, new remaining: ${_formatDuration(newDuration)}');
 
       _sleepTimer = Timer(newDuration, () {
@@ -1092,10 +1097,10 @@ class AudioPlayerService extends ChangeNotifier {
 
   /// Called when the sleep timer expires
   void _onSleepTimerComplete() {
-    debugPrint('Sleep timer expired - pausing playback');
+    _log.info('Sleep timer expired - pausing playback');
 
     unawaited(pause().catchError((Object e) {
-      debugPrint('Sleep timer could not pause playback: $e');
+      _log.warning('Sleep timer could not pause playback', e);
     }));
 
     // Reset timer state
@@ -1126,7 +1131,7 @@ class AudioPlayerService extends ChangeNotifier {
     _persistence?.flushPendingPositionSave();
     _scrobbleQueue.dispose();
     unawaited(_audioPlayer.dispose().catchError((Object e) {
-      debugPrint('[audio_player] Could not release the player: $e');
+      _log.warning('Could not release the player', e);
     }));
     _position.dispose();
     super.dispose();

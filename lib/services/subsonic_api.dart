@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http_plus/http_plus.dart' as http_plus;
 import 'package:xml/xml.dart';
+import 'package:logging/logging.dart';
 import 'api_cache.dart';
 import 'network_config.dart';
 import 'network_errors.dart';
@@ -13,6 +14,9 @@ import 'network_retry.dart';
 import 'replaygain_debug_logger.dart';
 import 'replaygain_reader.dart';
 import '../utils/redact.dart';
+
+final _log = Logger('subsonic_api');
+final _rgLogger = Logger('replaygain');
 
 /// An error the server reported in a `status="failed"` response. Subsonic
 /// servers answer with HTTP 200 even then (wrong password, unknown id).
@@ -141,14 +145,10 @@ class SubsonicApi {
     } on SubsonicException {
       rethrow;
     } on NetworkTimeoutException catch (e) {
-      if (kDebugMode) {
-        debugPrint(redactCredentials('Request timeout: $uri - $e'));
-      }
+      _log.warning('Request timeout: $uri', e);
       rethrow;
     } on NetworkConnectionException catch (e) {
-      if (kDebugMode) {
-        debugPrint(redactCredentials('Connection error: $uri - $e'));
-      }
+      _log.warning('Connection error: $uri', e);
       rethrow;
     } on HttpException catch (e) {
       // Without its URL, which carries the credentials
@@ -160,9 +160,7 @@ class SubsonicApi {
     } on XmlException {
       rethrow;
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint(redactCredentials('Network request failed: $uri - $e'));
-      }
+      _log.warning('Network request failed: $uri', e);
       // Other errors (e.g. the client's) can contain the request URL
       throw Exception(redactCredentials('Network error: $e'));
     }
@@ -245,7 +243,7 @@ class SubsonicApi {
           'getScanStatus', null, NetworkRequestType.metadata);
     } on SubsonicException catch (e) {
       // Not supported, or not allowed for this user
-      debugPrint('getScanStatus failed: $e');
+      _log.fine('getScanStatus failed', e);
       return null;
     }
     return libraryVersionFrom(doc);
@@ -295,12 +293,13 @@ class SubsonicApi {
           final albumElements = doc.findAllElements('album');
           if (albumElements.isEmpty) {
             // Debug: log the full response to understand the structure
-            debugPrint('getAlbum response for ID $id: ${doc.toXmlString()}');
+            _log.fine(
+                () => 'getAlbum response for ID $id: ${doc.toXmlString()}');
             throw const UserFacingException('Album not found');
           }
           return Album.fromXml(albumElements.first);
         } catch (e) {
-          debugPrint('getAlbum failed for ID $id: $e');
+          _log.warning('getAlbum failed for ID $id', e);
           rethrow;
         }
       },
@@ -364,7 +363,7 @@ class SubsonicApi {
     };
 
     await _makeRequest('scrobble', params);
-    debugPrint('Now playing notification sent for song: $songId');
+    _log.fine('Now playing notification sent for song: $songId');
   }
 
   /// Submits a scrobble for a played song.
@@ -382,7 +381,7 @@ class SubsonicApi {
     }
 
     await _makeRequest('scrobble', params);
-    debugPrint('Scrobble submission sent for song: $songId');
+    _log.info('Scrobble submission sent for song: $songId');
   }
 
   /// Searches for artists, albums, and songs.
@@ -409,14 +408,9 @@ class SubsonicApi {
           final doc = await _makeRequest(
               'search3', params, NetworkRequestType.metadata);
 
-          // Debug: Print the XML response to understand the structure
-          if (kDebugMode) {
-            debugPrint('Search response: ${doc.toXmlString()}');
-          }
-
           return SearchResult.fromXml(doc);
         } catch (e) {
-          debugPrint('Search failed: $e');
+          _log.warning('Search failed', e);
           rethrow;
         }
       },
@@ -448,7 +442,7 @@ class SubsonicApi {
 
           return artists;
         } catch (e) {
-          debugPrint('Failed to get artists: $e');
+          _log.warning('Failed to get artists', e);
           rethrow;
         }
       },
@@ -479,7 +473,7 @@ class SubsonicApi {
 
           return albums;
         } catch (e) {
-          debugPrint('Failed to get albums for artist $artistId: $e');
+          _log.warning('Failed to get albums for artist $artistId', e);
           rethrow;
         }
       },
@@ -634,15 +628,17 @@ class Album {
   }
 }
 
-/// Whether ReplayGain parsing is logged: in debug builds, or when the user
-/// has enabled the ReplayGain debug log in Settings. Parsing runs for every
+/// Whether ReplayGain parsing is logged: when the `replaygain` logger prints
+/// `FINE` (debug builds, see setUpLogging()), or when the user has enabled
+/// the ReplayGain debug log in Settings. Parsing runs for every
 /// song, so the messages aren't even built otherwise.
-bool get _rgLogging => kDebugMode || ReplayGainDebugLogger.instance.enabled;
+bool get _rgLogging =>
+    _rgLogger.isLoggable(Level.FINE) || ReplayGainDebugLogger.instance.enabled;
 
-/// Logs to the console (debug builds only) and the persistent ReplayGain
-/// debug log (only when the user has enabled it in Settings).
+/// Logs to the console (debug builds, see setUpLogging()) and the persistent
+/// ReplayGain debug log (only when the user has enabled it in Settings).
 void _rgLog(String message) {
-  if (kDebugMode) debugPrint(message);
+  _rgLogger.fine(message);
   ReplayGainDebugLogger.instance.log(message);
 }
 
@@ -986,34 +982,22 @@ class SearchResult {
       final searchResult = searchResultElements.first;
 
       final artistElements = searchResult.findAllElements('artist');
-      if (kDebugMode) {
-        debugPrint('Found ${artistElements.length} artists');
-      }
       for (final element in artistElements) {
         artists.add(Artist.fromXml(element));
       }
 
       final albumElements = searchResult.findAllElements('album');
-      if (kDebugMode) {
-        debugPrint('Found ${albumElements.length} albums');
-      }
       for (final element in albumElements) {
         albums.add(Album.fromXml(element));
       }
 
       final songElements = searchResult.findAllElements('song');
-      if (kDebugMode) {
-        debugPrint('Found ${songElements.length} songs');
-      }
       for (final element in songElements) {
         songs.add(Song.fromXml(element));
       }
     } else {
-      if (kDebugMode) {
-        debugPrint('No searchResult3 elements found');
-        debugPrint(
-            'Available elements: ${doc.findAllElements('*').map((e) => e.name.local).toList()}');
-      }
+      _log.fine(() =>
+          'No searchResult3 element, found: ${doc.findAllElements('*').map((e) => e.name.local).toList()}');
     }
 
     final result = SearchResult(
@@ -1022,11 +1006,8 @@ class SearchResult {
       songs: songs,
     );
 
-    if (kDebugMode) {
-      debugPrint(
-          'SearchResult created: ${artists.length} artists, ${albums.length} albums, ${songs.length} songs');
-      debugPrint('SearchResult isEmpty: ${result.isEmpty}');
-    }
+    _log.fine(
+        'SearchResult created: ${artists.length} artists, ${albums.length} albums, ${songs.length} songs');
 
     return result;
   }

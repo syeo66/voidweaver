@@ -4,8 +4,11 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:logging/logging.dart';
 import '../utils/redact.dart';
 import 'replaygain_debug_logger.dart';
+
+final _logger = Logger('replaygain');
 
 class ReplayGainData {
   final double? trackGain;
@@ -39,10 +42,11 @@ class ReplayGainReader {
   // art placed before the ReplayGain frames)
   static const int _maxMetadataSize = 16 * 1024 * 1024;
 
-  /// Logs to both the console (debug builds) and the persistent ReplayGain
-  /// debug log (only when the user has enabled it in Settings).
+  /// Logs to both the console (debug builds, see setUpLogging()) and the
+  /// persistent ReplayGain debug log (only when the user has enabled it in
+  /// Settings).
   static void _log(String message) {
-    debugPrint(message);
+    _logger.fine(message);
     ReplayGainDebugLogger.instance.log(message);
   }
 

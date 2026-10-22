@@ -13,7 +13,7 @@
 - [ ] Handle self-signed certificates
 - [ ] Better login validation and feedback
 - [ ] Smarter background sync (currently every 5 minutes while the app is visible)
-- [ ] Structured logging
+- [x] Structured logging (`package:logging`, see docs/DEVELOPMENT.md)
 - [ ] Crash reporting
 - [ ] Battery optimization
 

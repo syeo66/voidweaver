@@ -7,7 +7,7 @@ void main() {
     test(
         'parses ReplayGain from actual Navidrome album response (The Facets of Propaganda)',
         () {
-      // This is a snippet of the actual XML response from music.raven.ch
+      // This is a snippet of the actual XML response from a Navidrome server
       // for the album "Imperium Delirium" by Shadow of Intent
       final xml = '''
         <song 

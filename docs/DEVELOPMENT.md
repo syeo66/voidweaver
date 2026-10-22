@@ -42,7 +42,8 @@ State is managed with Provider. Services take optional dependencies (`Voidweaver
 
 ## Conventions
 
-- Use `debugPrint()` for logging.
+- Log through a `Logger` from `package:logging`, one per file (`final _log = Logger('api_cache');`), not `debugPrint()` or `print()`. Levels: `severe` for unexpected errors, `warning` for failures the app recovers from, `info` for notable events, `fine` for details. Pass the error as the second argument (`_log.warning('Search failed', e)`), and a closure for messages that are expensive to build (`_log.fine(() => doc.toXmlString())`). `setUpLogging()` in `lib/utils/log.dart` prints all records through `redactCredentials()`, so URLs can be logged as they are.
+- Debug builds print every level, release builds `info` and up. Build with `--dart-define=LOG_LEVEL=FINE` for everything, or `--dart-define=LOG_FINE=audio_player,replaygain` for some loggers only. On Android the lines appear as `I flutter : W/api_cache: ...` (`adb logcat -s flutter`). Tests print nothing.
 - Every service and `State` that owns subscriptions, timers, controllers or HTTP clients disposes them in `dispose()`. `test/services/memory_leak_test.dart` covers the services.
 - Check `mounted` after `await` in widgets.
 - Screens choose layouts with `MediaQuery.of(context).orientation`, using `_buildPortraitLayout()` / `_buildLandscapeLayout()`. Test both orientations when changing a screen.

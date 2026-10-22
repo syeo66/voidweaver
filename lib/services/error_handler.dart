@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:logging/logging.dart';
+
+final _log = Logger('error_handler');
 
 /// Global error handler service that catches and manages uncaught exceptions
 /// throughout the application.
@@ -48,9 +51,7 @@ class ErrorHandler {
       );
     };
 
-    if (kDebugMode) {
-      print('ErrorHandler initialized');
-    }
+    _log.fine('ErrorHandler initialized');
   }
 
   /// Add an error reporter to receive error notifications
@@ -70,9 +71,7 @@ class ErrorHandler {
         reporter.reportError(details);
       } catch (e) {
         // Don't let reporter errors crash the app
-        if (kDebugMode) {
-          print('Error reporter failed: $e');
-        }
+        _log.warning('Error reporter failed', e);
       }
     }
   }
@@ -127,23 +126,13 @@ abstract class ErrorReporter {
   void reportError(FlutterErrorDetails details);
 }
 
-/// Console error reporter for development
+/// Logs errors at `SEVERE`, so they reach the console (logcat) in release
+/// builds too, see setUpLogging()
 class ConsoleErrorReporter implements ErrorReporter {
   @override
   void reportError(FlutterErrorDetails details) {
-    if (kDebugMode) {
-      print('=== ERROR REPORT ===');
-      print('Time: ${DateTime.now()}');
-      print('Error: ${details.exception}');
-      if (details.stack != null) {
-        print('Stack trace:');
-        print(details.stack);
-      }
-      if (details.context != null) {
-        print('Context: ${details.context}');
-      }
-      print('==================');
-    }
+    _log.severe(details.context?.toString() ?? 'Uncaught error',
+        details.exception, details.stack);
   }
 }
 

@@ -8,12 +8,14 @@ import 'services/settings_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'widgets/error_boundary.dart';
+import 'utils/log.dart';
 
 void main() async {
   // Run the app in a zone to catch async errors
   unawaited(runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+      setUpLogging();
 
       // Initialize global error handling
       ErrorHandler.instance.initialize();

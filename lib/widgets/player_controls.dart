@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:logging/logging.dart';
 import '../services/audio_player_service.dart';
+
+final _log = Logger('player_controls');
 
 class PlayerControls extends StatelessWidget {
   const PlayerControls({super.key});
@@ -149,7 +152,7 @@ class _ProgressSection extends StatelessWidget {
                         .read<AudioPlayerService>()
                         .seekTo(newPosition)
                         .catchError((Object e) {
-                      debugPrint('[player_controls] Seek failed: $e');
+                      _log.warning('Seek failed', e);
                     }));
                   }
                 },

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:logging/logging.dart';
 import 'subsonic_api.dart';
 import 'audio_player_service.dart';
 import 'audio_cache.dart';
@@ -11,6 +12,8 @@ import 'playback_persistence.dart';
 import 'replaygain_debug_logger.dart';
 import 'scrobble_queue.dart';
 import 'network_errors.dart';
+
+final _log = Logger('app_state');
 
 enum SyncStatus {
   idle,
@@ -140,10 +143,10 @@ class AppState extends ChangeNotifier {
       try {
         final restored = await _audioPlayerService!.restorePlaybackState();
         if (restored) {
-          debugPrint('Successfully restored previous playback state');
+          _log.info('Successfully restored previous playback state');
         }
       } catch (e) {
-        debugPrint('Failed to restore playback state: $e');
+        _log.warning('Failed to restore playback state', e);
         // Continue normally if restoration fails
       }
 
@@ -213,7 +216,7 @@ class AppState extends ChangeNotifier {
     } catch (e) {
       // Only the sync indicator shows this; the albums loaded before stay
       _syncStatus = SyncStatus.error;
-      debugPrint('Background sync failed: $e');
+      _log.warning('Background sync failed', e);
     }
 
     notifyListeners();
@@ -283,7 +286,7 @@ class AppState extends ChangeNotifier {
       await _secureStorage.write(key: 'username', value: username);
       await _secureStorage.write(key: 'password', value: password);
     } catch (e) {
-      debugPrint('Error saving secure credentials: $e');
+      _log.warning('Error saving secure credentials', e);
       rethrow;
     }
   }
@@ -299,7 +302,7 @@ class AppState extends ChangeNotifier {
         return;
       }
     } catch (e) {
-      debugPrint('Error loading secure credentials: $e');
+      _log.warning('Error loading secure credentials', e);
     }
     // Not in secure storage: credentials saved by an old version may still be
     // in SharedPreferences
@@ -330,7 +333,7 @@ class AppState extends ChangeNotifier {
         await prefs.remove(key);
       }
     } catch (e) {
-      debugPrint('Error clearing configuration: $e');
+      _log.warning('Error clearing configuration', e);
     }
 
     _albums.clear();
@@ -356,7 +359,7 @@ class AppState extends ChangeNotifier {
       final password = prefs.getString('password');
 
       if (serverUrl != null && username != null && password != null) {
-        debugPrint(
+        _log.fine(
             'Migrating credentials from SharedPreferences to secure storage');
 
         // Save to secure storage
@@ -370,10 +373,10 @@ class AppState extends ChangeNotifier {
         // Configure with migrated credentials
         await configure(serverUrl, username, password);
 
-        debugPrint('Credential migration completed successfully');
+        _log.info('Credential migration completed successfully');
       }
     } catch (e) {
-      debugPrint('Error during credential migration: $e');
+      _log.warning('Error during credential migration', e);
     }
   }
 

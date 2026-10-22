@@ -7,7 +7,7 @@ void main() {
     test(
         'parses nested replayGain element with namespace (OpenSubsonic/Navidrome format)',
         () {
-      // This is the actual format from Navidrome (music.raven.ch)
+      // This is the actual format from Navidrome (a Navidrome server)
       final xml = '''
         <song 
           xmlns="http://subsonic.org/restapi"
