@@ -19,7 +19,7 @@ The Java tests (`packages/voidweaver_player/android/src/test/`) cover `GainAudio
 
 ## Layout
 
-- `services/`: one file per service (API cache, audio cache, scrobble queue, playback restore, ReplayGain parsing, skips, gapless playback and system controls, timeouts, HTTPS enforcement, disposal)
+- `services/`: one file per service (API cache, audio cache, scrobble queue, playback restore, ReplayGain parsing and gain calculation, skips, gapless playback and system controls, timeouts, HTTPS enforcement, disposal)
 - `utils/`: validators and formatting helpers
 - `widgets/`: error boundaries, album list, player controls, search screen (debounce, stale responses)
 - `screens/`: home and settings screens, in portrait and landscape at a phone's size (`tester.view`).

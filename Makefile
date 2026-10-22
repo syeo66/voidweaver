@@ -1,5 +1,5 @@
 # Voidweaver Flutter Project Makefile
-.PHONY: help setup analyze format test test-android build-release clean doctor devices run run-web install upgrade
+.PHONY: help setup analyze format test test-android build-release clean doctor devices run install upgrade
 
 # Default target
 all: format analyze test
@@ -17,7 +17,6 @@ help:
 	@echo "  doctor        - Check Flutter installation"
 	@echo "  devices       - List available devices"
 	@echo "  run           - Run app on connected device/emulator"
-	@echo "  run-web       - Run app in web browser"
 	@echo "  install       - Install dependencies"
 	@echo "  upgrade       - Upgrade dependencies"
 
@@ -89,8 +88,3 @@ devices:
 run: setup
 	@echo "Running app..."
 	flutter run
-
-# Run app in web browser
-run-web: setup
-	@echo "Running app in web browser..."
-	flutter run -d chrome

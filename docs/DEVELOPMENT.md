@@ -5,7 +5,6 @@
 ```bash
 make setup           # flutter pub get
 make run             # run on device/emulator (prefer the Android emulator)
-make run-web         # run in Chrome
 make test            # flutter test
 make analyze         # flutter analyze (keep it at 0 issues)
 make format          # dart format lib/ test/

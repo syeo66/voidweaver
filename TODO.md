@@ -23,4 +23,3 @@
 ## Tests
 - [ ] Integration tests for full user flows
 - [ ] Playback tests beyond the mocked player
-- [ ] ReplayGain volume calculation tests

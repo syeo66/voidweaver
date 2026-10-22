@@ -1,6 +1,6 @@
 # Voidweaver
 
-A Flutter music player for Android and iOS that streams from your own music server.
+A Flutter music player for Android that streams from your own music server.
 
 Voidweaver is built to run against [Navidrome](https://www.navidrome.org/) through [subsoxy](https://github.com/syeo66/subsoxy), a Subsonic API proxy that learns from your plays and skips to make shuffle smarter. It also works with any other Subsonic-compatible server, but that setup isn't the focus.
 
