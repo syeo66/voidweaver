@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:voidweaver_player/voidweaver_player.dart';
 import 'package:logging/logging.dart';
@@ -40,7 +41,13 @@ class AudioPlayerService extends ChangeNotifier {
   /// Upcoming tracks downloaded to the cache while playing
   static const int _maxPreloadTracks = 3;
 
-  static const _skipDebounceMs = 200;
+  /// Skips within this time of the previous one are ignored, as a doubled
+  /// event rather than another press
+  static const _skipDebounceMs = 100;
+
+  /// How long the current track has to have played for Previous to restart
+  /// it instead of going back a track
+  static const _restartThreshold = Duration(seconds: 3);
 
   /// How far the position may move beyond the time that passed between two
   /// position updates and still count as listening, see _trackListening()
@@ -93,6 +100,8 @@ class AudioPlayerService extends ChangeNotifier {
   // Skips
   DateTime? _lastSkipTime;
   bool _skipOperationInProgress = false;
+  // Where the skip in progress ends up; presses meanwhile move it, see _skip()
+  int? _skipTarget;
 
   // Set when a song couldn't be loaded (e.g. offline at startup); the queue
   // is loaded again on the next play()
@@ -720,26 +729,52 @@ class AudioPlayerService extends ChangeNotifier {
     return true;
   }
 
-  Future<void> next() => _skip(_currentIndex + 1, 'next');
+  Future<void> next() => _skip('next', (from) => from + 1);
 
-  Future<void> previous() => _skip(_currentIndex - 1, 'previous');
+  /// Restarts the current track once it has played for a few seconds, and
+  /// the first track; otherwise goes back a track.
+  Future<void> previous() => _skip('previous', (from) {
+        // Not during a skip: that's a press to go back further
+        final restart =
+            !_skipOperationInProgress && _currentPosition > _restartThreshold;
+        return restart ? from : max(from - 1, 0);
+      });
 
-  Future<void> _skip(int target, String source) async {
+  /// Skips to the index [targetFrom] returns for the current one or, while a
+  /// skip is in progress, for its target. A press during a skip doesn't start
+  /// another one but moves the target, and the skip continues there once it
+  /// has reached its earlier target. So pressing Next three times moves three
+  /// tracks, however long each takes to load.
+  Future<void> _skip(String source, int Function(int from) targetFrom) async {
+    final target = targetFrom(_skipTarget ?? _currentIndex);
     if (target < 0 || target >= _playlist.length) return;
-    if (!_canSkip() || _skipOperationInProgress) {
+    if (!_canSkip()) {
       _log.fine('[$source] Skip ignored');
       return;
     }
+    if (_skipOperationInProgress) {
+      _log.fine('[$source] Skip in progress, continuing to index $target');
+      _skipTarget = target;
+      return;
+    }
 
+    final playlist = _playlist;
+    _skipTarget = target;
     _skipOperationInProgress = true;
     notifyListeners();
     try {
-      _scrobbleCurrentSongIfEligible();
-      await _jumpTo(target);
+      int? reached;
+      // Ends early if a new queue was started meanwhile
+      while (_skipTarget != reached && identical(playlist, _playlist)) {
+        reached = _skipTarget!;
+        _scrobbleCurrentSongIfEligible();
+        await _jumpTo(reached);
+      }
     } catch (e) {
       _log.warning('[$source] Error during skip', e);
       _onLoadFailed('Failed to play song: $e');
     } finally {
+      _skipTarget = null;
       _skipOperationInProgress = false;
       notifyListeners();
     }

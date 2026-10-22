@@ -322,31 +322,31 @@ class _ControlButtons extends StatelessWidget {
         AudioPlayerService,
         ({
           PlaybackState state,
-          bool hasPrevious,
+          bool hasSong,
           bool hasNext,
-          bool isSkipping
         })>(
       selector: (context, service) => (
         state: service.playbackState,
-        hasPrevious: service.hasPrevious,
+        hasSong: service.currentSong != null,
         hasNext: service.hasNext,
-        isSkipping: service.isSkipOperationInProgress,
       ),
+      // The skip buttons stay enabled during a skip: a press moves its target
+      // (see AudioPlayerService.next()), and the play button shows a
+      // spinner while a track loads
       builder: (context, controls, child) {
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildSkipButton(
               icon: Icons.skip_previous,
-              enabled: controls.hasPrevious && !controls.isSkipping,
-              isSkipping: controls.isSkipping,
+              // Also on the first track, which Previous restarts
+              enabled: controls.hasSong,
               onPressed: () => context.read<AudioPlayerService>().previous(),
             ),
             _buildPlayPauseButton(controls.state),
             _buildSkipButton(
               icon: Icons.skip_next,
-              enabled: controls.hasNext && !controls.isSkipping,
-              isSkipping: controls.isSkipping,
+              enabled: controls.hasNext,
               onPressed: () => context.read<AudioPlayerService>().next(),
             ),
           ],
@@ -358,20 +358,8 @@ class _ControlButtons extends StatelessWidget {
   Widget _buildSkipButton({
     required IconData icon,
     required bool enabled,
-    required bool isSkipping,
     required VoidCallback onPressed,
   }) {
-    if (isSkipping) {
-      return const Padding(
-        padding: EdgeInsets.all(8.0),
-        child: SizedBox(
-          width: 24,
-          height: 24,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-      );
-    }
-
     return IconButton(
       icon: Icon(icon),
       onPressed: enabled ? onPressed : null,

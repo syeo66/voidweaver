@@ -44,6 +44,10 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
 
   final Map<String, double> _gains = {};
 
+  /// While set, a seek to another item waits for it to complete, like an
+  /// item that takes a while to load.
+  Completer<void>? seekGate;
+
   /// The gain of the item for [source] (in the notation of
   /// [sequenceSources]) in the current sequence.
   double? gainOfSource(String source) {
@@ -172,6 +176,7 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
       _positionController.add(_position);
       return;
     }
+    await seekGate?.future;
     loadedSources.add(_describe(_sequence[index]));
     _moveTo(index, position ?? Duration.zero);
     if (_fails(index)) {

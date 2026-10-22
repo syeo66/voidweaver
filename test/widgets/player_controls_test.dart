@@ -135,7 +135,8 @@ void main() {
     await pumpControls(tester);
     await playAlbum(tester);
 
-    expect(buttonWithIcon(tester, Icons.skip_previous).onPressed, isNull);
+    // Previous restarts the first track
+    expect(buttonWithIcon(tester, Icons.skip_previous).onPressed, isNotNull);
     expect(buttonWithIcon(tester, Icons.skip_next).onPressed, isNotNull);
   });
 

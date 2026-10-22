@@ -44,7 +44,9 @@ After `stop()` or an error the player is idle, so `play()` and skips load the qu
 ## Skips
 
 - `next()` and `previous()` seek within the sequence (`_jumpTo()`). Nothing is reloaded, and a cached target plays from the cache.
-- Skips are debounced (200 ms, `_skipDebounceMs`) in the service, so UI and system controls share the debounce. `_skipOperationInProgress` blocks a skip while another runs, and is reset in a `finally` block so the skip buttons can't get stuck.
+- Previous restarts the current track once it has played for more than 3 s (`_restartThreshold`), and always on the first track; otherwise it goes back a track. A restart is a new play, like any other skip.
+- Presses during a skip are coalesced: a skip already in progress continues to the target that later presses move (`_skipTarget`), counting from its target rather than the current track. Pressing Next three times moves three tracks, however long each takes to load; earlier versions dropped presses while a skip ran. The skip buttons stay enabled during a skip for the same reason. `_skipOperationInProgress` and `_skipTarget` are reset in a `finally` block.
+- Skips within 100 ms of the previous one are ignored (`_skipDebounceMs`) as doubled events. The service does this, so UI and system controls share it.
 - A skip scrobbles the current track if it passed the threshold.
 
 There is deliberately no handling for the player pausing near the end of a track: the player keeps `playing` true while buffering and on completion, so ready and not playing only happens after `pause()`.

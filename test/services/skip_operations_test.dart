@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
@@ -142,6 +144,42 @@ void main() {
       expect(service.currentIndex, 1);
     });
 
+    test('presses during a slow skip move on from its target', () async {
+      await service.playAlbum(album(4));
+      player.seekGate = Completer();
+
+      final skipping = service.next();
+      await Future.delayed(pastSkipDebounce);
+      unawaited(service.next());
+      await Future.delayed(pastSkipDebounce);
+      unawaited(service.next());
+      expect(service.currentIndex, 1);
+      expect(service.isSkipOperationInProgress, isTrue);
+
+      player.seekGate!.complete();
+      await skipping;
+
+      expect(service.currentIndex, 3);
+      expect(player.currentIndex, 3);
+      expect(service.isSkipOperationInProgress, isFalse);
+    });
+
+    test('presses during a skip stop at the last track', () async {
+      await service.playAlbum(album(3));
+      player.seekGate = Completer();
+
+      final skipping = service.next();
+      for (var i = 0; i < 3; i++) {
+        await Future.delayed(pastSkipDebounce);
+        unawaited(service.next());
+      }
+      player.seekGate!.complete();
+      await skipping;
+
+      expect(service.currentIndex, 2);
+      expect(player.currentIndex, 2);
+    });
+
     test('allows another skip once the debounce window has passed', () async {
       await service.playAlbum(album(3));
       await Future.delayed(pastSkipDebounce);
@@ -185,14 +223,63 @@ void main() {
   });
 
   group('previous()', () {
-    test('does nothing on the first track', () async {
+    test('restarts the first track', () async {
       await service.playAlbum(album(3));
+      player.simulatePositionChange(const Duration(seconds: 1));
+      await settle();
 
       await service.previous();
 
       expect(service.currentIndex, 0);
       expect(service.hasPrevious, isFalse);
+      expect(player.position, Duration.zero);
       expect(player.loadedSources, [urlFor('s1')]);
+    });
+
+    test('restarts a track that has played for a few seconds', () async {
+      await service.playAlbum(album(3));
+      await Future.delayed(pastSkipDebounce);
+      await service.next();
+      await Future.delayed(pastSkipDebounce);
+      player.simulatePositionChange(const Duration(seconds: 10));
+      await settle();
+
+      await service.previous();
+
+      expect(service.currentIndex, 1);
+      expect(service.currentPosition, Duration.zero);
+      expect(player.position, Duration.zero);
+      expect(service.playbackState, PlaybackState.playing);
+    });
+
+    test('a restart counts as a new play', () async {
+      when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {});
+      await service.playAlbum(album(3));
+      player.simulatePositionChange(const Duration(seconds: 10));
+      await settle();
+
+      await service.previous();
+      // The scrobble queue sends requests asynchronously, 100 ms apart
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      verify(mockApi.scrobbleNowPlaying('s1')).called(2);
+    });
+
+    test('goes back from the target when pressed during a skip', () async {
+      await service.playAlbum(album(3));
+      player.seekGate = Completer();
+
+      final skipping = service.next();
+      // A late position update of the track being skipped
+      player.simulatePositionChange(const Duration(seconds: 10));
+      await settle();
+      await Future.delayed(pastSkipDebounce);
+      unawaited(service.previous());
+      player.seekGate!.complete();
+      await skipping;
+
+      expect(service.currentIndex, 0);
+      expect(player.currentIndex, 0);
     });
 
     test('goes back to the preceding track', () async {
