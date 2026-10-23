@@ -30,6 +30,9 @@ class _ArtistDetailScreenState extends State<ArtistDetailScreen> {
   }
 
   Future<void> _loadArtistAlbums() async {
+    final api = context.read<AppState>().api;
+    if (api == null) return;
+
     setState(() {
       _isLoadingAlbums = true;
       _albums = [];
@@ -37,16 +40,14 @@ class _ArtistDetailScreenState extends State<ArtistDetailScreen> {
     });
 
     try {
-      final appState = context.read<AppState>();
-      final api = appState.api;
-      if (api != null) {
-        final albums = await api.getArtistAlbums(widget.artist.id);
-        setState(() {
-          _albums = albums;
-          _isLoadingAlbums = false;
-        });
-      }
+      final albums = await api.getArtistAlbums(widget.artist.id);
+      if (!mounted) return;
+      setState(() {
+        _albums = albums;
+        _isLoadingAlbums = false;
+      });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoadingAlbums = false;
         _errorMessage = NetworkErrorHelper.getErrorMessage(e,

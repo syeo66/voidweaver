@@ -20,6 +20,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
   bool _isLoadingArtists = false;
   bool _isLoadingAlbums = false;
   String? _errorMessage;
+  // Incremented for every album request and when going back to the artists;
+  // a response to an older one is dropped
+  int _albumsGeneration = 0;
 
   @override
   void initState() {
@@ -28,22 +31,23 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   Future<void> _loadArtists() async {
+    final api = context.read<AppState>().api;
+    if (api == null) return;
+
     setState(() {
       _isLoadingArtists = true;
       _errorMessage = null;
     });
 
     try {
-      final appState = context.read<AppState>();
-      final api = appState.api;
-      if (api != null) {
-        final artists = await api.getArtists();
-        setState(() {
-          _artists = artists;
-          _isLoadingArtists = false;
-        });
-      }
+      final artists = await api.getArtists();
+      if (!mounted) return;
+      setState(() {
+        _artists = artists;
+        _isLoadingArtists = false;
+      });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoadingArtists = false;
         _errorMessage = NetworkErrorHelper.getErrorMessage(e,
@@ -53,24 +57,25 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   Future<void> _loadArtistAlbums(Artist artist) async {
+    final api = context.read<AppState>().api;
+    final generation = ++_albumsGeneration;
     setState(() {
       _selectedArtist = artist;
-      _isLoadingAlbums = true;
+      _isLoadingAlbums = api != null;
       _albums = [];
       _errorMessage = null;
     });
+    if (api == null) return;
 
     try {
-      final appState = context.read<AppState>();
-      final api = appState.api;
-      if (api != null) {
-        final albums = await api.getArtistAlbums(artist.id);
-        setState(() {
-          _albums = albums;
-          _isLoadingAlbums = false;
-        });
-      }
+      final albums = await api.getArtistAlbums(artist.id);
+      if (!mounted || generation != _albumsGeneration) return;
+      setState(() {
+        _albums = albums;
+        _isLoadingAlbums = false;
+      });
     } catch (e) {
+      if (!mounted || generation != _albumsGeneration) return;
       setState(() {
         _isLoadingAlbums = false;
         _errorMessage = NetworkErrorHelper.getErrorMessage(e,
@@ -97,7 +102,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   void _backToArtists() {
+    // An album request still running is dropped, see _albumsGeneration
+    _albumsGeneration++;
     setState(() {
+      _isLoadingAlbums = false;
       _selectedArtist = null;
       _albums = [];
       _errorMessage = null;
