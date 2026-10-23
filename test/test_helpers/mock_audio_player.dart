@@ -169,9 +169,13 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
     _positionController.add(_position);
   }
 
+  /// Targets of the seeks within the current item, in order
+  final List<Duration> seeks = [];
+
   @override
   Future<void> seek(Duration? position, {int? index}) async {
     if (index == null || index == _currentIndex) {
+      seeks.add(position ?? Duration.zero);
       _position = position ?? Duration.zero;
       _positionController.add(_position);
       return;

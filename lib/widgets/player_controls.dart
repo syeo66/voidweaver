@@ -43,7 +43,6 @@ class PlayerControls extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _ProgressSection(),
-        _TimeLabels(),
         _SleepTimerIndicator(),
         Padding(
           padding: EdgeInsets.all(16.0),
@@ -87,7 +86,6 @@ class PlayerControls extends StatelessWidget {
           SizedBox(height: 8),
           // Progress section spans full width
           _ProgressSection(),
-          _TimeLabels(),
         ],
       ),
     );
@@ -116,83 +114,98 @@ class _ProgressBuilder extends StatelessWidget {
   }
 }
 
-class _ProgressSection extends StatelessWidget {
+/// The seek bar and the times next to it. While the thumb is dragged it
+/// follows the finger, and the player only seeks once it's let go: a seek per
+/// drag update would make the player buffer at every step, and the position
+/// updates meanwhile would pull the thumb back.
+class _ProgressSection extends StatefulWidget {
   const _ProgressSection();
 
   @override
-  Widget build(BuildContext context) {
-    return _ProgressBuilder(
-      builder: (context, progress) {
-        final double value = progress.total.inMilliseconds > 0
-            ? progress.current.inMilliseconds / progress.total.inMilliseconds
-            : 0;
-
-        return SizedBox(
-          height: 20,
-          child: Builder(
-            builder: (context) => SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackHeight: 4,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-                activeTrackColor: Colors.blue,
-                inactiveTrackColor: Colors.grey[300],
-                thumbColor: Colors.blue,
-                overlayColor: Colors.blue.withValues(alpha: 0.2),
-              ),
-              child: Slider(
-                value: value.clamp(0.0, 1.0),
-                onChanged: (newValue) {
-                  if (progress.total.inMilliseconds > 0) {
-                    final newPosition = Duration(
-                      milliseconds:
-                          (newValue * progress.total.inMilliseconds).round(),
-                    );
-                    unawaited(context
-                        .read<AudioPlayerService>()
-                        .seekTo(newPosition)
-                        .catchError((Object e) {
-                      _log.warning('Seek failed', e);
-                    }));
-                  }
-                },
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
+  State<_ProgressSection> createState() => _ProgressSectionState();
 }
 
-class _TimeLabels extends StatelessWidget {
-  const _TimeLabels();
+class _ProgressSectionState extends State<_ProgressSection> {
+  // The position the thumb was dragged to, shown instead of the player's
+  // until the seek there has completed
+  Duration? _dragPosition;
+  // Incremented with every drag, so an earlier drag's seek completing doesn't
+  // end a later one
+  int _drag = 0;
+
+  Duration _positionAt(double value, Duration total) =>
+      Duration(milliseconds: (value * total.inMilliseconds).round());
+
+  Future<void> _seek(Duration position) async {
+    final drag = _drag;
+    try {
+      await context.read<AudioPlayerService>().seekTo(position);
+    } catch (e) {
+      _log.warning('Seek failed', e);
+    }
+    if (mounted && drag == _drag) setState(() => _dragPosition = null);
+  }
 
   @override
   Widget build(BuildContext context) {
     return _ProgressBuilder(
       builder: (context, progress) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                _formatDuration(progress.current),
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 12,
+        final total = progress.total;
+        final current = _dragPosition ?? progress.current;
+        final double value = total.inMilliseconds > 0
+            ? current.inMilliseconds / total.inMilliseconds
+            : 0;
+        final canSeek = total.inMilliseconds > 0;
+        final colors = Theme.of(context).colorScheme;
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              height: 20,
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 4,
+                  thumbShape:
+                      const RoundSliderThumbShape(enabledThumbRadius: 6),
+                  overlayShape:
+                      const RoundSliderOverlayShape(overlayRadius: 12),
+                ),
+                child: Slider(
+                  value: value.clamp(0.0, 1.0),
+                  onChangeStart: canSeek
+                      ? (value) => setState(() {
+                            _drag++;
+                            _dragPosition = _positionAt(value, total);
+                          })
+                      : null,
+                  onChanged: canSeek
+                      ? (value) => setState(
+                          () => _dragPosition = _positionAt(value, total))
+                      : null,
+                  onChangeEnd: canSeek
+                      ? (value) => unawaited(_seek(_positionAt(value, total)))
+                      : null,
                 ),
               ),
-              Text(
-                _formatDuration(progress.total),
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 12,
-                ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  for (final time in [current, total])
+                    Text(
+                      _formatDuration(time),
+                      style: TextStyle(
+                        color: colors.onSurfaceVariant,
+                        fontSize: 12,
+                      ),
+                    ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         );
       },
     );
@@ -303,7 +316,8 @@ class _SongInfo extends StatelessWidget {
             ),
             Text(
               songInfo.artist,
-              style: TextStyle(color: Colors.grey[600]),
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
               overflow: TextOverflow.ellipsis,
             ),
           ],

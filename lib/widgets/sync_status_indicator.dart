@@ -20,15 +20,16 @@ class SyncStatusIndicator extends StatelessWidget {
           case SyncStatus.idle:
             return const SizedBox.shrink();
           case SyncStatus.syncing:
-            icon = const SizedBox(
+            icon = SizedBox(
               width: 16,
               height: 16,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                    Theme.of(context).colorScheme.primary),
               ),
             );
-            color = Colors.blue;
+            color = Theme.of(context).colorScheme.primary;
             tooltip = 'Syncing...';
             break;
           case SyncStatus.success:
@@ -38,7 +39,7 @@ class SyncStatusIndicator extends StatelessWidget {
             break;
           case SyncStatus.error:
             icon = const Icon(Icons.error, size: 16);
-            color = Colors.red;
+            color = Theme.of(context).colorScheme.error;
             tooltip = lastSyncTime != null
                 ? 'Sync failed (last success: ${_formatTime(lastSyncTime)})'
                 : 'Sync failed';

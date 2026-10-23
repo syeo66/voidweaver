@@ -58,7 +58,8 @@ class ImageCacheManager {
         height: height,
         fit: fit ?? BoxFit.cover,
         cacheKey: api.coverArtCacheKey(coverArtId, size: size),
-        placeholder: placeholder ?? (context, url) => _buildPlaceholder(),
+        placeholder:
+            placeholder ?? (context, url) => _buildPlaceholder(context),
         errorWidget: errorWidget ??
             (context, url, error) => _buildErrorWidget(context, url, error),
         memCacheWidth: width == null ? null : (width * pixelRatio).round(),
@@ -96,34 +97,37 @@ class ImageCacheManager {
     required String coverArtId,
     double size = 60,
   }) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        color: Colors.grey[300],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: buildCoverArt(
-          api: api,
-          coverArtId: coverArtId,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
+    return Builder(
+      builder: (context) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: buildCoverArt(
+            api: api,
+            coverArtId: coverArtId,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+          ),
         ),
       ),
     );
   }
 
   /// Default placeholder widget
-  static Widget _buildPlaceholder() {
+  static Widget _buildPlaceholder(BuildContext context) {
     return Container(
-      color: Colors.grey[200],
-      child: const Center(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: Center(
         child: CircularProgressIndicator(
           strokeWidth: 2,
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
+          valueColor: AlwaysStoppedAnimation<Color>(
+              Theme.of(context).colorScheme.onSurfaceVariant),
         ),
       ),
     );
@@ -133,10 +137,10 @@ class ImageCacheManager {
   static Widget _buildErrorWidget(
       BuildContext context, String url, dynamic error) {
     return Container(
-      color: Colors.grey[300],
-      child: const Icon(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: Icon(
         Icons.music_note,
-        color: Colors.grey,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
         size: 24,
       ),
     );

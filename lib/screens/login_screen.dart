@@ -53,7 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 Icon(
                                   Icons.music_note,
                                   size: 80,
-                                  color: Theme.of(context).primaryColor,
+                                  color: Theme.of(context).colorScheme.primary,
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
@@ -62,7 +62,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                       .textTheme
                                       .headlineMedium
                                       ?.copyWith(
-                                        color: Theme.of(context).primaryColor,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
                                         fontWeight: FontWeight.bold,
                                       ),
                                 ),
@@ -90,7 +92,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           Icon(
                             Icons.music_note,
                             size: 80,
-                            color: Theme.of(context).primaryColor,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                           const SizedBox(height: 32),
                           _buildLoginForm(isLoading, hasError, appState),
@@ -117,18 +119,21 @@ class _LoginScreenState extends State<LoginScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.red.shade100,
+                color: Theme.of(context).colorScheme.errorContainer,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.red.shade300),
+                border: Border.all(color: Theme.of(context).colorScheme.error),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.error, color: Colors.red.shade700),
+                  Icon(Icons.error,
+                      color: Theme.of(context).colorScheme.onErrorContainer),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       appState.configurationError!,
-                      style: TextStyle(color: Colors.red.shade700),
+                      style: TextStyle(
+                          color:
+                              Theme.of(context).colorScheme.onErrorContainer),
                     ),
                   ),
                 ],
@@ -213,7 +218,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Connection failed: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }

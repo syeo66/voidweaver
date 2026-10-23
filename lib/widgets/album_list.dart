@@ -24,7 +24,8 @@ class AlbumList extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                Icon(Icons.error_outline,
+                    size: 64, color: Theme.of(context).colorScheme.error),
                 const SizedBox(height: 16),
                 Text(appState.error!),
                 const SizedBox(height: 16),
@@ -42,7 +43,9 @@ class AlbumList extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.library_music, size: 64, color: Colors.grey),
+                Icon(Icons.library_music,
+                    size: 64,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
                 const SizedBox(height: 16),
                 const Text('No albums found'),
                 const SizedBox(height: 16),
@@ -121,7 +124,7 @@ class _AlbumTileState extends State<AlbumTile> {
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
-                  color: Colors.grey[300],
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 ),
                 child: widget.album.coverArt != null
                     ? ImageCacheManager.buildAlbumArt(
@@ -129,7 +132,8 @@ class _AlbumTileState extends State<AlbumTile> {
                         coverArtId: widget.album.coverArt!,
                         size: 56,
                       )
-                    : const Icon(Icons.album, color: Colors.grey),
+                    : Icon(Icons.album,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
             ),
             title: Text(
@@ -144,7 +148,9 @@ class _AlbumTileState extends State<AlbumTile> {
                     widget.album.duration != null)
                   Text(
                     '${widget.album.songCount} songs • ${_formatDuration(widget.album.duration!)}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
               ],
             ),
@@ -204,7 +210,7 @@ class _AlbumTileState extends State<AlbumTile> {
           SnackBar(
             content: Text(NetworkErrorHelper.getErrorMessage(e,
                 context: 'Failed to play album')),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -265,7 +271,9 @@ class _AlbumGridTileState extends State<AlbumGridTile> {
                       width: double.infinity,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(8),
-                        color: Colors.grey[300],
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
                       ),
                       child: widget.album.coverArt != null
                           ? ImageCacheManager.buildAlbumArt(
@@ -273,8 +281,11 @@ class _AlbumGridTileState extends State<AlbumGridTile> {
                               coverArtId: widget.album.coverArt!,
                               size: 120,
                             )
-                          : const Icon(Icons.album,
-                              color: Colors.grey, size: 48),
+                          : Icon(Icons.album,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                              size: 48),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -292,7 +303,7 @@ class _AlbumGridTileState extends State<AlbumGridTile> {
                   Text(
                     widget.album.artist,
                     style: TextStyle(
-                      color: Colors.grey[600],
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontSize: 12,
                     ),
                     maxLines: 1,
@@ -331,7 +342,7 @@ class _AlbumGridTileState extends State<AlbumGridTile> {
           SnackBar(
             content: Text(NetworkErrorHelper.getErrorMessage(e,
                 context: 'Failed to play album')),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }

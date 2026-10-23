@@ -16,6 +16,7 @@ import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.Timeline;
 import androidx.media3.common.audio.AudioProcessor;
+import androidx.media3.datasource.DataSourceBitmapLoader;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlaybackException;
 import androidx.media3.exoplayer.ExoPlayer;
@@ -24,6 +25,7 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy;
 import androidx.media3.extractor.DefaultExtractorsFactory;
+import androidx.media3.session.CacheBitmapLoader;
 import androidx.media3.session.MediaSession;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -67,6 +69,7 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
   private final MethodChannel methodChannel;
   private final EventChannel eventChannel;
   private final GainAudioProcessor gainProcessor = new GainAudioProcessor();
+  private final ArtworkLoader artwork;
   private final ExoPlayer player;
   private final SessionPlayer sessionPlayer;
   private final MediaSession session;
@@ -80,6 +83,7 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
 
   PlaylistPlayer(Context context, BinaryMessenger messenger, String id) {
     this.context = context;
+    artwork = new ArtworkLoader(new DataSourceBitmapLoader.Builder(context).build());
     DefaultRenderersFactory renderersFactory =
         new DefaultRenderersFactory(context) {
           @Override
@@ -117,7 +121,9 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
     MediaSession.Builder sessionBuilder =
         new MediaSession.Builder(context, sessionPlayer)
             .setId(id)
-            .setCallback(new FullControlCallback());
+            .setCallback(new FullControlCallback())
+            // As the session's default, but resolving the URIs that hide the credentials
+            .setBitmapLoader(new CacheBitmapLoader(artwork));
     Intent launchIntent =
         context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
     if (launchIntent != null) {
@@ -199,7 +205,7 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
             .setArtist((String) source.get("artist"))
             .setAlbumTitle((String) source.get("album"));
     String artUri = (String) source.get("artUri");
-    if (artUri != null) metadata.setArtworkUri(Uri.parse(artUri));
+    if (artUri != null) metadata.setArtworkUri(artwork.register(id, Uri.parse(artUri)));
     return new MediaItem.Builder()
         .setMediaId(id)
         .setUri(Uri.parse((String) source.get("uri")))
@@ -212,6 +218,7 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
     interruptLoad();
     completeSeek();
     gainProcessor.clearGains();
+    artwork.clear();
     List<?> sources = call.argument("sources");
     List<MediaItem> items = new ArrayList<>();
     for (Object source : sources) {

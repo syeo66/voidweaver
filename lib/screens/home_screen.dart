@@ -67,6 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     final appState = context.read<AppState>();
                     final messenger = ScaffoldMessenger.of(context);
+                    final errorColor = Theme.of(context).colorScheme.error;
 
                     try {
                       await appState.audioPlayerService?.playRandomSongs();
@@ -76,7 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           SnackBar(
                             content: Text(NetworkErrorHelper.getErrorMessage(e,
                                 context: 'Failed to play random songs')),
-                            backgroundColor: Colors.red,
+                            backgroundColor: errorColor,
                           ),
                         );
                       }
@@ -363,7 +364,8 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
                 Text(
                   'Playlist: ${_currentIndex + 1} of ${_currentPlaylist.length}',
                   style: TextStyle(
-                      color: Colors.grey[600], fontSize: labelFontSize),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: labelFontSize),
                 ),
                 const SizedBox(height: 4),
               ],
@@ -399,7 +401,8 @@ class _StaticPlaylistInfoState extends State<_StaticPlaylistInfo> {
         const Divider(),
         Text(
           'Playlist: ${_currentIndex + 1} of ${_currentPlaylist.length}',
-          style: TextStyle(color: Colors.grey[600]),
+          style:
+              TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 8),
         SizedBox(
@@ -462,18 +465,19 @@ class _PlaylistItem extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(isCompact ? 6 : 8),
               color: isCurrentSong
-                  ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
-                  : Colors.grey[300],
+                  ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
+                  : Theme.of(context).colorScheme.surfaceContainerHighest,
               border: isCurrentSong
                   ? Border.all(
-                      color: Theme.of(context).primaryColor,
+                      color: Theme.of(context).colorScheme.primary,
                       width: isCompact ? 2 : 3)
                   : null,
               boxShadow: isCurrentSong
                   ? [
                       BoxShadow(
                         color: Theme.of(context)
-                            .primaryColor
+                            .colorScheme
+                            .primary
                             .withValues(alpha: 0.3),
                         blurRadius: isCompact ? 4 : 8,
                         spreadRadius: isCompact ? 0.5 : 1,
@@ -493,19 +497,29 @@ class _PlaylistItem extends StatelessWidget {
                           fit: BoxFit.cover,
                           placeholder: (context, url) => Icon(
                             Icons.music_note,
-                            color: isCurrentSong ? Colors.white : Colors.grey,
+                            color: isCurrentSong
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
                             size: iconSize * 0.8,
                           ),
                           errorWidget: (context, url, error) => Icon(
                             Icons.music_note,
-                            color: isCurrentSong ? Colors.white : Colors.grey,
+                            color: isCurrentSong
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
                             size: iconSize * 0.8,
                           ),
                         ),
                       )
                     : Icon(
                         Icons.music_note,
-                        color: isCurrentSong ? Colors.white : Colors.grey,
+                        color: isCurrentSong
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
                         size: iconSize * 0.8,
                       ),
                 if (isCurrentSong)
@@ -532,7 +546,9 @@ class _PlaylistItem extends StatelessWidget {
               style: TextStyle(
                 fontSize: fontSize,
                 fontWeight: isCurrentSong ? FontWeight.bold : FontWeight.normal,
-                color: isCurrentSong ? Theme.of(context).primaryColor : null,
+                color: isCurrentSong
+                    ? Theme.of(context).colorScheme.primary
+                    : null,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -564,14 +580,18 @@ class _NowPlayingContent extends StatelessWidget {
         final currentSong = playerService.currentSong;
 
         if (currentSong == null) {
-          return const Center(
+          return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.music_off, size: 64, color: Colors.grey),
+                Icon(Icons.music_off,
+                    size: 64,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
                 SizedBox(height: 16),
                 Text('No song playing',
-                    style: TextStyle(fontSize: 18, color: Colors.grey)),
+                    style: TextStyle(
+                        fontSize: 18,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ],
             ),
           );
@@ -720,9 +740,10 @@ class _StaticAlbumArtState extends State<_StaticAlbumArt> {
         height: 200,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          color: Colors.grey[300],
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
         ),
-        child: const Icon(Icons.music_note, size: 64, color: Colors.grey),
+        child: Icon(Icons.music_note,
+            size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
       );
     }
 
@@ -731,11 +752,12 @@ class _StaticAlbumArtState extends State<_StaticAlbumArt> {
       height: 200,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        color: Colors.grey[300],
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
       ),
       child: _currentCoverArt != null
           ? _buildCachedImage()
-          : const Icon(Icons.music_note, size: 64, color: Colors.grey),
+          : Icon(Icons.music_note,
+              size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
     );
   }
 
@@ -752,15 +774,15 @@ class _StaticAlbumArtState extends State<_StaticAlbumArt> {
         key: ValueKey('main-$_currentCoverArt'),
         fit: BoxFit.cover,
         placeholder: (context, url) => Container(
-          color: Colors.grey[300],
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
           child: const Center(
             child: CircularProgressIndicator(
               strokeWidth: 2,
             ),
           ),
         ),
-        errorWidget: (context, url, error) =>
-            const Icon(Icons.music_note, size: 64, color: Colors.grey),
+        errorWidget: (context, url, error) => Icon(Icons.music_note,
+            size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
       ),
     );
 
@@ -795,13 +817,17 @@ class _StaticSongInfo extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               currentSong.artist,
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              style: TextStyle(
+                  fontSize: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 4),
             Text(
               currentSong.album,
-              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+              style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
           ],
@@ -874,7 +900,8 @@ class _SleepTimerDialogState extends State<_SleepTimerDialog> {
                   const SizedBox(height: 8),
                   Text(
                     'Time remaining:',
-                    style: TextStyle(color: Colors.grey[600]),
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                   Text(
                     widget.playerService.sleepTimerRemaining != null

@@ -66,7 +66,7 @@ class _ArtistDetailScreenState extends State<ArtistDetailScreen> {
           SnackBar(
             content: Text(NetworkErrorHelper.getErrorMessage(e,
                 context: 'Failed to play album')),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -92,7 +92,7 @@ class _ArtistDetailScreenState extends State<ArtistDetailScreen> {
             Icon(
               Icons.error_outline,
               size: 64,
-              color: Colors.grey[600],
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
             const SizedBox(height: 16),
             Text(
@@ -128,7 +128,9 @@ class _ArtistDetailScreenState extends State<ArtistDetailScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.album_outlined, size: 64, color: Colors.grey),
+            Icon(Icons.album_outlined,
+                size: 64,
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
             const SizedBox(height: 16),
             const Text('No albums found for this artist'),
             const SizedBox(height: 16),
@@ -176,7 +178,7 @@ class _ArtistDetailScreenState extends State<ArtistDetailScreen> {
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(4),
                   ),
@@ -187,24 +189,29 @@ class _ArtistDetailScreenState extends State<ArtistDetailScreen> {
                         coverArtId: album.coverArt!,
                         fit: BoxFit.cover,
                         placeholder: (context, url) => Container(
-                          color: Colors.grey[300],
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest,
                           child: const Center(
                             child: CircularProgressIndicator(),
                           ),
                         ),
                         errorWidget: (context, url, error) => Container(
-                          color: Colors.grey[300],
-                          child: const Icon(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest,
+                          child: Icon(
                             Icons.music_note,
                             size: 48,
-                            color: Colors.grey,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       )
-                    : const Icon(
+                    : Icon(
                         Icons.music_note,
                         size: 48,
-                        color: Colors.grey,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
               ),
             ),
@@ -226,7 +233,8 @@ class _ArtistDetailScreenState extends State<ArtistDetailScreen> {
                     Text(
                       '${album.songCount} songs',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.grey[600],
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                     ),
                   ],

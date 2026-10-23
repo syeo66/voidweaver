@@ -186,6 +186,44 @@ void main() {
 
     // A tap in the middle of the slider seeks to the middle of the song
     expect(player.position.inSeconds, closeTo(90, 2));
+    expect(player.seeks, hasLength(1));
+  });
+
+  testWidgets('dragging the slider seeks once, when let go', (tester) async {
+    await pumpControls(tester);
+    await playAlbum(tester);
+    final slider = find.byType(Slider);
+    final box = tester.getRect(slider);
+
+    final gesture = await tester.startGesture(box.centerLeft.translate(24, 0));
+    for (var i = 1; i <= 5; i++) {
+      await gesture.moveBy(Offset(box.width / 10, 0));
+      await tester.pump();
+    }
+
+    // The thumb and the time follow the finger, but nothing was seeked yet
+    expect(player.seeks, isEmpty);
+    final dragged = tester.widget<Slider>(slider).value;
+    expect(dragged, greaterThan(0.4));
+    final draggedTime = Duration(milliseconds: (dragged * 180000).round());
+    expect(
+        find.text('${draggedTime.inMinutes}:'
+            '${(draggedTime.inSeconds % 60).toString().padLeft(2, '0')}'),
+        findsOneWidget);
+
+    // A position update from the player doesn't pull the thumb back
+    await tester.runAsync(() async {
+      player.simulatePositionChange(const Duration(seconds: 10));
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pump();
+    expect(tester.widget<Slider>(slider).value, dragged);
+
+    await gesture.up();
+    await tester.pump();
+
+    expect(player.seeks, hasLength(1));
+    expect(player.seeks.single.inMilliseconds / 180000, closeTo(dragged, 0.01));
   });
 
   testWidgets('shows the sleep timer while it runs', (tester) async {

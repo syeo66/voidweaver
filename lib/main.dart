@@ -61,13 +61,11 @@ class MyApp extends StatelessWidget {
             builder: (context, child) => MaterialApp(
               title: 'Voidweaver',
               theme: ThemeData(
-                primarySwatch: Colors.deepPurple,
-                visualDensity: VisualDensity.adaptivePlatformDensity,
+                colorSchemeSeed: Colors.deepPurple,
                 brightness: Brightness.light,
               ),
               darkTheme: ThemeData(
-                primarySwatch: Colors.deepPurple,
-                visualDensity: VisualDensity.adaptivePlatformDensity,
+                colorSchemeSeed: Colors.deepPurple,
                 brightness: Brightness.dark,
               ),
               themeMode: settingsService?.themeMode ?? ThemeMode.system,

@@ -130,7 +130,7 @@ class _SettingsContent extends StatelessWidget {
             Text(
               'Normalize volume levels for consistent playback',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[600],
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
             const SizedBox(height: 8),
@@ -149,7 +149,9 @@ class _SettingsContent extends StatelessWidget {
                   Expanded(
                     child: Text(
                       'ReplayGain metadata is read directly from your audio files for accurate volume normalization.',
-                      style: TextStyle(fontSize: 12, color: Colors.green[800]),
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onSurface),
                     ),
                   ),
                 ],
@@ -218,7 +220,7 @@ class _SettingsContent extends StatelessWidget {
               Text(
                 'Adjust the overall volume level',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.grey[600],
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
               ),
 
@@ -266,7 +268,7 @@ class _SettingsContent extends StatelessWidget {
               Text(
                 'Gain applied to songs without ReplayGain data',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.grey[600],
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
               ),
             ],
@@ -337,7 +339,7 @@ class _SettingsContent extends StatelessWidget {
               'A song is scrobbled once it has played for the minimum time '
               'or reached the percentage threshold below, whichever comes first.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[600],
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
             const SizedBox(height: 16),
@@ -369,7 +371,7 @@ class _SettingsContent extends StatelessWidget {
             Text(
               'Scrobble once a song has played for this long',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.grey[600],
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
 
@@ -400,7 +402,7 @@ class _SettingsContent extends StatelessWidget {
             Text(
               'Scrobble once this percentage of a song has played',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.grey[600],
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
           ],
@@ -572,7 +574,7 @@ class _SettingsContent extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red,
+        backgroundColor: Theme.of(context).colorScheme.error,
         duration: const Duration(seconds: 3),
       ),
     );
@@ -678,7 +680,7 @@ class _CacheSectionState extends State<_CacheSection> {
               'Upcoming songs are downloaded so playback continues offline. '
               'Album lists and cover art are also kept for offline browsing.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[600],
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
             const SizedBox(height: 8),
@@ -691,7 +693,7 @@ class _CacheSectionState extends State<_CacheSection> {
                       ? 'Downloaded songs: calculating…'
                       : 'Downloaded songs: ${_formatBytes(size)}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey[600],
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                 );
               },
@@ -710,7 +712,7 @@ class _CacheSectionState extends State<_CacheSection> {
                     : const Icon(Icons.delete_outline),
                 label: const Text('Clear Cache'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.red,
+                  foregroundColor: Theme.of(context).colorScheme.error,
                 ),
               ),
             ),
@@ -828,7 +830,7 @@ class _ReplayGainDebugLogSectionState
               'settings, and the resulting volume adjustment. Export the '
               'log and share it to help track down the issue.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[600],
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
             const SizedBox(height: 8),
@@ -850,7 +852,9 @@ class _ReplayGainDebugLogSectionState
                       'The log includes your server address and song details. '
                       'Login credentials are redacted before saving, but only '
                       'export and share this file with people you trust.',
-                      style: TextStyle(fontSize: 12, color: Colors.orange[800]),
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onSurface),
                     ),
                   ),
                 ],
@@ -881,7 +885,7 @@ class _ReplayGainDebugLogSectionState
                 return Text(
                   'Log size: ${_formatBytes(size)}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey[600],
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                 );
               },
@@ -904,7 +908,7 @@ class _ReplayGainDebugLogSectionState
                     icon: const Icon(Icons.delete_outline),
                     label: const Text('Clear'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
+                      foregroundColor: Theme.of(context).colorScheme.error,
                     ),
                   ),
                 ),

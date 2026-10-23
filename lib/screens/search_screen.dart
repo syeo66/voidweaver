@@ -162,7 +162,8 @@ class _SearchScreenState extends State<SearchScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.red),
+            Icon(Icons.error_outline,
+                size: 64, color: Theme.of(context).colorScheme.error),
             const SizedBox(height: 16),
             Text(
               _errorMessage,
@@ -180,15 +181,19 @@ class _SearchScreenState extends State<SearchScreen>
     }
 
     if (_searchResult == null) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search, size: 64, color: Colors.grey),
+            Icon(Icons.search,
+                size: 64,
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
             SizedBox(height: 16),
             Text(
               'Enter a search term to find artists, albums, and songs',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
+              style: TextStyle(
+                  fontSize: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
           ],
@@ -197,15 +202,19 @@ class _SearchScreenState extends State<SearchScreen>
     }
 
     if (_searchResult!.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off, size: 64, color: Colors.grey),
+            Icon(Icons.search_off,
+                size: 64,
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
             SizedBox(height: 16),
             Text(
               'No results found',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
+              style: TextStyle(
+                  fontSize: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ],
         ),
@@ -224,15 +233,19 @@ class _SearchScreenState extends State<SearchScreen>
 
   Widget _buildArtistsList() {
     if (_searchResult!.artists.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.person_search, size: 64, color: Colors.grey),
+            Icon(Icons.person_search,
+                size: 64,
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
             SizedBox(height: 16),
             Text(
               'No artists found',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
+              style: TextStyle(
+                  fontSize: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ],
         ),
@@ -249,15 +262,19 @@ class _SearchScreenState extends State<SearchScreen>
 
   Widget _buildAlbumsList() {
     if (_searchResult!.albums.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.album, size: 64, color: Colors.grey),
+            Icon(Icons.album,
+                size: 64,
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
             SizedBox(height: 16),
             Text(
               'No albums found',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
+              style: TextStyle(
+                  fontSize: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ],
         ),
@@ -274,15 +291,19 @@ class _SearchScreenState extends State<SearchScreen>
 
   Widget _buildSongsList() {
     if (_searchResult!.songs.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.music_note, size: 64, color: Colors.grey),
+            Icon(Icons.music_note,
+                size: 64,
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
             SizedBox(height: 16),
             Text(
               'No songs found',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
+              style: TextStyle(
+                  fontSize: 16,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ],
         ),
