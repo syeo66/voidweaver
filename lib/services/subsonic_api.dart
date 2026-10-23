@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -107,6 +108,39 @@ class SubsonicApi {
     Map<String, String>? extraParams,
     NetworkRequestType requestType = NetworkRequestType.metadata,
   ]) async {
+    return _parseBody(await _fetchBody(endpoint, extraParams, requestType));
+  }
+
+  /// Like [_makeRequest], but decodes and parses the response with [parse]
+  /// on a background isolate. For responses that can be large (the whole
+  /// library), which would otherwise stall the UI. [parse] must be a static
+  /// or top-level function.
+  Future<T> _makeLargeRequest<T>(
+    String endpoint,
+    Map<String, String>? extraParams,
+    NetworkRequestType requestType,
+    T Function(XmlDocument doc) parse,
+  ) async {
+    return parseInBackground(
+        await _fetchBody(endpoint, extraParams, requestType), parse);
+  }
+
+  /// Parses [body] with [parse] on a background isolate. Static, so the
+  /// closure sent to the isolate can't capture an API (and its HTTP client).
+  @visibleForTesting
+  static Future<T> parseInBackground<T>(
+          Uint8List body, T Function(XmlDocument doc) parse) =>
+      Isolate.run(() => parse(_parseBody(body)));
+
+  static XmlDocument _parseBody(Uint8List body) =>
+      parseResponse(utf8.decode(body, allowMalformed: true));
+
+  /// The body of a successful response to [endpoint]
+  Future<Uint8List> _fetchBody(
+    String endpoint,
+    Map<String, String>? extraParams,
+    NetworkRequestType requestType,
+  ) async {
     final params = _getAuthParams();
     if (extraParams != null) {
       params.addAll(extraParams);
@@ -129,21 +163,11 @@ class SubsonicApi {
       );
 
       if (response.statusCode == 200) {
-        // Properly decode UTF-8 bytes with malformed character handling
-        String responseBody;
-        try {
-          responseBody = utf8.decode(response.bodyBytes, allowMalformed: true);
-        } catch (e) {
-          // Fallback to response.body if utf8.decode fails
-          responseBody = response.body;
-        }
-        return parseResponse(responseBody);
+        return response.bodyBytes;
       } else {
         // Not the body: it can be a whole HTML error page
         throw HttpException('HTTP ${response.statusCode}');
       }
-    } on SubsonicException {
-      rethrow;
     } on NetworkTimeoutException catch (e) {
       _log.warning('Request timeout: $uri', e);
       rethrow;
@@ -156,8 +180,6 @@ class SubsonicApi {
     } on SocketException {
       rethrow;
     } on TlsException {
-      rethrow;
-    } on XmlException {
       rethrow;
     } catch (e) {
       _log.warning('Network request failed: $uri', e);
@@ -190,6 +212,12 @@ class SubsonicApi {
   static Object? _albumsToJson(List<Album> albums) =>
       albums.map((a) => a.toJson()).toList();
 
+  @visibleForTesting
+  static List<Album> albumsFromXml(XmlDocument doc) => [
+        for (final element in doc.findAllElements('album'))
+          Album.fromXml(element)
+      ];
+
   static List<Album> _albumsFromJson(dynamic json) => (json as List<dynamic>)
       .map((a) => Album.fromJson(a as Map<String, dynamic>))
       .toList();
@@ -209,20 +237,15 @@ class SubsonicApi {
         // The list used to be fetched sorted by last play (type=recent)
         _cache.clearEntry(
             'getAlbumList2', {'type': 'recent', 'size': '$_albumPageSize'});
-        return fetchAllAlbumPages((offset) async {
-          final doc = await _makeRequest(
-              'getAlbumList2',
-              {
-                'type': 'newest',
-                'size': '$_albumPageSize',
-                'offset': '$offset',
-              },
-              NetworkRequestType.metadata);
-          return [
-            for (final element in doc.findAllElements('album'))
-              Album.fromXml(element)
-          ];
-        });
+        return fetchAllAlbumPages((offset) => _makeLargeRequest(
+            'getAlbumList2',
+            {
+              'type': 'newest',
+              'size': '$_albumPageSize',
+              'offset': '$offset',
+            },
+            NetworkRequestType.metadata,
+            albumsFromXml));
       },
       cacheDuration: const Duration(minutes: 3),
       usePersistentCache: true,
@@ -428,19 +451,8 @@ class SubsonicApi {
       null,
       () async {
         try {
-          final doc = await _makeRequest('getArtists');
-          final artists = <Artist>[];
-
-          final artistElements = doc.findAllElements('artist');
-          for (final element in artistElements) {
-            artists.add(Artist.fromXml(element));
-          }
-
-          // Sort artists alphabetically by name
-          artists.sort(
-              (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-
-          return artists;
+          return await _makeLargeRequest('getArtists', null,
+              NetworkRequestType.metadata, _sortedArtistsFromXml);
         } catch (e) {
           _log.warning('Failed to get artists', e);
           rethrow;
@@ -454,6 +466,11 @@ class SubsonicApi {
           .toList(),
     );
   }
+
+  static List<Artist> _sortedArtistsFromXml(XmlDocument doc) => [
+        for (final element in doc.findAllElements('artist'))
+          Artist.fromXml(element)
+      ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
   /// Gets all albums for a specific artist.
   /// Returns a list of Album objects for the given artist ID.

@@ -118,10 +118,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
       appBar: AppBar(
         title: Text(_selectedArtist?.name ?? 'Artists'),
         leading: _selectedArtist != null
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: _backToArtists,
-              )
+            ? BackButton(onPressed: _backToArtists)
             : null,
       ),
       body: _buildBody(),

@@ -2,7 +2,6 @@ package com.example.voidweaver.player;
 
 import android.app.PendingIntent;
 import android.content.Context;
-import android.content.Intent;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -124,17 +123,8 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
             .setCallback(new FullControlCallback())
             // As the session's default, but resolving the URIs that hide the credentials
             .setBitmapLoader(new CacheBitmapLoader(artwork));
-    Intent launchIntent =
-        context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
-    if (launchIntent != null) {
-      // Tapping the notification opens the app
-      sessionBuilder.setSessionActivity(
-          PendingIntent.getActivity(
-              context,
-              0,
-              launchIntent,
-              PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
-    }
+    PendingIntent sessionActivity = PlaybackService.sessionActivity(context);
+    if (sessionActivity != null) sessionBuilder.setSessionActivity(sessionActivity);
     session = sessionBuilder.build();
     PlaybackService.register(context, session);
 
@@ -332,6 +322,10 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
     }
     if (pendingSeek != null && state != Player.STATE_BUFFERING) {
       completeSeek();
+    }
+    if (player.getPlayWhenReady()
+        && (state == Player.STATE_READY || state == Player.STATE_BUFFERING)) {
+      PlaybackService.onPlaying();
     }
     sendState();
     handler.removeCallbacks(positionUpdate);

@@ -58,6 +58,9 @@ public class VoidweaverPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
           result.success(null);
           break;
         }
+      case "resumption.take":
+        result.success(PlaybackService.takeResumeRequest());
+        break;
       case "cache.prefetch":
         run(
             downloads,

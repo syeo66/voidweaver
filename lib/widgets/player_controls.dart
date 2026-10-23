@@ -353,6 +353,7 @@ class _ControlButtons extends StatelessWidget {
           children: [
             _buildSkipButton(
               icon: Icons.skip_previous,
+              tooltip: 'Previous',
               // Also on the first track, which Previous restarts
               enabled: controls.hasSong,
               onPressed: () => context.read<AudioPlayerService>().previous(),
@@ -360,6 +361,7 @@ class _ControlButtons extends StatelessWidget {
             _buildPlayPauseButton(controls.state),
             _buildSkipButton(
               icon: Icons.skip_next,
+              tooltip: 'Next',
               enabled: controls.hasNext,
               onPressed: () => context.read<AudioPlayerService>().next(),
             ),
@@ -371,11 +373,13 @@ class _ControlButtons extends StatelessWidget {
 
   Widget _buildSkipButton({
     required IconData icon,
+    required String tooltip,
     required bool enabled,
     required VoidCallback onPressed,
   }) {
     return IconButton(
       icon: Icon(icon),
+      tooltip: tooltip,
       onPressed: enabled ? onPressed : null,
     );
   }
@@ -387,12 +391,14 @@ class _ControlButtons extends StatelessWidget {
           case PlaybackState.playing:
             return IconButton(
               icon: const Icon(Icons.pause),
+              tooltip: 'Pause',
               onPressed: () => context.read<AudioPlayerService>().pause(),
             );
           case PlaybackState.paused:
           case PlaybackState.stopped:
             return IconButton(
               icon: const Icon(Icons.play_arrow),
+              tooltip: 'Play',
               onPressed: () => context.read<AudioPlayerService>().play(),
             );
           case PlaybackState.loading:
@@ -401,7 +407,8 @@ class _ControlButtons extends StatelessWidget {
               child: SizedBox(
                 width: 24,
                 height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, semanticsLabel: 'Loading'),
               ),
             );
         }

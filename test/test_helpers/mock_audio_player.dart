@@ -149,6 +149,16 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
     return _duration;
   }
 
+  /// What [takeResumeRequest] answers (once)
+  bool resumeRequested = false;
+
+  @override
+  Future<bool> takeResumeRequest() async {
+    final requested = resumeRequested;
+    resumeRequested = false;
+    return requested;
+  }
+
   @override
   Future<void> play() async {
     _setState(true, ProcessingState.ready);

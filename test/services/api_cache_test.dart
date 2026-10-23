@@ -213,6 +213,22 @@ void main() {
       expect(result, albums);
     });
 
+    test('persists entries too large to decode on the UI isolate', () async {
+      final large = 'x' * (128 * 1024);
+      await cache.getOrFetch<List<String>>('large', null, () async => [large],
+          usePersistentCache: true,
+          fromJson: (json) => (json as List<dynamic>).cast<String>());
+
+      final restarted = ApiCache.forTesting(directory: directory);
+      await restarted.initialize();
+      final result = await restarted.getOrFetch<List<String>>(
+          'large', null, () async => fail('read from the file'),
+          usePersistentCache: true,
+          fromJson: (json) => (json as List<dynamic>).cast<String>());
+
+      expect(result, [large]);
+    });
+
     test('clearAll removes persisted entries before the cache was used',
         () async {
       await cache.getOrFetch<String>('endpoint', null, () async => 'saved',

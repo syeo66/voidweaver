@@ -3,10 +3,9 @@ package com.example.voidweaver
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
+import com.example.voidweaver.player.AppEngine
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.embedding.engine.FlutterEngineCache
-import io.flutter.embedding.engine.dart.DartExecutor
 
 // Audio focus is handled by the player's ExoPlayer (packages/voidweaver_player).
 // Requesting it here as well would register a second focus listener that
@@ -15,15 +14,10 @@ class MainActivity : FlutterActivity() {
     // The engine outlives the activity: playlist logic, scrobbling and
     // downloads run in Dart and have to keep going while the app is in the
     // background without an activity (e.g. after it was swiped away while
-    // playing). A new activity attaches to the same engine.
-    override fun provideFlutterEngine(context: Context): FlutterEngine {
-        val cache = FlutterEngineCache.getInstance()
-        cache.get(ENGINE_ID)?.let { return it }
-        val engine = FlutterEngine(context.applicationContext)
-        engine.dartExecutor.executeDartEntrypoint(DartExecutor.DartEntrypoint.createDefault())
-        cache.put(ENGINE_ID, engine)
-        return engine
-    }
+    // playing). A new activity attaches to the same engine, also to one the
+    // playback service started to resume playback.
+    override fun provideFlutterEngine(context: Context): FlutterEngine =
+        AppEngine.getOrStart(context)
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -33,9 +27,5 @@ class MainActivity : FlutterActivity() {
             getSystemService(NotificationManager::class.java)
                 .deleteNotificationChannel("com.voidweaver.audio")
         }
-    }
-
-    companion object {
-        private const val ENGINE_ID = "main"
     }
 }

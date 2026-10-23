@@ -307,6 +307,16 @@ class AudioPlayerService extends ChangeNotifier {
     return false;
   }
 
+  /// Plays if the app was started for a Play media button while it wasn't
+  /// running, see [VoidweaverPlayer.takeResumeRequest]. Call after
+  /// [restorePlaybackState].
+  Future<void> resumeIfRequested() async {
+    if (await _audioPlayer.takeResumeRequest()) {
+      _log.info('Resuming playback for a media button');
+      await play();
+    }
+  }
+
   PersistedPlaybackState _persistedState() => PersistedPlaybackState(
         playlist: _playlist,
         currentIndex: _currentIndex,

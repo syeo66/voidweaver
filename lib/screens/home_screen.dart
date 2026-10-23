@@ -46,6 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SyncStatusIndicator(),
           IconButton(
             icon: const Icon(Icons.search),
+            tooltip: 'Search',
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(builder: (context) => const SearchScreen()),
@@ -60,6 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.shuffle),
+            tooltip: 'Play random songs',
             onPressed: _isPlayingRandomSongs
                 ? null
                 : () async {
@@ -101,6 +103,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: appState.audioPlayerService!.isSleepTimerActive
                         ? const Icon(Icons.bedtime, color: Colors.orange)
                         : const Icon(Icons.bedtime_outlined),
+                    tooltip: 'Sleep timer',
                     onPressed: () => _showSleepTimerDialog(
                         context, appState.audioPlayerService!),
                   );

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -219,6 +221,34 @@ void main() {
     test('does not treat other errors as auth errors', () {
       expect(const SubsonicException(70, 'Not found').isAuthError, isFalse);
       expect(const SubsonicException(null, 'Unknown').isAuthError, isFalse);
+    });
+  });
+
+  group('SubsonicApi.parseInBackground', () {
+    Uint8List bytes(String body) => Uint8List.fromList(utf8.encode(body));
+
+    test('parses albums on another isolate', () async {
+      final albums = await SubsonicApi.parseInBackground(
+          bytes('<subsonic-response status="ok"><albumList2>'
+              '<album id="1" name="Müde" artist="A" songCount="3"/>'
+              '<album id="2" name="Second" artist="B"/>'
+              '</albumList2></subsonic-response>'),
+          SubsonicApi.albumsFromXml);
+
+      expect(albums.map((a) => a.name), ['Müde', 'Second']);
+      expect(albums.first.songCount, 3);
+    });
+
+    test('keeps the type and code of a server error', () async {
+      await expectLater(
+        SubsonicApi.parseInBackground(
+            bytes('<subsonic-response status="failed">'
+                '<error code="40" message="Wrong username or password"/>'
+                '</subsonic-response>'),
+            SubsonicApi.albumsFromXml),
+        throwsA(isA<SubsonicException>()
+            .having((e) => e.isAuthError, 'isAuthError', isTrue)),
+      );
     });
   });
 

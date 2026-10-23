@@ -244,6 +244,10 @@ class ApiCache {
     }
   }
 
+  // Entries this long (in characters) are decoded on a background isolate,
+  // so a large library doesn't stall the UI at startup
+  static const _backgroundJsonThreshold = 64 * 1024;
+
   /// Get data from persistent cache, including expired entries
   Future<CacheEntry<T>?> _getPersistentCache<T>(
       String key, T Function(dynamic json)? fromJson) async {
@@ -253,8 +257,10 @@ class ApiCache {
 
     try {
       if (!await file.exists()) return null;
-      final json =
-          jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      final contents = await file.readAsString();
+      final json = (contents.length < _backgroundJsonThreshold
+          ? jsonDecode(contents)
+          : await compute(jsonDecode, contents)) as Map<String, dynamic>;
       return CacheEntry<T>.fromJson(json, fromJson ?? (data) => data as T);
     } catch (e) {
       _log.warning('Error reading persistent cache for $key', e);
@@ -272,10 +278,15 @@ class ApiCache {
     final file = _fileFor(directory, key);
 
     try {
-      final jsonString = jsonEncode({
+      final json = {
         ...entry.toJson(),
         'data': toJson != null ? toJson(entry.data) : entry.data,
-      });
+      };
+      // Lists (the album list, all artists) can be large; single entries
+      // aren't worth an isolate
+      final jsonString = json['data'] is List
+          ? await compute(jsonEncode, json)
+          : jsonEncode(json);
       // Written next to it and renamed, so a crash mid-write can't leave a
       // truncated entry
       final temp = File('${file.path}.tmp');

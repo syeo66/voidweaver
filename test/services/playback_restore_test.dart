@@ -124,6 +124,28 @@ void main() {
           mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')));
     });
 
+    test('plays the restored song when started for a media button', () async {
+      mockAudioPlayer.resumeRequested = true;
+      await restoreAt(const Duration(seconds: 90));
+      expect(mockAudioPlayer.playing, isFalse);
+
+      await service.resumeIfRequested();
+      await Future.delayed(const Duration(milliseconds: 250));
+
+      expect(mockAudioPlayer.playing, isTrue);
+      expect(service.currentPosition, const Duration(seconds: 90));
+      verify(mockApi.scrobbleNowPlaying('song1')).called(1);
+    });
+
+    test('stays paused when not started for a media button', () async {
+      await restoreAt(const Duration(seconds: 90));
+
+      await service.resumeIfRequested();
+      await Future.delayed(const Duration(milliseconds: 250));
+
+      expect(mockAudioPlayer.playing, isFalse);
+    });
+
     test('a single song replaces the saved source of the album before it',
         () async {
       SharedPreferences.setMockInitialValues({});

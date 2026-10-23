@@ -284,6 +284,15 @@ class VoidweaverPlayer {
         'index': index,
       });
 
+  /// Whether the app was started to resume playback: Play was pressed (e.g.
+  /// on Bluetooth headphones) while the app wasn't running. The app should
+  /// then restore its queue on this player and play. True once per press;
+  /// until this player plays, the notification shows the app resuming.
+  Future<bool> takeResumeRequest() async {
+    await _created;
+    return await _plugin.invokeMethod<bool>('resumption.take') ?? false;
+  }
+
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
