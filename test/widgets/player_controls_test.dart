@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,9 +11,8 @@ import 'package:voidweaver/widgets/player_controls.dart';
 
 import '../test_helpers/fake_audio_cache.dart';
 import '../test_helpers/mock_audio_player.dart';
-import 'player_controls_test.mocks.dart';
+import '../test_helpers/mocks.mocks.dart';
 
-@GenerateMocks([SubsonicApi, SettingsService])
 void main() {
   late MockSubsonicApi mockApi;
   late MockSettingsService mockSettings;

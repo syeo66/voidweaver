@@ -2,14 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 import 'package:voidweaver/screens/search_screen.dart';
 import 'package:voidweaver/services/app_state.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 
-import 'search_screen_test.mocks.dart';
+import '../test_helpers/mocks.mocks.dart';
 
 /// An [AppState] that hands out the given API without logging in.
 class _FakeAppState extends AppState {
@@ -21,7 +20,6 @@ class _FakeAppState extends AppState {
   SubsonicApi? get api => _fakeApi;
 }
 
-@GenerateMocks([SubsonicApi])
 void main() {
   late MockSubsonicApi mockApi;
 

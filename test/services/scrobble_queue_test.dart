@@ -1,15 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/scrobble_queue.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 
-import 'scrobble_queue_test.mocks.dart';
+import '../test_helpers/mocks.mocks.dart';
 
-@GenerateMocks([SubsonicApi])
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 

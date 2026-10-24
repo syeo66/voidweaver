@@ -1,7 +1,6 @@
 import 'package:voidweaver_player/voidweaver_player.dart'
     show ProcessingState, SystemCommandType;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/replaygain_reader.dart';
@@ -11,9 +10,8 @@ import 'package:voidweaver/services/subsonic_api.dart';
 
 import '../test_helpers/fake_audio_cache.dart';
 import '../test_helpers/mock_audio_player.dart';
-import 'gapless_playback_test.mocks.dart';
+import '../test_helpers/mocks.mocks.dart';
 
-@GenerateMocks([SubsonicApi, SettingsService])
 void main() {
   // Skips within this window of the previous one are ignored by the service
   const pastSkipDebounce = Duration(milliseconds: 250);

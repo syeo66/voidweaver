@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,7 +13,7 @@ import 'package:voidweaver/services/replaygain_reader.dart';
 
 import '../test_helpers/fake_audio_cache.dart';
 import '../test_helpers/mock_audio_player.dart';
-import 'home_screen_test.mocks.dart';
+import '../test_helpers/mocks.mocks.dart';
 
 /// An [AppState] that is logged in with the given API and player, without
 /// a server.
@@ -51,7 +50,6 @@ void _setOrientation(WidgetTester tester, Orientation orientation) {
   addTearDown(tester.view.reset);
 }
 
-@GenerateMocks([SubsonicApi])
 void main() {
   late MockSubsonicApi mockApi;
   late SettingsService settings;

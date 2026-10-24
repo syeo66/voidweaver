@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:voidweaver/services/audio_player_service.dart';
 import 'package:voidweaver_player/voidweaver_player.dart';
@@ -7,10 +6,9 @@ import 'package:voidweaver/services/subsonic_api.dart';
 import 'package:voidweaver/services/settings_service.dart';
 import 'package:voidweaver/services/replaygain_reader.dart';
 
-import 'scrobble_test.mocks.dart';
+import '../test_helpers/mocks.mocks.dart';
 import '../test_helpers/mock_audio_player.dart';
 
-@GenerateMocks([SubsonicApi, SettingsService])
 void main() {
   group('Scrobble Tests', () {
     late AudioPlayerService audioPlayerService;
