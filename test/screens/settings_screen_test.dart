@@ -40,7 +40,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     PackageInfo.setMockInitialValues(
       appName: 'Voidweaver',
-      packageName: 'com.example.voidweaver',
+      packageName: 'red.ochsenbein.voidweaver',
       version: '1.1.0',
       buildNumber: '160',
       buildSignature: '',

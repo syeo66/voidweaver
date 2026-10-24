@@ -1,4 +1,4 @@
-package com.example.voidweaver
+package red.ochsenbein.voidweaver
 
 import android.app.NotificationManager
 import android.content.Context

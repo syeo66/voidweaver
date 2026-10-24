@@ -7,7 +7,7 @@ void main() {
   testWidgets('shows the version and build number', (tester) async {
     PackageInfo.setMockInitialValues(
       appName: 'voidweaver',
-      packageName: 'com.example.voidweaver',
+      packageName: 'red.ochsenbein.voidweaver',
       version: '1.1.0',
       buildNumber: '160',
       buildSignature: '',
