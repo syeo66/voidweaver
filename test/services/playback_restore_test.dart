@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +10,7 @@ import 'package:voidweaver/services/settings_service.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 import 'package:voidweaver/services/replaygain_reader.dart';
 
+import '../test_helpers/fake_audio_cache.dart';
 import '../test_helpers/mocks.mocks.dart';
 import '../test_helpers/mock_audio_player.dart';
 
@@ -58,7 +60,7 @@ void main() {
       await mockAudioPlayer.dispose();
     });
 
-    Future<void> restoreAt(Duration position) async {
+    Future<PlaybackPersistenceService> savedAt(Duration position) async {
       final saved = PersistedPlaybackState(
         playlist: [song],
         currentIndex: 0,
@@ -70,10 +72,13 @@ void main() {
           {'playbackState': jsonEncode(saved.toJson())});
       final persistence = PlaybackPersistenceService();
       await persistence.initialize();
+      return persistence;
+    }
 
+    Future<void> restoreAt(Duration position) async {
       service = AudioPlayerService(mockApi, mockSettingsService,
           audioPlayer: mockAudioPlayer,
-          persistence: persistence,
+          persistence: await savedAt(position),
           clock: mockAudioPlayer.clock);
       expect(await service.restorePlaybackState(), isTrue);
       await Future.delayed(const Duration(milliseconds: 250));
@@ -144,6 +149,29 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 250));
 
       expect(mockAudioPlayer.playing, isFalse);
+    });
+
+    test('playback started while restoring replaces the saved queue', () async {
+      // Restoring waits for the saved song's ReplayGain tags
+      final tags = Completer<ReplayGainData>();
+      when(mockApi.readReplayGain('song1')).thenAnswer((_) => tags.future);
+      service = AudioPlayerService(mockApi, mockSettingsService,
+          audioPlayer: mockAudioPlayer,
+          persistence: await savedAt(const Duration(seconds: 90)),
+          audioCache: FakeAudioCache());
+      final restoring = service.restorePlaybackState();
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      await service.playSong(
+          Song(id: 'song2', title: 'Other', artist: 'Other', album: 'Other'));
+      tags.complete(const ReplayGainData());
+
+      expect(await restoring, isFalse);
+      await Future.delayed(const Duration(milliseconds: 250));
+      expect(service.playlist.map((s) => s.id), ['song2']);
+      expect(service.currentSong?.id, 'song2');
+      expect(mockAudioPlayer.playing, isTrue);
+      expect(service.playbackState, PlaybackState.playing);
     });
 
     test('a single song replaces the saved source of the album before it',

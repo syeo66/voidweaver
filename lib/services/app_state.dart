@@ -142,20 +142,6 @@ class AppState extends ChangeNotifier {
       _configurationLoadingState = LoadingState.success;
 
       await _saveServerConfig(serverUrl, username, password);
-
-      // Attempt to restore previous playback state
-      try {
-        final restored = await _audioPlayerService!.restorePlaybackState();
-        if (restored) {
-          _log.info('Successfully restored previous playback state');
-        }
-        await _audioPlayerService!.resumeIfRequested();
-      } catch (e) {
-        _log.warning('Failed to restore playback state', e);
-        // Continue normally if restoration fails
-      }
-
-      await loadAlbums();
       _startBackgroundSync();
       notifyListeners();
     } catch (e) {
@@ -166,6 +152,26 @@ class AppState extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
       rethrow;
+    }
+
+    // Not awaited, as they can wait for the network (retries, timeouts):
+    // the home screen shows right away and fills in
+    unawaited(loadAlbums());
+    unawaited(_restorePlayback(_audioPlayerService!));
+  }
+
+  /// Restores the queue saved by the last session, then plays it if a media
+  /// button started the app. Stops if [player] was released meanwhile (a
+  /// logout).
+  Future<void> _restorePlayback(AudioPlayerService player) async {
+    try {
+      if (await player.restorePlaybackState()) {
+        _log.info('Successfully restored previous playback state');
+      }
+      if (!identical(player, _audioPlayerService)) return;
+      await player.resumeIfRequested();
+    } catch (e) {
+      _log.warning('Failed to restore playback state', e);
     }
   }
 
@@ -186,7 +192,8 @@ class AppState extends ChangeNotifier {
   /// Loads the album list. [forceRefresh] (a refresh by the user) bypasses
   /// the API cache's fresh entry; when offline the cached list is used.
   Future<void> loadAlbums({bool forceRefresh = false}) async {
-    if (_api == null) return;
+    final api = _api;
+    if (api == null) return;
 
     _isLoading = true;
     _error = null;
@@ -194,31 +201,38 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _albums = await _api!.getAlbumList(forceRefresh: forceRefresh);
+      final albums = await api.getAlbumList(forceRefresh: forceRefresh);
+      // Logged out meanwhile
+      if (!identical(api, _api)) return;
+      _albums = albums;
       _lastSyncTime = DateTime.now();
     } catch (e) {
+      if (!identical(api, _api)) return;
       _error = NetworkErrorHelper.getErrorMessage(e,
           context: 'Failed to load albums');
       _albumError = _error;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
     }
+    _isLoading = false;
+    notifyListeners();
   }
 
   Future<void> _backgroundSync() async {
-    if (_api == null || _syncStatus == SyncStatus.syncing) return;
+    final api = _api;
+    if (api == null || _syncStatus == SyncStatus.syncing) return;
 
     _syncStatus = SyncStatus.syncing;
     notifyListeners();
 
     try {
-      final newAlbums = await _api!.getAlbumList();
+      final newAlbums = await api.getAlbumList();
+      // Logged out meanwhile
+      if (!identical(api, _api)) return;
       _albums = newAlbums;
       _syncStatus = SyncStatus.success;
       _lastSyncTime = DateTime.now();
       _error = null;
     } catch (e) {
+      if (!identical(api, _api)) return;
       // Only the sync indicator shows this; the albums loaded before stay
       _syncStatus = SyncStatus.error;
       _log.warning('Background sync failed', e);
@@ -342,6 +356,8 @@ class AppState extends ChangeNotifier {
     }
 
     _albums.clear();
+    // A load still running is dropped, see loadAlbums()
+    _isLoading = false;
     _isConfigured = false;
     _error = null;
     _syncStatus = SyncStatus.idle;

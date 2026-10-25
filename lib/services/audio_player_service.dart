@@ -272,6 +272,8 @@ class AudioPlayerService extends ChangeNotifier {
         return false;
       }
       if (!savedState.hasValidIndex) return false;
+      // The user started playback while the saved state was loading
+      if (_playlist.isNotEmpty) return false;
 
       _log.fine(
           'Attempting to restore playlist with ${savedState.playlist.length} songs');
@@ -283,14 +285,20 @@ class AudioPlayerService extends ChangeNotifier {
 
       // Load the queue but don't auto-play. If that fails (e.g. the server
       // is unreachable) keep the restored queue and retry on play().
+      final loading =
+          _loadQueue(savedState.currentIndex, position: resumeAt, play: false);
+      final generation = _generation;
       try {
-        await _loadQueue(savedState.currentIndex,
-            position: resumeAt, play: false);
+        await loading;
       } catch (e) {
-        _log.warning('Could not load restored song, will retry on play', e);
-        _needsSourceReload = true;
-        _pendingResumePosition = resumeAt;
+        if (generation == _generation) {
+          _log.warning('Could not load restored song, will retry on play', e);
+          _needsSourceReload = true;
+          _pendingResumePosition = resumeAt;
+        }
       }
+      // Playback the user started meanwhile (an album, or Play) took over
+      if (generation != _generation) return false;
       _currentPosition = resumeAt;
       _playbackState = PlaybackState.paused; // User must manually resume
 
