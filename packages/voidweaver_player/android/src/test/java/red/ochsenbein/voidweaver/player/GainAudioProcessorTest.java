@@ -1,4 +1,4 @@
-package com.example.voidweaver.player;
+package red.ochsenbein.voidweaver.player;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;

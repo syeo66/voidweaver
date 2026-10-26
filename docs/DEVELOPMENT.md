@@ -9,6 +9,7 @@ make test            # flutter test
 make analyze         # flutter analyze (keep it at 0 issues)
 make format          # dart format lib/ test/
 make build-release   # format + analyze + test + release APK
+make check-emulator  # release APK, then media session/keys/resumption checks in the running emulator (tool/emulator_check.sh, see CLAUDE.md)
 ```
 
 Regenerate mocks after changing a `@GenerateMocks` annotation:

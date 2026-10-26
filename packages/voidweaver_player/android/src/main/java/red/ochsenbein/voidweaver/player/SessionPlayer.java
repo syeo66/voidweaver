@@ -1,4 +1,4 @@
-package com.example.voidweaver.player;
+package red.ochsenbein.voidweaver.player;
 
 import androidx.annotation.Nullable;
 import androidx.media3.common.ForwardingSimpleBasePlayer;

@@ -1,5 +1,5 @@
 # Voidweaver Flutter Project Makefile
-.PHONY: help setup analyze format test test-android build-release clean doctor devices run install upgrade
+.PHONY: help setup analyze format test test-android check-emulator build-release clean doctor devices run install upgrade
 
 # Default target
 all: format analyze test
@@ -12,6 +12,7 @@ help:
 	@echo "  format        - Format code (dart format)"
 	@echo "  test          - Run the Dart tests (app and player plugin)"
 	@echo "  test-android  - Run the player plugin's JVM tests (Gradle, needs JAVA_HOME)"
+	@echo "  check-emulator - Check media session, media keys and resumption in the running emulator"
 	@echo "  build-release - Build release APK (includes format, analyze, test)"
 	@echo "  clean         - Clean build artifacts"
 	@echo "  doctor        - Check Flutter installation"
@@ -60,6 +61,12 @@ test-android: setup
 	@echo "Running Android unit tests..."
 	cd android && ./gradlew :voidweaver_player:testDebugUnitTest
 	@echo "Android unit tests complete."
+
+# System integration of the release build in the running emulator
+# (tool/emulator_check.sh: media session, notification, media keys, resumption)
+check-emulator: setup
+	flutter build apk --release
+	tool/emulator_check.sh
 
 # Build release APK with full validation
 build-release: format analyze test

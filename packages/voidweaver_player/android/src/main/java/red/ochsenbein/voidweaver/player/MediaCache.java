@@ -1,4 +1,4 @@
-package com.example.voidweaver.player;
+package red.ochsenbein.voidweaver.player;
 
 import android.content.Context;
 import android.net.Uri;

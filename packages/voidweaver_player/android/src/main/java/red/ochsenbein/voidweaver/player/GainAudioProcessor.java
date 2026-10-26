@@ -1,4 +1,4 @@
-package com.example.voidweaver.player;
+package red.ochsenbein.voidweaver.player;
 
 import android.util.Log;
 import androidx.annotation.Nullable;

@@ -1,4 +1,4 @@
-group = "com.example.voidweaver.player"
+group = "red.ochsenbein.voidweaver.player"
 version = "1.0"
 
 buildscript {
@@ -28,7 +28,7 @@ tasks.withType<JavaCompile>().configureEach {
 }
 
 android {
-    namespace = "com.example.voidweaver.player"
+    namespace = "red.ochsenbein.voidweaver.player"
     compileSdk = 36
 
     defaultConfig {

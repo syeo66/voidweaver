@@ -20,5 +20,5 @@ flutter:
   plugin:
     platforms:
       android:
-        package: com.example.voidweaver.player
+        package: red.ochsenbein.voidweaver.player
         pluginClass: VoidweaverPlayerPlugin
