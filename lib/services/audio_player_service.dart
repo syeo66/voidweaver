@@ -916,8 +916,7 @@ class AudioPlayerService extends ChangeNotifier {
       _rgLog(
           '[ReplayGain] No ReplayGain in API response, reading from file...');
       final streamUrl = _api.getStreamUrl(song.id);
-      _rgLog(
-          '[ReplayGain] Stream URL: ${ReplayGainDebugLogger.redact(streamUrl)}');
+      _rgLog('[ReplayGain] Stream URL: $streamUrl');
       try {
         final data = await _audioCache.readReplayGain(song.id) ??
             await _api.readReplayGain(song.id);
@@ -1004,8 +1003,7 @@ class AudioPlayerService extends ChangeNotifier {
     _rgLog('='.padRight(80, '='));
     _rgLog(
         '[ReplayGain] Song: "${_currentSong!.title}" by "${_currentSong!.artist}" (id=${_currentSong!.id})');
-    _rgLog(
-        '[ReplayGain] Stream URL: ${ReplayGainDebugLogger.redact(_api.getStreamUrl(_currentSong!.id))}');
+    _rgLog('[ReplayGain] Stream URL: ${_api.getStreamUrl(_currentSong!.id)}');
     _rgLog('[ReplayGain] Mode: $rgMode');
     _rgLog(
         '[ReplayGain] TrackGain: ${trackGain?.toStringAsFixed(2) ?? 'null'} dB');

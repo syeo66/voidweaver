@@ -5,6 +5,7 @@ import 'dart:isolate';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:http_plus/http_plus.dart' as http_plus;
 import 'package:xml/xml.dart';
 import 'package:logging/logging.dart';
@@ -45,6 +46,11 @@ class SubsonicApi {
   final String version = '1.16.1';
   final ApiCache _cache = ApiCache();
   late http_plus.HttpPlusClient _httpClient;
+  // For reading the start of a file (ReplayGain tags). HTTP/1.1, because
+  // http_plus only returns an HTTP/2 response once the whole body has arrived
+  // and can't stop the download, so a server that ignores the Range header
+  // would send the whole file. Here, stopping the read closes the connection.
+  final http.Client _rangeClient = http.Client();
   late NetworkRetryService _retryService;
   NetworkConfig _networkConfig;
 
@@ -353,11 +359,10 @@ class SubsonicApi {
   }
 
   /// ReplayGain tags of the song [id], read from the start of its file, for
-  /// songs the server sends no ReplayGain data for. Through the API's client,
-  /// which already has a connection to the server open; no data after a few
+  /// songs the server sends no ReplayGain data for. No data after a few
   /// seconds, see [ReplayGainReader.readFromUrl].
   Future<ReplayGainData> readReplayGain(String id) =>
-      ReplayGainReader.readFromUrl(getStreamUrl(id), client: _httpClient);
+      ReplayGainReader.readFromUrl(getStreamUrl(id), client: _rangeClient);
 
   /// URL of the cover art [id], scaled by the server to [size] pixels
   String getCoverArtUrl(String id, {int size = 300}) {
@@ -526,6 +531,7 @@ class SubsonicApi {
   void dispose() {
     _retryService.dispose();
     _httpClient.close();
+    _rangeClient.close();
   }
 }
 

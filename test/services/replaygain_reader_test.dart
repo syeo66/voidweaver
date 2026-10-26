@@ -302,6 +302,67 @@ void main() {
       expect(data.trackGain, -6.5);
     });
 
+    test('fetches the rest of a tag larger than the first read', () async {
+      final bytes = loadFixture('thebrowning_not_alone_evolved_large_cover');
+      final ranges = <String>[];
+      final server = await serve((request) async {
+        final range = request.headers.value('range')!;
+        ranges.add(range);
+        final [start, end] =
+            range.substring('bytes='.length).split('-').map(int.parse).toList();
+        request.response
+          ..statusCode = HttpStatus.partialContent
+          ..add(Uint8List.sublistView(
+              bytes, start, math.min(end + 1, bytes.length)));
+        await request.response.close();
+      });
+
+      final data =
+          await ReplayGainReader.readFromUrl(urlOf(server), client: client);
+      expect(data.trackGain, -10.44);
+      expect(ranges, ['bytes=0-262143', 'bytes=262144-327660']);
+    });
+
+    test('stops reading when the server ignores the range', () async {
+      const chunk = 64 * 1024;
+      const fileSize = 64 * 1024 * 1024;
+      var sent = 0;
+      final done = Completer<void>();
+      // A raw socket: an HttpServer's response drops writes once the client
+      // is gone, so it would seem to send everything
+      final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(server.close);
+      server.listen((socket) async {
+        socket.listen((_) {}, onError: (_) {});
+        // The whole file, as for a transcoded stream
+        final tag = id3v23(txxxFrame('REPLAYGAIN_TRACK_GAIN', '-6.5 dB'));
+        try {
+          socket
+            ..add('HTTP/1.1 200 OK\r\n'
+                    'Content-Length: ${tag.length + fileSize}\r\n\r\n'
+                .codeUnits)
+            ..add(tag);
+          while (sent < fileSize) {
+            socket.add(Uint8List(chunk));
+            await socket.flush();
+            sent += chunk;
+          }
+          await socket.close();
+        } catch (_) {
+          // The client closed the connection
+        }
+        done.complete();
+      });
+
+      final data = await ReplayGainReader.readFromUrl(
+          'http://127.0.0.1:${server.port}/stream',
+          client: client);
+      expect(data.trackGain, -6.5);
+      await done.future.timeout(const Duration(seconds: 5));
+      // Socket buffers take a few MB at most
+      expect(sent, lessThan(fileSize ~/ 4));
+    });
+
     test('gives up with no data when the server does not answer', () async {
       // Accepts the request but never responds, like a stalled connection
       final server = await serve((_) => Completer<void>().future);

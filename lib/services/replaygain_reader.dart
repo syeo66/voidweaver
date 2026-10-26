@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
-import '../utils/redact.dart';
 import 'replaygain_debug_logger.dart';
 
 final _logger = Logger('replaygain');
@@ -67,8 +67,7 @@ class ReplayGainReader {
       _log('Reading ReplayGain metadata timed out after $timeout');
       return const ReplayGainData();
     } catch (e, stackTrace) {
-      // Client errors can contain the URL with the credentials
-      _log('Error reading ReplayGain metadata: ${redactCredentials('$e')}');
+      _log('Error reading ReplayGain metadata: $e');
       _log('Stack trace: $stackTrace');
       return const ReplayGainData();
     }
@@ -76,33 +75,23 @@ class ReplayGainReader {
 
   static Future<ReplayGainData> _fetchFromUrl(
       String url, http.Client client) async {
-    _log(
-        'Reading ReplayGain metadata from: ${ReplayGainDebugLogger.redact(url)}');
+    _log('Reading ReplayGain metadata from: $url');
 
-    // Make a range request to get just the beginning of the file
-    final response = await client.get(
-      Uri.parse(url),
-      headers: {'Range': 'bytes=0-${_maxHeaderSize - 1}'},
-    );
+    // Just the beginning of the file
+    final head = await _fetchRange(client, url, 0, _maxHeaderSize);
+    if (head == null) return const ReplayGainData();
+    var (bytes, ranged) = head;
 
-    if (response.statusCode != 206 && response.statusCode != 200) {
-      _log('Failed to fetch audio data: ${response.statusCode}');
-      return const ReplayGainData();
-    }
-
-    var bytes = response.bodyBytes;
     if (bytes.isNotEmpty) {
       _log(
           'Received ${bytes.length} bytes, first 16 bytes: ${bytes.take(16).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
       final required = requiredHeaderSize(bytes);
-      if (response.statusCode == 206 && required > bytes.length) {
+      if (ranged && required > bytes.length) {
         _log('Metadata extends to $required bytes, fetching the rest');
-        final rest = await client.get(
-          Uri.parse(url),
-          headers: {'Range': 'bytes=${bytes.length}-${required - 1}'},
-        );
-        if (rest.statusCode == 206) {
-          bytes = Uint8List.fromList([...bytes, ...rest.bodyBytes]);
+        final rest = await _fetchRange(
+            client, url, bytes.length, required - bytes.length);
+        if (rest != null) {
+          bytes = Uint8List.fromList([...bytes, ...rest.$1]);
         }
       }
       return _parseReplayGainFromBytes(bytes);
@@ -110,6 +99,38 @@ class ReplayGainReader {
       _log('Received empty response');
       return const ReplayGainData();
     }
+  }
+
+  /// Up to [length] bytes of the file at [url] from [start], and whether the
+  /// server sent just that range (206). A server that ignores the Range
+  /// header sends the whole file (200): reading stops after [length] bytes,
+  /// which closes the connection, so the rest isn't downloaded. Null for
+  /// other statuses, and for a whole file when [start] isn't 0.
+  static Future<(Uint8List, bool)?> _fetchRange(
+      http.Client client, String url, int start, int length) async {
+    final request = http.Request('GET', Uri.parse(url))
+      ..headers['Range'] = 'bytes=$start-${start + length - 1}';
+    final response = await client.send(request);
+
+    final ranged = response.statusCode == 206;
+    if (!ranged && (response.statusCode != 200 || start > 0)) {
+      _log('Failed to fetch audio data: ${response.statusCode}');
+      // Without reading the body
+      await response.stream.listen(null).cancel();
+      return null;
+    }
+
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in response.stream) {
+      builder.add(chunk);
+      // Cancels the response stream
+      if (builder.length >= length) break;
+    }
+    final bytes = builder.takeBytes();
+    return (
+      bytes.length > length ? Uint8List.sublistView(bytes, 0, length) : bytes,
+      ranged,
+    );
   }
 
   /// Reads ReplayGain metadata from the start of a local file.

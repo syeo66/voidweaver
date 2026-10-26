@@ -15,7 +15,7 @@ The gain is `10^((gain + preamp) / 20)`, limited by the peak when clipping preve
 
 1. **Server response**: Navidrome includes ReplayGain in song entries (OpenSubsonic `<replayGain>` element or flat attributes). If present, nothing else is fetched.
 2. **Downloaded file**: for prefetched tracks, tags are read from the cached file (`ReplayGainReader.readFromFile`), which also works offline.
-3. **Range request**: otherwise the first 256 KB of the stream are fetched, plus more if the tag header is larger (`ReplayGainReader.readFromUrl`). Starting the track waits for this, so it gives up after 3 seconds and the track plays at the fallback gain.
+3. **Range request**: otherwise the first 256 KB of the stream are fetched, plus more if the tag header is larger (`ReplayGainReader.readFromUrl`). If the server ignores the Range header and sends the whole file, reading stops after 256 KB and the connection is closed. This goes over a separate HTTP/1.1 client, because `http_plus` can't stop an HTTP/2 download. Starting the track waits for this, so it gives up after 3 seconds and the track plays at the fallback gain.
 
 Supported tags:
 
@@ -27,6 +27,6 @@ Supported tags:
 
 ## Debugging
 
-Turn on **Debug Logging** under Settings → ReplayGain Debug Log to write a log file on the device. For every track played or prefetched it records the source of the values, the parsed gains and peaks, the settings and the final multiplier. The log is capped at 5 MB and can be exported through the share sheet. Credentials are redacted from URLs, but the log still contains the server address and song titles.
+Turn on **Debug Logging** under Settings → ReplayGain Debug Log to write a log file on the device. For every track played or prefetched it records the source of the values, the parsed gains and peaks, the settings and the final multiplier. The log is capped at 5 MB and can be exported through the share sheet. Every line is passed through `redactCredentials()`, so credentials in URLs (also inside error messages) are masked, but the log still contains the server address and song titles.
 
 If tracks have no ReplayGain data, tag the library with a tool such as `rsgain`, foobar2000 or MusicBrainz Picard, then rescan in Navidrome.

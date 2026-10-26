@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:logging/logging.dart';
+import '../utils/redact.dart';
 
 final _log = Logger('replaygain');
 
@@ -68,37 +69,23 @@ class ReplayGainDebugLogger extends ChangeNotifier {
     }
   }
 
-  /// Redacts Subsonic auth query parameters (username/token/salt) from a
-  /// URL before it is written to the log, since the log file is meant to
-  /// be exported and shared outside the device.
-  static String redact(String url) {
-    try {
-      final uri = Uri.parse(url);
-      if (uri.queryParameters.isEmpty) return url;
-
-      final sanitized = <String, String>{};
-      for (final entry in uri.queryParameters.entries) {
-        sanitized[entry.key] =
-            (entry.key == 'u' || entry.key == 't' || entry.key == 's')
-                ? '[REDACTED]'
-                : entry.value;
-      }
-      return uri.replace(queryParameters: sanitized).toString();
-    } catch (_) {
-      return url;
-    }
-  }
-
-  /// Appends a line to the debug log. No-op unless [enabled].
+  /// Appends a line to the debug log. No-op unless [enabled]. The log is
+  /// meant to be shared, so credentials in URLs (also inside error messages)
+  /// are masked here, see [redactCredentials].
   void log(String message) {
     if (!_enabled) return;
 
-    final line = '${DateTime.now().toIso8601String()}  $message';
+    final line =
+        '${DateTime.now().toIso8601String()}  ${redactCredentials(message)}';
 
     _writeQueue = _writeQueue.then((_) => _appendLine(line)).catchError((e) {
       _log.warning('Debug log: Write failed', e);
     });
   }
+
+  /// Completes when the lines logged so far are written
+  @visibleForTesting
+  Future<void> flush() => _writeQueue;
 
   Future<void> _appendLine(String line) async {
     final file = await _ensureLogFile();
