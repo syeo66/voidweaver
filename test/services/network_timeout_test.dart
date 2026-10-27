@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http2/transport.dart' as http2;
 import 'package:xml/xml.dart';
 
 import 'package:voidweaver/services/network_config.dart';
@@ -89,6 +91,41 @@ void main() {
       expect(config.shouldRetry(const FormatException('Bad format'), 1), false);
     });
 
+    test('retries the HTTP/1.1 and HTTP/2 clients\' connection errors', () {
+      const config = NetworkConfig.defaultConfig;
+
+      expect(
+          config.shouldRetry(
+              http.ClientException('Connection closed before full header'), 1),
+          true);
+      expect(
+          config.shouldRetry(
+              http2.TransportConnectionException(0, 'terminated'), 1),
+          true);
+    });
+
+    test('retries server errors but not other HTTP statuses', () {
+      const config = NetworkConfig.defaultConfig;
+
+      expect(config.shouldRetry(const HttpStatusException(503), 1), true);
+      expect(config.shouldRetry(const HttpStatusException(404), 1), false);
+    });
+
+    test('goes by the error\'s type, not its message', () {
+      const config = NetworkConfig.defaultConfig;
+
+      expect(config.shouldRetry(StateError('timeout'), 1), false);
+      expect(config.shouldRetry(const FormatException('no host'), 1), false);
+    });
+
+    test('treats an OS-level timeout as a timeout', () {
+      const error = SocketException('Connection timed out',
+          osError: OSError('Connection timed out', 110));
+
+      expect(isTimeoutError(error), true);
+      expect(isConnectionError(error), false);
+    });
+
     test('should serialize to/from JSON correctly', () {
       const original = NetworkConfig(
         connectionTimeout: Duration(seconds: 10),
@@ -154,13 +191,56 @@ void main() {
     });
 
     test('should provide user-friendly messages for socket errors', () {
+      // Android's (Linux) errno for a refused connection
       const error = SocketException('Connection refused',
-          osError: OSError('Connection refused', 61));
+          osError: OSError('Connection refused', 111));
 
       final message = NetworkErrorHelper.getErrorMessage(error);
 
       expect(message, contains('Server refused connection'));
       expect(message, contains('server URL'));
+    });
+
+    test('explains a failed lookup, which is also how offline looks', () {
+      const error = SocketException("Failed host lookup: 'music.example.com'",
+          osError: OSError('No address associated with hostname', 7));
+
+      final message = NetworkErrorHelper.getErrorMessage(error);
+
+      expect(message, contains('Cannot find server'));
+      expect(message, contains('internet connection'));
+    });
+
+    test('explains no route to host', () {
+      const error = SocketException('Connection failed',
+          osError: OSError('No route to host', 113));
+
+      expect(NetworkErrorHelper.getErrorMessage(error),
+          contains('Cannot reach server'));
+    });
+
+    test('explains the socket error behind a failed retry', () {
+      const error = NetworkConnectionException('Connection failed',
+          attemptsMade: 3,
+          originalError: SocketException('Connection refused',
+              osError: OSError('Connection refused', 111)));
+
+      expect(NetworkErrorHelper.getErrorMessage(error, context: 'Login'),
+          startsWith('Login: Server refused connection'));
+    });
+
+    test('should explain HTTP statuses', () {
+      expect(NetworkErrorHelper.getErrorMessage(const HttpStatusException(503)),
+          contains('Service unavailable (503)'));
+      expect(NetworkErrorHelper.getErrorMessage(const HttpStatusException(404)),
+          contains('HTTP 404'));
+    });
+
+    test('should not guess the kind of error from its message', () {
+      final message = NetworkErrorHelper.getErrorMessage(
+          StateError('No host for connection'));
+
+      expect(message, 'Something went wrong. Please try again.');
     });
 
     test('should explain wrong credentials', () {

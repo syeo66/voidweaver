@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http_plus/http_plus.dart' as http_plus;
 import 'package:logging/logging.dart';
@@ -82,14 +81,14 @@ class NetworkRetryService {
 
     // All retries exhausted, throw appropriate exception
     if (lastError != null) {
-      if (_isTimeoutError(lastError)) {
+      if (isTimeoutError(lastError)) {
         throw NetworkTimeoutException(
           'Request timed out after $attemptNumber attempts: $contextDescription',
           attemptsMade: attemptNumber,
           totalDuration: stopwatch.elapsed,
           originalError: lastError,
         );
-      } else if (_isConnectionError(lastError)) {
+      } else if (isConnectionError(lastError)) {
         throw NetworkConnectionException(
           'Connection failed after $attemptNumber attempts: $contextDescription',
           attemptsMade: attemptNumber,
@@ -127,36 +126,6 @@ class NetworkRetryService {
         originalError: e,
       );
     }
-  }
-
-  /// Check if error is timeout-related
-  bool _isTimeoutError(Object error) {
-    if (error is TimeoutException) return true;
-    if (error is NetworkTimeoutException) return true;
-    if (error is SocketException) {
-      final message = error.message.toLowerCase();
-      return message.contains('timeout') || message.contains('timed out');
-    }
-    if (error is HttpException) {
-      final message = error.message.toLowerCase();
-      return message.contains('timeout') || message.contains('timed out');
-    }
-    return error.toString().toLowerCase().contains('timeout');
-  }
-
-  /// Check if error is connection-related
-  bool _isConnectionError(Object error) {
-    if (error is SocketException) {
-      // Common socket error types that indicate connection issues
-      return error.osError?.errorCode ==
-              7 || // No address associated with hostname
-          error.osError?.errorCode == 61 || // Connection refused
-          error.osError?.errorCode == 64 || // Host is down
-          error.osError?.errorCode == 65 || // No route to host
-          error.message.toLowerCase().contains('connection');
-    }
-    if (error is NetworkConnectionException) return true;
-    return false;
   }
 
   /// Dispose resources

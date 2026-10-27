@@ -173,7 +173,7 @@ class SubsonicApi {
         return response.bodyBytes;
       } else {
         // Not the body: it can be a whole HTML error page
-        throw HttpException('HTTP ${response.statusCode}');
+        throw HttpStatusException(response.statusCode);
       }
     } on NetworkTimeoutException catch (e) {
       _log.warning('Request timeout: $uri', e);
@@ -181,9 +181,8 @@ class SubsonicApi {
     } on NetworkConnectionException catch (e) {
       _log.warning('Connection error: $uri', e);
       rethrow;
-    } on HttpException catch (e) {
-      // Without its URL, which carries the credentials
-      throw HttpException(e.message);
+    } on HttpStatusException {
+      rethrow;
     } on SocketException {
       rethrow;
     } on TlsException {

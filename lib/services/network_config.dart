@@ -1,5 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+
+import 'package:http/http.dart' as http;
+import 'package:http2/transport.dart' as http2;
 
 /// Network timeout and retry configuration for different types of requests
 class NetworkConfig {
@@ -72,39 +76,9 @@ class NetworkConfig {
   bool shouldRetry(Object error, int attemptNumber) {
     if (attemptNumber >= maxRetryAttempts) return false;
 
-    // Handle our custom network exceptions
-    if (error is NetworkTimeoutException) {
-      return enableRetryOnTimeout;
-    }
-
-    if (error is NetworkConnectionException) {
-      return enableRetryOnConnectionError;
-    }
-
-    if (error is SocketException) {
-      // Connection errors - usually worth retrying
-      return enableRetryOnConnectionError;
-    }
-
-    if (error is HttpException) {
-      final message = error.message.toLowerCase();
-      if (message.contains('timeout') || message.contains('timed out')) {
-        return enableRetryOnTimeout;
-      }
-
-      // Check for specific HTTP status codes that are retryable
-      if (message.contains('500') || // Internal Server Error
-          message.contains('502') || // Bad Gateway
-          message.contains('503') || // Service Unavailable
-          message.contains('504')) {
-        // Gateway Timeout
-        return true;
-      }
-    }
-
-    if (error.toString().toLowerCase().contains('timeout')) {
-      return enableRetryOnTimeout;
-    }
+    if (isTimeoutError(error)) return enableRetryOnTimeout;
+    if (isConnectionError(error)) return enableRetryOnConnectionError;
+    if (error is HttpStatusException) return error.isTransient;
 
     return false;
   }
@@ -243,3 +217,51 @@ class NetworkConnectionException implements Exception {
     return 'NetworkConnectionException: $message ($attemptsMade attempts)';
   }
 }
+
+/// A response with a status other than 200.
+class HttpStatusException implements Exception {
+  final int statusCode;
+
+  const HttpStatusException(this.statusCode);
+
+  /// Server and gateway errors that may go away on a retry.
+  bool get isTransient => const {500, 502, 503, 504}.contains(statusCode);
+
+  @override
+  String toString() => 'HTTP $statusCode';
+}
+
+/// [SocketException.osError] codes on Android: Linux errno values, and
+/// getaddrinfo's for failed lookups. macOS and iOS use other numbers.
+abstract final class SocketErrorCodes {
+  /// EAI_NODATA, "No address associated with hostname". Also what a lookup
+  /// fails with while the device is offline.
+  static const lookupNoData = 7;
+  static const lookupNoName = 8; // EAI_NONAME
+  static const networkUnreachable = 101; // ENETUNREACH
+  static const connectionReset = 104; // ECONNRESET
+  static const timedOut = 110; // ETIMEDOUT
+  static const connectionRefused = 111; // ECONNREFUSED
+  static const hostDown = 112; // EHOSTDOWN
+  static const hostUnreachable = 113; // EHOSTUNREACH
+}
+
+// The checks below go by the error's type and code, never its message, which
+// can contain anything (e.g. a host name).
+
+/// Whether [error] is a timeout.
+bool isTimeoutError(Object error) =>
+    error is TimeoutException ||
+    error is NetworkTimeoutException ||
+    (error is SocketException &&
+        error.osError?.errorCode == SocketErrorCodes.timedOut);
+
+/// Whether [error] means the connection couldn't be made or broke off.
+/// `http.ClientException` comes from the HTTP/1.1 client (and implements
+/// [SocketException] when caused by one), `TransportException` from HTTP/2.
+bool isConnectionError(Object error) =>
+    !isTimeoutError(error) &&
+    (error is NetworkConnectionException ||
+        error is SocketException ||
+        error is http.ClientException ||
+        error is http2.TransportException);

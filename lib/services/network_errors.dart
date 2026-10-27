@@ -44,12 +44,8 @@ class NetworkErrorHelper {
       return _getConnectionMessage(error, baseContext);
     }
 
-    if (error is SocketException) {
-      return _getSocketExceptionMessage(error, baseContext);
-    }
-
-    if (error is HttpException) {
-      return _getHttpExceptionMessage(error, baseContext);
+    if (error is HttpStatusException) {
+      return _getHttpStatusMessage(error, baseContext);
     }
 
     if (error is TlsException) {
@@ -60,16 +56,15 @@ class NetworkErrorHelper {
       return '${baseContext}The server sent an unexpected response. Please check your server URL.';
     }
 
-    // Handle generic timeout errors
-    final errorString = error.toString().toLowerCase();
-    if (errorString.contains('timeout') || errorString.contains('timed out')) {
+    if (isTimeoutError(error)) {
       return '${baseContext}Request timed out. Please check your connection and try again.';
     }
 
-    // Handle connection errors in generic exceptions
-    if (errorString.contains('connection') ||
-        errorString.contains('network') ||
-        errorString.contains('host')) {
+    if (error is SocketException) {
+      return '$baseContext${_socketErrorMessage(error) ?? 'Connection failed: ${error.message}'}';
+    }
+
+    if (isConnectionError(error)) {
       return '${baseContext}Unable to connect to server. Please check your internet connection.';
     }
 
@@ -94,51 +89,52 @@ class NetworkErrorHelper {
 
   static String _getConnectionMessage(
       NetworkConnectionException error, String baseContext) {
+    final original = error.originalError;
+    final specific =
+        original is SocketException ? _socketErrorMessage(original) : null;
+    if (specific != null) return '$baseContext$specific';
+
     final attempts = error.attemptsMade;
 
     return '${baseContext}Failed to connect after $attempts attempt${attempts > 1 ? 's' : ''}. '
         'Please check your server URL and internet connection.';
   }
 
-  static String _getSocketExceptionMessage(
-      SocketException error, String baseContext) {
+  /// A message for the socket errors whose cause is known, null for others.
+  static String? _socketErrorMessage(SocketException error) {
     switch (error.osError?.errorCode) {
-      case 7: // No address associated with hostname
-        return '${baseContext}Cannot find server. Please check your server URL.';
-      case 61: // Connection refused
-        return '${baseContext}Server refused connection. Please check your server URL and port.';
-      case 64: // Host is down
-        return '${baseContext}Server is currently unavailable. Please try again later.';
-      case 65: // No route to host
-        return '${baseContext}Cannot reach server. Please check your internet connection.';
+      case SocketErrorCodes.lookupNoData:
+      case SocketErrorCodes.lookupNoName:
+        return 'Cannot find server. Please check your internet connection and server URL.';
+      case SocketErrorCodes.connectionRefused:
+        return 'Server refused connection. Please check your server URL and port.';
+      case SocketErrorCodes.hostDown:
+        return 'Server is currently unavailable. Please try again later.';
+      case SocketErrorCodes.hostUnreachable:
+      case SocketErrorCodes.networkUnreachable:
+        return 'Cannot reach server. Please check your internet connection.';
+      case SocketErrorCodes.connectionReset:
+        return 'The connection to the server was interrupted. Please try again.';
+      case SocketErrorCodes.timedOut:
+        return 'Connection timed out. Please check your internet connection.';
       default:
-        final message = error.message.toLowerCase();
-        if (message.contains('timeout')) {
-          return '${baseContext}Connection timed out. Please check your internet connection.';
-        } else if (message.contains('refused')) {
-          return '${baseContext}Connection refused by server. Please check your server settings.';
-        } else {
-          return '${baseContext}Connection failed: ${error.message}';
-        }
+        return null;
     }
   }
 
-  static String _getHttpExceptionMessage(
-      HttpException error, String baseContext) {
-    final message = error.message.toLowerCase();
-
-    if (message.contains('500')) {
-      return '${baseContext}Server error (500). Please try again later.';
-    } else if (message.contains('502')) {
-      return '${baseContext}Bad gateway (502). Server may be temporarily unavailable.';
-    } else if (message.contains('503')) {
-      return '${baseContext}Service unavailable (503). Server is temporarily overloaded.';
-    } else if (message.contains('504')) {
-      return '${baseContext}Gateway timeout (504). Server took too long to respond.';
-    } else if (message.contains('timeout')) {
-      return '${baseContext}Request timed out. Please try again.';
-    } else {
-      return '${baseContext}HTTP error: ${error.message}';
+  static String _getHttpStatusMessage(
+      HttpStatusException error, String baseContext) {
+    switch (error.statusCode) {
+      case 500:
+        return '${baseContext}Server error (500). Please try again later.';
+      case 502:
+        return '${baseContext}Bad gateway (502). Server may be temporarily unavailable.';
+      case 503:
+        return '${baseContext}Service unavailable (503). Server is temporarily overloaded.';
+      case 504:
+        return '${baseContext}Gateway timeout (504). Server took too long to respond.';
+      default:
+        return '${baseContext}The server returned an error (HTTP ${error.statusCode}).';
     }
   }
 }
