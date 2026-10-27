@@ -49,6 +49,24 @@ Uint8List id3v23(List<int> frames) {
   ]);
 }
 
+List<int> flacBlock(int type, List<int> data, {bool last = false}) {
+  final n = data.length;
+  return [
+    (last ? 0x80 : 0) | type, (n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff, //
+    ...data,
+  ];
+}
+
+/// FLAC metadata whose cover art (a PICTURE block of [pictureSize] bytes)
+/// comes before the Vorbis comment, followed by some audio frames
+Uint8List flacWithCover(int pictureSize, String comment) => Uint8List.fromList([
+      ...'fLaC'.codeUnits,
+      ...flacBlock(0, List.filled(34, 0)), // STREAMINFO
+      ...flacBlock(6, List.filled(pictureSize, 0)), // PICTURE
+      ...flacBlock(4, comment.codeUnits, last: true), // VORBIS_COMMENT
+      ...List.filled(64 * 1024, 0xff),
+    ]);
+
 double dbToLinear(double db) => math.pow(10.0, db / 20.0).toDouble();
 
 void main() {
@@ -143,6 +161,27 @@ void main() {
           loadFixture('dreamtheater_octavarium_large_moov', ext: 'm4a');
       final head = Uint8List.sublistView(bytes, 0, 256 * 1024);
       expect(ReplayGainReader.requiredHeaderSize(head), 399069);
+    });
+
+    test('FLAC whose cover art pushes the Vorbis comment past 256KB', () async {
+      final bytes = flacWithCover(400 * 1024, 'REPLAYGAIN_TRACK_GAIN=-4.20 dB');
+      final file = await writeTempFile(bytes, 'cover.flac');
+      final data = await ReplayGainReader.readFromFile(file);
+      expect(data.trackGain, -4.20);
+    });
+
+    test('requiredHeaderSize walks the FLAC blocks to the Vorbis comment', () {
+      final bytes = flacWithCover(400 * 1024, 'REPLAYGAIN_TRACK_GAIN=-4.20 dB');
+      const pictureEnd = 4 + 38 + 4 + 400 * 1024;
+      // The PICTURE block's end, plus the next block header
+      expect(
+          ReplayGainReader.requiredHeaderSize(
+              Uint8List.sublistView(bytes, 0, 256 * 1024)),
+          pictureEnd + 4);
+      expect(
+          ReplayGainReader.requiredHeaderSize(
+              Uint8List.sublistView(bytes, 0, pictureEnd + 4)),
+          pictureEnd + 4 + 'REPLAYGAIN_TRACK_GAIN=-4.20 dB'.length);
     });
 
     test('requiredHeaderSize leaves small tags alone', () {
@@ -321,6 +360,41 @@ void main() {
           await ReplayGainReader.readFromUrl(urlOf(server), client: client);
       expect(data.trackGain, -10.44);
       expect(ranges, ['bytes=0-262143', 'bytes=262144-327660']);
+    });
+
+    test('reads a large tag on from a response that ignores the range',
+        () async {
+      final bytes = loadFixture('thebrowning_not_alone_evolved_large_cover');
+      var requests = 0;
+      final server = await serve((request) async {
+        requests++;
+        request.response.add(bytes);
+        await request.response.close();
+      });
+
+      final data =
+          await ReplayGainReader.readFromUrl(urlOf(server), client: client);
+      expect(data.trackGain, -10.44);
+      expect(data.albumGain, -10.41);
+      expect(requests, 1);
+    });
+
+    test('fetches FLAC blocks past the first read', () async {
+      final bytes = flacWithCover(400 * 1024, 'REPLAYGAIN_TRACK_GAIN=-4.20 dB');
+      final server = await serve((request) async {
+        final range = request.headers.value('range')!;
+        final [start, end] =
+            range.substring('bytes='.length).split('-').map(int.parse).toList();
+        request.response
+          ..statusCode = HttpStatus.partialContent
+          ..add(Uint8List.sublistView(
+              bytes, start, math.min(end + 1, bytes.length)));
+        await request.response.close();
+      });
+
+      final data =
+          await ReplayGainReader.readFromUrl(urlOf(server), client: client);
+      expect(data.trackGain, -4.20);
     });
 
     test('stops reading when the server ignores the range', () async {

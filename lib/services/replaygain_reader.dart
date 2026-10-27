@@ -61,8 +61,10 @@ class ReplayGainReader {
   static Future<ReplayGainData> readFromUrl(String url,
       {required http.Client client,
       Duration timeout = defaultUrlTimeout}) async {
+    _log('Reading ReplayGain metadata from: $url');
+    final head = _UrlHead(client, url);
     try {
-      return await _fetchFromUrl(url, client).timeout(timeout);
+      return await readFromHead(head.read).timeout(timeout);
     } on TimeoutException {
       _log('Reading ReplayGain metadata timed out after $timeout');
       return const ReplayGainData();
@@ -70,67 +72,9 @@ class ReplayGainReader {
       _log('Error reading ReplayGain metadata: $e');
       _log('Stack trace: $stackTrace');
       return const ReplayGainData();
+    } finally {
+      await head.close();
     }
-  }
-
-  static Future<ReplayGainData> _fetchFromUrl(
-      String url, http.Client client) async {
-    _log('Reading ReplayGain metadata from: $url');
-
-    // Just the beginning of the file
-    final head = await _fetchRange(client, url, 0, _maxHeaderSize);
-    if (head == null) return const ReplayGainData();
-    var (bytes, ranged) = head;
-
-    if (bytes.isNotEmpty) {
-      _log(
-          'Received ${bytes.length} bytes, first 16 bytes: ${bytes.take(16).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
-      final required = requiredHeaderSize(bytes);
-      if (ranged && required > bytes.length) {
-        _log('Metadata extends to $required bytes, fetching the rest');
-        final rest = await _fetchRange(
-            client, url, bytes.length, required - bytes.length);
-        if (rest != null) {
-          bytes = Uint8List.fromList([...bytes, ...rest.$1]);
-        }
-      }
-      return _parseReplayGainFromBytes(bytes);
-    } else {
-      _log('Received empty response');
-      return const ReplayGainData();
-    }
-  }
-
-  /// Up to [length] bytes of the file at [url] from [start], and whether the
-  /// server sent just that range (206). A server that ignores the Range
-  /// header sends the whole file (200): reading stops after [length] bytes,
-  /// which closes the connection, so the rest isn't downloaded. Null for
-  /// other statuses, and for a whole file when [start] isn't 0.
-  static Future<(Uint8List, bool)?> _fetchRange(
-      http.Client client, String url, int start, int length) async {
-    final request = http.Request('GET', Uri.parse(url))
-      ..headers['Range'] = 'bytes=$start-${start + length - 1}';
-    final response = await client.send(request);
-
-    final ranged = response.statusCode == 206;
-    if (!ranged && (response.statusCode != 200 || start > 0)) {
-      _log('Failed to fetch audio data: ${response.statusCode}');
-      // Without reading the body
-      await response.stream.listen(null).cancel();
-      return null;
-    }
-
-    final builder = BytesBuilder(copy: false);
-    await for (final chunk in response.stream) {
-      builder.add(chunk);
-      // Cancels the response stream
-      if (builder.length >= length) break;
-    }
-    final bytes = builder.takeBytes();
-    return (
-      bytes.length > length ? Uint8List.sublistView(bytes, 0, length) : bytes,
-      ranged,
-    );
   }
 
   /// Reads ReplayGain metadata from the start of a local file.
@@ -158,12 +102,20 @@ class ReplayGainReader {
   static Future<ReplayGainData> readFromHead(
       Future<Uint8List?> Function(int length) readHead) async {
     try {
-      var bytes = await readHead(_maxHeaderSize);
-      if (bytes == null || bytes.isEmpty) return const ReplayGainData();
-      final required = requiredHeaderSize(bytes);
-      if (required > bytes.length) {
+      final head = await readHead(_maxHeaderSize);
+      if (head == null || head.isEmpty) return const ReplayGainData();
+      var bytes = head;
+      _log('Received ${bytes.length} bytes, first 16 bytes: '
+          '${bytes.take(16).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      // FLAC blocks and MP4 atoms reveal the next one's position only once
+      // they are read, so this can take several steps
+      for (var required = requiredHeaderSize(bytes);
+          required > bytes.length;
+          required = requiredHeaderSize(bytes)) {
         _log('Metadata extends to $required bytes, reading the rest');
-        bytes = await readHead(required) ?? bytes;
+        final more = await readHead(required);
+        if (more == null || more.length <= bytes.length) break;
+        bytes = more;
       }
       return _parseReplayGainFromBytes(bytes);
     } catch (e) {
@@ -173,8 +125,11 @@ class ReplayGainReader {
   }
 
   /// Returns how many leading bytes are needed to cover the file's metadata,
-  /// based on the ID3v2 tag size or the end of the MP4 'moov' atom. Returns
-  /// [bytes.length] when the size can't be determined or is unreasonable.
+  /// based on the ID3v2 tag size, the FLAC metadata blocks up to the Vorbis
+  /// comment or the end of the MP4 'moov' atom. When [bytes] end before the
+  /// next FLAC block or MP4 atom header, that header is all it asks for, so
+  /// call again once it's read. Returns [bytes.length] when the size can't be
+  /// determined or is unreasonable.
   @visibleForTesting
   static int requiredHeaderSize(Uint8List bytes) {
     int required = bytes.length;
@@ -188,6 +143,12 @@ class ReplayGainReader {
           (bytes[6] << 21) | (bytes[7] << 14) | (bytes[8] << 7) | bytes[9];
       final hasFooter = (bytes[5] & 0x10) != 0;
       required = tagSize + 10 + (hasFooter ? 10 : 0);
+      // Some taggers put an ID3v2 tag in front of a FLAC stream
+      if (required <= bytes.length) {
+        required = _flacMetadataEnd(bytes, required) ?? bytes.length;
+      }
+    } else if (_flacMetadataEnd(bytes, 0) case final end?) {
+      required = end;
     } else if (bytes.length >= 8 &&
         bytes[4] == 0x66 &&
         bytes[5] == 0x74 &&
@@ -210,6 +171,8 @@ class ReplayGainReader {
         }
         if (atomType == 'mdat') break;
         offset += atomSize;
+        // The next atom's header
+        if (offset + 8 > bytes.length) required = offset + 8;
       }
     }
 
@@ -217,6 +180,33 @@ class ReplayGainReader {
       return bytes.length;
     }
     return required;
+  }
+
+  /// End of the FLAC metadata blocks up to and including the Vorbis comment
+  /// (all of them if there is none), for a FLAC stream at [start]. If [bytes]
+  /// end before that, the end of the next block header. Null if there is no
+  /// FLAC stream at [start].
+  static int? _flacMetadataEnd(Uint8List bytes, int start) {
+    if (bytes.length < start + 4 ||
+        bytes[start] != 0x66 || // fLaC
+        bytes[start + 1] != 0x4c ||
+        bytes[start + 2] != 0x61 ||
+        bytes[start + 3] != 0x43) {
+      return null;
+    }
+    var offset = start + 4;
+    while (offset + 4 <= bytes.length) {
+      final isLast = (bytes[offset] & 0x80) != 0;
+      final type = bytes[offset] & 0x7f;
+      final end = offset +
+          4 +
+          ((bytes[offset + 1] << 16) |
+              (bytes[offset + 2] << 8) |
+              bytes[offset + 3]);
+      if (type == 4 || isLast) return end; // 4: VORBIS_COMMENT
+      offset = end;
+    }
+    return offset + 4;
   }
 
   @visibleForTesting
@@ -996,5 +986,73 @@ class ReplayGainReader {
     }
 
     return String.fromCharCodes(chars);
+  }
+}
+
+/// The start of the file at a URL, read only as far as asked, for
+/// [ReplayGainReader.readFromHead]. Asks for each part with a Range request.
+/// A server that ignores the Range header sends the whole file (200, e.g. a
+/// transcoded stream): then later parts are read on from that same response,
+/// and [close] stops the download by closing the connection.
+class _UrlHead {
+  _UrlHead(this._client, this._url);
+
+  final http.Client _client;
+  final String _url;
+  final _bytes = BytesBuilder(copy: false);
+  // The whole file, when the server ignored the Range header
+  StreamIterator<List<int>>? _body;
+  // Nothing more to read: the end of the file, an error or [close]
+  bool _ended = false;
+
+  /// At least [length] bytes from the start of the file, or fewer if it
+  /// ends sooner; null if nothing could be read.
+  Future<Uint8List?> read(int length) async {
+    while (!_ended && _bytes.length < length) {
+      var body = _body;
+      if (body == null) {
+        final start = _bytes.length;
+        final request = http.Request('GET', Uri.parse(_url))
+          ..headers['Range'] = 'bytes=$start-${length - 1}';
+        final response = await _client.send(request);
+        if (_ended) {
+          // Closed meanwhile
+          await response.stream.listen(null).cancel();
+          break;
+        }
+        if (response.statusCode == 206) {
+          await for (final chunk in response.stream) {
+            _bytes.add(chunk);
+            if (_bytes.length >= length) break;
+          }
+          // Less than asked for: the file ends here
+          if (_bytes.length < length) _ended = true;
+          continue;
+        }
+        if (response.statusCode != 200 || start > 0) {
+          ReplayGainReader._log(
+              'Failed to fetch audio data: ${response.statusCode}');
+          // Without reading the body
+          await response.stream.listen(null).cancel();
+          _ended = true;
+          break;
+        }
+        ReplayGainReader._log(
+            'Server ignored the Range header, reading the start of the file');
+        body = _body = StreamIterator(response.stream);
+      }
+      if (await body.moveNext()) {
+        _bytes.add(body.current);
+      } else {
+        _ended = true;
+      }
+    }
+    return _bytes.isEmpty ? null : _bytes.toBytes();
+  }
+
+  /// Stops reading, also a read in progress
+  Future<void> close() async {
+    _ended = true;
+    await _body?.cancel();
   }
 }
