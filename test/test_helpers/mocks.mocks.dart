@@ -5,14 +5,15 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 
 import 'dart:async' as _i6;
-import 'dart:ui' as _i9;
+import 'dart:ui' as _i10;
 
-import 'package:flutter/material.dart' as _i8;
+import 'package:flutter/material.dart' as _i9;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i5;
+import 'package:voidweaver/models/album_list_type.dart' as _i7;
 import 'package:voidweaver/services/network_config.dart' as _i2;
 import 'package:voidweaver/services/replaygain_reader.dart' as _i4;
-import 'package:voidweaver/services/settings_service.dart' as _i7;
+import 'package:voidweaver/services/settings_service.dart' as _i8;
 import 'package:voidweaver/services/subsonic_api.dart' as _i3;
 
 // ignore_for_file: type=lint
@@ -154,12 +155,18 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
       ) as _i6.Future<void>);
 
   @override
-  _i6.Future<List<_i3.Album>> getAlbumList({bool? forceRefresh = false}) =>
+  _i6.Future<List<_i3.Album>> getAlbumList({
+    _i7.AlbumListType? type = _i7.AlbumListType.recent,
+    bool? forceRefresh = false,
+  }) =>
       (super.noSuchMethod(
         Invocation.method(
           #getAlbumList,
           [],
-          {#forceRefresh: forceRefresh},
+          {
+            #type: type,
+            #forceRefresh: forceRefresh,
+          },
         ),
         returnValue: _i6.Future<List<_i3.Album>>.value(<_i3.Album>[]),
       ) as _i6.Future<List<_i3.Album>>);
@@ -369,16 +376,16 @@ class MockSubsonicApi extends _i1.Mock implements _i3.SubsonicApi {
 /// A class which mocks [SettingsService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockSettingsService extends _i1.Mock implements _i7.SettingsService {
+class MockSettingsService extends _i1.Mock implements _i8.SettingsService {
   MockSettingsService() {
     _i1.throwOnMissingStub(this);
   }
 
   @override
-  _i7.ReplayGainMode get replayGainMode => (super.noSuchMethod(
+  _i8.ReplayGainMode get replayGainMode => (super.noSuchMethod(
         Invocation.getter(#replayGainMode),
-        returnValue: _i7.ReplayGainMode.off,
-      ) as _i7.ReplayGainMode);
+        returnValue: _i8.ReplayGainMode.off,
+      ) as _i8.ReplayGainMode);
 
   @override
   double get replayGainPreamp => (super.noSuchMethod(
@@ -399,10 +406,10 @@ class MockSettingsService extends _i1.Mock implements _i7.SettingsService {
       ) as double);
 
   @override
-  _i8.ThemeMode get themeMode => (super.noSuchMethod(
+  _i9.ThemeMode get themeMode => (super.noSuchMethod(
         Invocation.getter(#themeMode),
-        returnValue: _i8.ThemeMode.system,
-      ) as _i8.ThemeMode);
+        returnValue: _i9.ThemeMode.system,
+      ) as _i9.ThemeMode);
 
   @override
   _i2.NetworkConfig get networkConfig => (super.noSuchMethod(
@@ -426,6 +433,12 @@ class MockSettingsService extends _i1.Mock implements _i7.SettingsService {
       ) as double);
 
   @override
+  _i7.AlbumListType get albumListType => (super.noSuchMethod(
+        Invocation.getter(#albumListType),
+        returnValue: _i7.AlbumListType.recent,
+      ) as _i7.AlbumListType);
+
+  @override
   bool get hasListeners => (super.noSuchMethod(
         Invocation.getter(#hasListeners),
         returnValue: false,
@@ -442,7 +455,7 @@ class MockSettingsService extends _i1.Mock implements _i7.SettingsService {
       ) as _i6.Future<void>);
 
   @override
-  _i6.Future<void> setReplayGainMode(_i7.ReplayGainMode? mode) =>
+  _i6.Future<void> setReplayGainMode(_i8.ReplayGainMode? mode) =>
       (super.noSuchMethod(
         Invocation.method(
           #setReplayGainMode,
@@ -506,10 +519,21 @@ class MockSettingsService extends _i1.Mock implements _i7.SettingsService {
       ) as double);
 
   @override
-  _i6.Future<void> setThemeMode(_i8.ThemeMode? mode) => (super.noSuchMethod(
+  _i6.Future<void> setThemeMode(_i9.ThemeMode? mode) => (super.noSuchMethod(
         Invocation.method(
           #setThemeMode,
           [mode],
+        ),
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
+
+  @override
+  _i6.Future<void> setAlbumListType(_i7.AlbumListType? type) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #setAlbumListType,
+          [type],
         ),
         returnValue: _i6.Future<void>.value(),
         returnValueForMissingStub: _i6.Future<void>.value(),
@@ -579,7 +603,7 @@ class MockSettingsService extends _i1.Mock implements _i7.SettingsService {
       ) as _i6.Future<void>);
 
   @override
-  void addListener(_i9.VoidCallback? listener) => super.noSuchMethod(
+  void addListener(_i10.VoidCallback? listener) => super.noSuchMethod(
         Invocation.method(
           #addListener,
           [listener],
@@ -588,7 +612,7 @@ class MockSettingsService extends _i1.Mock implements _i7.SettingsService {
       );
 
   @override
-  void removeListener(_i9.VoidCallback? listener) => super.noSuchMethod(
+  void removeListener(_i10.VoidCallback? listener) => super.noSuchMethod(
         Invocation.method(
           #removeListener,
           [listener],

@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_plus/http_plus.dart' as http_plus;
 import 'package:xml/xml.dart';
 import 'package:logging/logging.dart';
+import '../models/album_list_type.dart';
 import 'api_cache.dart';
 import 'network_config.dart';
 import 'network_errors.dart';
@@ -231,34 +232,41 @@ class SubsonicApi {
   /// Albums per getAlbumList2 request, the most the Subsonic API allows
   static const _albumPageSize = 500;
 
-  /// All albums, most recently added first, fetched page by page. With
-  /// [forceRefresh] they're fetched from the server even if the cached list
-  /// hasn't expired yet. Otherwise an expired list is only fetched again if
-  /// the server scanned the library since, see [getLibraryVersion].
-  Future<List<Album>> getAlbumList({bool forceRefresh = false}) async {
+  /// Albums in the order of [type]. With [forceRefresh] they're fetched from
+  /// the server even if the cached list hasn't expired yet.
+  ///
+  /// [AlbumListType.newest] is every album, fetched page by page. An expired
+  /// list is only fetched again if the server scanned the library since, see
+  /// [getLibraryVersion].
+  ///
+  /// [AlbumListType.recent] is only the first page: its order changes with
+  /// every play, so it's fetched again whenever it expires, and nobody
+  /// scrolls past the last 500 albums played.
+  Future<List<Album>> getAlbumList(
+      {AlbumListType type = AlbumListType.recent,
+      bool forceRefresh = false}) async {
+    Future<List<Album>> fetchPage(int offset) => _makeLargeRequest(
+        'getAlbumList2',
+        {
+          'type': type.name,
+          'size': '$_albumPageSize',
+          'offset': '$offset',
+        },
+        NetworkRequestType.metadata,
+        albumsFromXml);
+
     return await _cache.getOrFetch<List<Album>>(
       'getAlbumList2',
-      {'type': 'newest', 'size': '$_albumPageSize'},
-      () {
-        // The list used to be fetched sorted by last play (type=recent)
-        _cache.clearEntry(
-            'getAlbumList2', {'type': 'recent', 'size': '$_albumPageSize'});
-        return fetchAllAlbumPages((offset) => _makeLargeRequest(
-            'getAlbumList2',
-            {
-              'type': 'newest',
-              'size': '$_albumPageSize',
-              'offset': '$offset',
-            },
-            NetworkRequestType.metadata,
-            albumsFromXml));
-      },
+      {'type': type.name, 'size': '$_albumPageSize'},
+      () => type == AlbumListType.newest
+          ? fetchAllAlbumPages(fetchPage)
+          : fetchPage(0),
       cacheDuration: const Duration(minutes: 3),
       usePersistentCache: true,
       forceRefresh: forceRefresh,
       toJson: _albumsToJson,
       fromJson: _albumsFromJson,
-      version: getLibraryVersion,
+      version: type == AlbumListType.newest ? getLibraryVersion : null,
     );
   }
 

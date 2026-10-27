@@ -134,7 +134,7 @@ if $login; then
 fi
 
 step "Playback from the app"
-"$ADB" shell input tap 400 390   # first album card
+"$ADB" shell input tap 400 550   # first album card, below the list order toggle
 expect_state PLAYING "after tapping the first album"
 if [ "$(session_active)" = true ]; then pass "session active"; else fail "session not active (active=$(session_active))"; fi
 count="$(session_count)"

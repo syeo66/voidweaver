@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:voidweaver/models/album_list_type.dart';
 import 'package:voidweaver/services/app_state.dart';
 
 void main() {
@@ -43,6 +44,19 @@ void main() {
     expect(appState.syncStatus, SyncStatus.syncing);
     await syncFinished();
     expect(appState.syncStatus, SyncStatus.error);
+  });
+
+  test('a sync of the order switched away from leaves the new one alone',
+      () async {
+    appState.setVisible(false);
+    appState.setVisible(true);
+    expect(appState.syncStatus, SyncStatus.syncing);
+    await appState.setAlbumListType(AlbumListType.newest);
+    await syncFinished();
+
+    // The load for the new order reports its failure, not the old sync
+    expect(appState.syncStatus, SyncStatus.idle);
+    expect(appState.error, isNotNull);
   });
 
   test('staying visible starts no extra sync', () {

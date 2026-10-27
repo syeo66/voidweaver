@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'network_config.dart';
+import '../models/album_list_type.dart';
 
 enum ReplayGainMode {
   off,
@@ -21,6 +22,7 @@ class SettingsService extends ChangeNotifier {
   static const String _scrobbleMinPlayTimeMinutesKey =
       'scrobbleMinPlayTimeMinutes';
   static const String _scrobbleThresholdPercentKey = 'scrobbleThresholdPercent';
+  static const String _albumListTypeKey = 'albumListType';
 
   SharedPreferences? _prefs;
 
@@ -32,6 +34,7 @@ class SettingsService extends ChangeNotifier {
   NetworkConfig _networkConfig = NetworkConfig.defaultConfig;
   double _scrobbleMinPlayTimeMinutes = 2.0;
   double _scrobbleThresholdPercent = 50.0;
+  AlbumListType _albumListType = AlbumListType.recent;
 
   ReplayGainMode get replayGainMode => _replayGainMode;
   double get replayGainPreamp => _replayGainPreamp;
@@ -41,6 +44,7 @@ class SettingsService extends ChangeNotifier {
   NetworkConfig get networkConfig => _networkConfig;
   double get scrobbleMinPlayTimeMinutes => _scrobbleMinPlayTimeMinutes;
   double get scrobbleThresholdPercent => _scrobbleThresholdPercent;
+  AlbumListType get albumListType => _albumListType;
 
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
@@ -80,6 +84,12 @@ class SettingsService extends ChangeNotifier {
         _prefs!.getDouble(_scrobbleMinPlayTimeMinutesKey) ?? 2.0;
     _scrobbleThresholdPercent =
         _prefs!.getDouble(_scrobbleThresholdPercentKey) ?? 50.0;
+
+    final albumListType = _prefs!.getString(_albumListTypeKey);
+    _albumListType = AlbumListType.values
+            .where((t) => t.name == albumListType)
+            .firstOrNull ??
+        AlbumListType.recent;
 
     notifyListeners();
   }
@@ -157,6 +167,12 @@ class SettingsService extends ChangeNotifier {
   Future<void> setThemeMode(ThemeMode mode) async {
     _themeMode = mode;
     await _prefs?.setInt(_themeModeKey, mode.index);
+    notifyListeners();
+  }
+
+  Future<void> setAlbumListType(AlbumListType type) async {
+    _albumListType = type;
+    await _prefs?.setString(_albumListTypeKey, type.name);
     notifyListeners();
   }
 

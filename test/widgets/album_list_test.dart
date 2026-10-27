@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:voidweaver/models/album_list_type.dart';
 import 'package:voidweaver/services/app_state.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 import 'package:voidweaver/widgets/album_list.dart';
@@ -12,6 +13,16 @@ class _StubAppState extends AppState {
   final List<Album> stubAlbums;
   final String? stubError;
   bool stubLoading = false;
+  AlbumListType stubListType = AlbumListType.recent;
+
+  @override
+  AlbumListType get albumListType => stubListType;
+
+  @override
+  Future<void> setAlbumListType(AlbumListType type) async {
+    stubListType = type;
+    notifyListeners();
+  }
 
   @override
   List<Album> get albums => stubAlbums;
@@ -73,6 +84,42 @@ void main() {
       await _pumpAlbumList(tester, appState);
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    });
+
+    testWidgets('switches between recently played and recently added',
+        (tester) async {
+      final appState = _StubAppState(stubAlbums: [album]);
+      await _pumpAlbumList(tester, appState);
+
+      SegmentedButton<AlbumListType> selector() =>
+          tester.widget(find.byType(SegmentedButton<AlbumListType>));
+      expect(selector().selected, {AlbumListType.recent});
+
+      await tester.tap(find.text('Recently added'));
+      await tester.pump();
+      expect(appState.stubListType, AlbumListType.newest);
+      expect(selector().selected, {AlbumListType.newest});
+    });
+
+    testWidgets('keeps the selector when nothing was played yet',
+        (tester) async {
+      await _pumpAlbumList(tester, _StubAppState());
+
+      expect(find.text('No albums played yet'), findsOneWidget);
+      expect(find.text('Recently added'), findsOneWidget);
+    });
+
+    testWidgets('offers recently added when nothing was played yet',
+        (tester) async {
+      final appState = _StubAppState();
+      await _pumpAlbumList(tester, appState);
+      expect(find.text('Refresh'), findsNothing);
+
+      await tester.tap(find.text('Show recently added'));
+      await tester.pump();
+      expect(appState.stubListType, AlbumListType.newest);
+      expect(find.text('No albums found'), findsOneWidget);
+      expect(find.text('Refresh'), findsOneWidget);
     });
   });
 }

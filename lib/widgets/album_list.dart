@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/app_state.dart';
+import '../models/album_list_type.dart';
 import '../services/subsonic_api.dart';
 import '../services/audio_player_service.dart';
 import '../services/image_cache_manager.dart';
@@ -11,6 +12,15 @@ class AlbumList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const _AlbumListTypeSelector(),
+        Expanded(child: _buildAlbums()),
+      ],
+    );
+  }
+
+  Widget _buildAlbums() {
     return Consumer<AppState>(
       builder: (context, appState, child) {
         // On a refresh, the RefreshIndicator shows the progress
@@ -39,6 +49,8 @@ class AlbumList extends StatelessWidget {
         }
 
         if (appState.albums.isEmpty) {
+          // Nothing played yet, e.g. a new account: a refresh won't help
+          final nothingPlayed = appState.albumListType == AlbumListType.recent;
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -47,12 +59,20 @@ class AlbumList extends StatelessWidget {
                     size: 64,
                     color: Theme.of(context).colorScheme.onSurfaceVariant),
                 const SizedBox(height: 16),
-                const Text('No albums found'),
+                Text(
+                    nothingPlayed ? 'No albums played yet' : 'No albums found'),
                 const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => appState.loadAlbums(forceRefresh: true),
-                  child: const Text('Refresh'),
-                ),
+                if (nothingPlayed)
+                  ElevatedButton(
+                    onPressed: () =>
+                        appState.setAlbumListType(AlbumListType.newest),
+                    child: const Text('Show recently added'),
+                  )
+                else
+                  ElevatedButton(
+                    onPressed: () => appState.loadAlbums(forceRefresh: true),
+                    child: const Text('Refresh'),
+                  ),
               ],
             ),
           );
@@ -95,6 +115,40 @@ class AlbumList extends StatelessWidget {
                 ),
         );
       },
+    );
+  }
+}
+
+/// Switches the album list between recently played and recently added
+class _AlbumListTypeSelector extends StatelessWidget {
+  const _AlbumListTypeSelector();
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+      child: SizedBox(
+        width: double.infinity,
+        child: SegmentedButton<AlbumListType>(
+          segments: const [
+            ButtonSegment(
+              value: AlbumListType.recent,
+              icon: Icon(Icons.history),
+              label: Text('Recently played'),
+            ),
+            ButtonSegment(
+              value: AlbumListType.newest,
+              icon: Icon(Icons.new_releases_outlined),
+              label: Text('Recently added'),
+            ),
+          ],
+          selected: {appState.albumListType},
+          showSelectedIcon: false,
+          onSelectionChanged: (selected) =>
+              appState.setAlbumListType(selected.single),
+        ),
+      ),
     );
   }
 }

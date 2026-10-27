@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logging/logging.dart';
 import 'subsonic_api.dart';
+import '../models/album_list_type.dart';
 import 'audio_player_service.dart';
 import 'audio_cache.dart';
 import 'image_cache_manager.dart';
@@ -69,6 +70,8 @@ class AppState extends ChangeNotifier {
   AudioPlayerService? get audioPlayerService => _audioPlayerService;
   SettingsService? get settingsService => _settingsService;
   List<Album> get albums => _albums;
+  AlbumListType get albumListType =>
+      _settingsService?.albumListType ?? AlbumListType.recent;
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isConfigured => _isConfigured;
@@ -189,11 +192,21 @@ class AppState extends ChangeNotifier {
     ]);
   }
 
+  /// Saves the order of the album list and loads it in that order
+  Future<void> setAlbumListType(AlbumListType type) async {
+    if (type == albumListType) return;
+    await _settingsService!.setAlbumListType(type);
+    // The spinner rather than the old list in the new order's place
+    _albums = [];
+    await loadAlbums();
+  }
+
   /// Loads the album list. [forceRefresh] (a refresh by the user) bypasses
   /// the API cache's fresh entry; when offline the cached list is used.
   Future<void> loadAlbums({bool forceRefresh = false}) async {
     final api = _api;
     if (api == null) return;
+    final type = albumListType;
 
     _isLoading = true;
     _error = null;
@@ -201,13 +214,15 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final albums = await api.getAlbumList(forceRefresh: forceRefresh);
-      // Logged out meanwhile
-      if (!identical(api, _api)) return;
+      final albums =
+          await api.getAlbumList(type: type, forceRefresh: forceRefresh);
+      // Logged out or switched to the other order meanwhile, in which case
+      // the load for that order finishes
+      if (!identical(api, _api) || type != albumListType) return;
       _albums = albums;
       _lastSyncTime = DateTime.now();
     } catch (e) {
-      if (!identical(api, _api)) return;
+      if (!identical(api, _api) || type != albumListType) return;
       _error = NetworkErrorHelper.getErrorMessage(e,
           context: 'Failed to load albums');
       _albumError = _error;
@@ -222,17 +237,30 @@ class AppState extends ChangeNotifier {
 
     _syncStatus = SyncStatus.syncing;
     notifyListeners();
+    final type = albumListType;
 
     try {
-      final newAlbums = await api.getAlbumList();
+      final newAlbums = await api.getAlbumList(type: type);
       // Logged out meanwhile
       if (!identical(api, _api)) return;
+      // Switched to the other order meanwhile: that load's list, error and
+      // time stay, see loadAlbums()
+      if (type != albumListType) {
+        _syncStatus = SyncStatus.idle;
+        notifyListeners();
+        return;
+      }
       _albums = newAlbums;
       _syncStatus = SyncStatus.success;
       _lastSyncTime = DateTime.now();
       _error = null;
     } catch (e) {
       if (!identical(api, _api)) return;
+      if (type != albumListType) {
+        _syncStatus = SyncStatus.idle;
+        notifyListeners();
+        return;
+      }
       // Only the sync indicator shows this; the albums loaded before stay
       _syncStatus = SyncStatus.error;
       _log.warning('Background sync failed', e);
