@@ -503,6 +503,7 @@ class MockSettingsService extends _i1.Mock implements _i8.SettingsService {
     double? albumGain,
     double? trackPeak,
     double? albumPeak,
+    bool? fromAlbum = false,
   }) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -513,6 +514,7 @@ class MockSettingsService extends _i1.Mock implements _i8.SettingsService {
             #albumGain: albumGain,
             #trackPeak: trackPeak,
             #albumPeak: albumPeak,
+            #fromAlbum: fromAlbum,
           },
         ),
         returnValue: 0.0,

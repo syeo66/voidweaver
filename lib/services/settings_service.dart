@@ -9,6 +9,9 @@ enum ReplayGainMode {
   off,
   track,
   album,
+  // Album gain for a queue started from an album, track gain otherwise.
+  // Last, so the stored indices of the other modes stay the same.
+  smart,
 }
 
 class SettingsService extends ChangeNotifier {
@@ -124,6 +127,7 @@ class SettingsService extends ChangeNotifier {
     double? albumGain,
     double? trackPeak,
     double? albumPeak,
+    bool fromAlbum = false,
   }) {
     if (_replayGainMode == ReplayGainMode.off) {
       return 1.0;
@@ -132,7 +136,11 @@ class SettingsService extends ChangeNotifier {
     double gainToUse = 0.0;
     double peakToUse = 1.0;
 
-    switch (_replayGainMode) {
+    final mode = _replayGainMode == ReplayGainMode.smart
+        ? (fromAlbum ? ReplayGainMode.album : ReplayGainMode.track)
+        : _replayGainMode;
+
+    switch (mode) {
       case ReplayGainMode.track:
         gainToUse = trackGain ?? _replayGainFallbackGain;
         peakToUse = trackPeak ?? 1.0;
@@ -142,6 +150,7 @@ class SettingsService extends ChangeNotifier {
         peakToUse = albumPeak ?? trackPeak ?? 1.0;
         break;
       case ReplayGainMode.off:
+      case ReplayGainMode.smart:
         return 1.0;
     }
 

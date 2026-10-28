@@ -72,6 +72,7 @@ void main() {
       albumGain: anyNamed('albumGain'),
       trackPeak: anyNamed('trackPeak'),
       albumPeak: anyNamed('albumPeak'),
+      fromAlbum: anyNamed('fromAlbum'),
     )).thenReturn(1.0);
 
     when(mockApi.getStreamUrl(any)).thenAnswer(

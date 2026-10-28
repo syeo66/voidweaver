@@ -958,12 +958,13 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   /// The linear gain [song] plays at, from its ReplayGain data and the
-  /// settings.
+  /// settings. Smart mode uses the album gain when the queue is an album.
   double _gainFor(Song song) => _settingsService.calculateVolumeAdjustment(
         trackGain: song.replayGainTrackGain,
         albumGain: song.replayGainAlbumGain,
         trackPeak: song.replayGainTrackPeak,
         albumPeak: song.replayGainAlbumPeak,
+        fromAlbum: _playlistSource == 'album',
       );
 
   /// Sets the gain of the items in the player's sequence (only those for
@@ -1004,7 +1005,7 @@ class AudioPlayerService extends ChangeNotifier {
     _rgLog(
         '[ReplayGain] Song: "${_currentSong!.title}" by "${_currentSong!.artist}" (id=${_currentSong!.id})');
     _rgLog('[ReplayGain] Stream URL: ${_api.getStreamUrl(_currentSong!.id)}');
-    _rgLog('[ReplayGain] Mode: $rgMode');
+    _rgLog('[ReplayGain] Mode: $rgMode (queue: ${_playlistSource ?? 'none'})');
     _rgLog(
         '[ReplayGain] TrackGain: ${trackGain?.toStringAsFixed(2) ?? 'null'} dB');
     _rgLog(

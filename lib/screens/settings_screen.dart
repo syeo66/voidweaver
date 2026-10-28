@@ -283,6 +283,8 @@ class _SettingsContent extends StatelessWidget {
         return 'Track';
       case ReplayGainMode.album:
         return 'Album';
+      case ReplayGainMode.smart:
+        return 'Smart';
     }
   }
 
@@ -294,6 +296,8 @@ class _SettingsContent extends StatelessWidget {
         return 'Normalize each track individually';
       case ReplayGainMode.album:
         return 'Normalize based on album levels';
+      case ReplayGainMode.smart:
+        return 'Album levels when playing an album, track levels otherwise';
     }
   }
 

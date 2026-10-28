@@ -53,6 +53,7 @@ void main() {
       albumGain: anyNamed('albumGain'),
       trackPeak: anyNamed('trackPeak'),
       albumPeak: anyNamed('albumPeak'),
+      fromAlbum: anyNamed('fromAlbum'),
     )).thenReturn(1.0);
     when(mockApi.getStreamUrl(any)).thenAnswer((invocation) =>
         'https://music.test/rest/stream?id=${invocation.positionalArguments.first}');

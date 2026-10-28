@@ -72,6 +72,7 @@ void main() {
       albumGain: anyNamed('albumGain'),
       trackPeak: anyNamed('trackPeak'),
       albumPeak: anyNamed('albumPeak'),
+      fromAlbum: anyNamed('fromAlbum'),
     )).thenAnswer((invocation) {
       final gain = invocation.namedArguments[#trackGain] as double?;
       return gain == -6.0 ? 0.5 : 0.7;
@@ -214,6 +215,7 @@ void main() {
         albumGain: anyNamed('albumGain'),
         trackPeak: anyNamed('trackPeak'),
         albumPeak: anyNamed('albumPeak'),
+        fromAlbum: anyNamed('fromAlbum'),
       )).thenReturn(1.4);
 
       await service.refreshReplayGainVolume();
@@ -221,6 +223,29 @@ void main() {
       for (final id in ['s1', 's2', 's3']) {
         expect(player.gainOfSource(urlFor(id)), 1.4);
       }
+    });
+
+    test('tells the settings whether the queue is an album', () async {
+      cache.reachable = false;
+      when(mockSettings.calculateVolumeAdjustment(
+        trackGain: anyNamed('trackGain'),
+        albumGain: anyNamed('albumGain'),
+        trackPeak: anyNamed('trackPeak'),
+        albumPeak: anyNamed('albumPeak'),
+        fromAlbum: anyNamed('fromAlbum'),
+      )).thenAnswer((invocation) =>
+          invocation.namedArguments[#fromAlbum] == true ? 0.3 : 0.9);
+
+      await service.playAlbum(albumOf(2));
+      expect(player.gainOfSource(urlFor('s1')), 0.3);
+
+      when(mockApi.getRandomSongs(any))
+          .thenAnswer((_) async => [song('r1'), song('r2')]);
+      await service.playRandomSongs(2);
+      expect(player.gainOfSource(urlFor('r1')), 0.9);
+
+      await service.playSong(song('x1'));
+      expect(player.gainOfSource(urlFor('x1')), 0.9);
     });
   });
 

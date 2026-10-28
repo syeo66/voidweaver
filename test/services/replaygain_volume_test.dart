@@ -47,6 +47,28 @@ void main() {
           closeTo(dbToLinear(-9), 1e-9));
     });
 
+    test('smart uses the album gain for an album', () async {
+      await settings.setReplayGainMode(ReplayGainMode.smart);
+
+      expect(
+          settings.calculateVolumeAdjustment(
+              trackGain: -6,
+              albumGain: -9,
+              trackPeak: 0.5,
+              albumPeak: 0.5,
+              fromAlbum: true),
+          closeTo(dbToLinear(-9), 1e-9));
+    });
+
+    test('smart uses the track gain outside an album', () async {
+      await settings.setReplayGainMode(ReplayGainMode.smart);
+
+      expect(
+          settings.calculateVolumeAdjustment(
+              trackGain: -6, albumGain: -9, trackPeak: 0.5, albumPeak: 0.5),
+          closeTo(dbToLinear(-6), 1e-9));
+    });
+
     test('album falls back to the track gain', () async {
       await settings.setReplayGainMode(ReplayGainMode.album);
 

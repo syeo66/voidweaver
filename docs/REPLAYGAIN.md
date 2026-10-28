@@ -4,7 +4,7 @@ ReplayGain adjusts playback volume so tracks play at a similar loudness. Setting
 
 | Setting | Range | Effect |
 |---------|-------|--------|
-| Mode | Off / Track / Album | Track evens out every song. Album keeps loudness differences within an album. Off ignores everything below. |
+| Mode | Off / Track / Album / Smart | Track evens out every song. Album keeps loudness differences within an album. Smart uses Album for a queue started from an album and Track otherwise (random songs, a single song from search). Off ignores everything below. |
 | Preamp | -15 to +15 dB | Added to every track's gain |
 | Prevent clipping | on/off | Lowers the gain so `peak × gain` stays ≤ 1.0 |
 | Fallback gain | -15 to +15 dB | Used for tracks without ReplayGain data |
