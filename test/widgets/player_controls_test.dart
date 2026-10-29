@@ -129,6 +129,28 @@ void main() {
     expect(find.byIcon(Icons.pause), findsOneWidget);
   });
 
+  testWidgets('pauses and resumes while buffering', (tester) async {
+    await pumpControls(tester);
+    await playAlbum(tester);
+
+    await tester.runAsync(() async {
+      player.simulateBuffering();
+      await pumpEventQueue();
+    });
+    await tester.pump();
+
+    expect(find.bySemanticsLabel('Loading'), findsOneWidget);
+    await tester.runAsync(() => tester.tap(find.byIcon(Icons.pause)));
+    await tester.pump();
+
+    expect(player.playing, isFalse);
+    expect(find.bySemanticsLabel('Loading'), findsOneWidget);
+    await tester.runAsync(() => tester.tap(find.byIcon(Icons.play_arrow)));
+    await tester.pump();
+
+    expect(player.playing, isTrue);
+  });
+
   testWidgets('enables skip buttons according to the playlist position',
       (tester) async {
     await pumpControls(tester);

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:voidweaver_player/voidweaver_player.dart'
     show ProcessingState, SystemCommandType;
 import 'package:flutter_test/flutter_test.dart';
@@ -402,6 +404,108 @@ void main() {
 
       expect(player.loadedSources.last, urlFor('s2'));
       expect(service.currentIndex, 1);
+    });
+  });
+
+  // The play button stays a pause button while a track loads or buffers
+  group('pausing while loading', () {
+    test('pause while buffering pauses, play continues', () async {
+      cache.reachable = false;
+      await service.playAlbum(albumOf(2));
+      player.simulateBuffering();
+      await until(() => service.playbackState == PlaybackState.loading,
+          'the service shows the buffering');
+      expect(service.playWhenReady, isTrue);
+
+      await service.pause();
+      await pumpEventQueue();
+      expect(player.playing, isFalse);
+      expect(service.playWhenReady, isFalse);
+
+      await service.play();
+      await pumpEventQueue();
+      expect(player.playing, isTrue);
+      expect(service.playWhenReady, isTrue);
+    });
+
+    test('pause during a load keeps the track from starting', () async {
+      player.loadGate = Completer();
+      final loading = service.playAlbum(albumOf(3));
+      await until(() => player.loadedSources.isNotEmpty, 'the load starts');
+      expect(service.playWhenReady, isTrue);
+
+      await service.pause();
+      expect(service.playWhenReady, isFalse);
+      player.loadGate!.complete();
+      player.loadGate = null;
+      await loading;
+      await pumpEventQueue();
+
+      expect(player.playing, isFalse);
+      expect(service.playbackState, PlaybackState.paused);
+      // Nothing that belongs to a started track, like downloading ahead
+      expect(cache.downloaded, isEmpty);
+
+      await service.play();
+      await until(() => service.playbackState == PlaybackState.playing,
+          'playback starts');
+      await until(() => cache.downloaded.isNotEmpty, 'downloads start');
+      expect(player.loadedSources, [urlFor('s1')]);
+    });
+
+    test('play after pause during a load starts the track once loaded',
+        () async {
+      cache.reachable = false;
+      player.loadGate = Completer();
+      final loading = service.playAlbum(albumOf(2));
+      await until(() => player.loadedSources.isNotEmpty, 'the load starts');
+
+      await service.pause();
+      await service.play();
+      expect(service.playWhenReady, isTrue);
+      player.loadGate!.complete();
+      player.loadGate = null;
+      await loading;
+
+      await until(() => service.playbackState == PlaybackState.playing,
+          'playback starts');
+      expect(player.loadedSources, [urlFor('s1')]);
+    });
+
+    test('pause during a skip stays paused on the new track', () async {
+      cache.reachable = false;
+      await service.playAlbum(albumOf(3));
+      await Future.delayed(pastSkipDebounce);
+      player.seekGate = Completer();
+
+      final skipping = service.next();
+      await until(() => service.currentIndex == 1, 'the skip starts');
+      await service.pause();
+      player.seekGate!.complete();
+      player.seekGate = null;
+      await skipping;
+      await pumpEventQueue();
+
+      expect(player.currentIndex, 1);
+      expect(player.playing, isFalse);
+      expect(service.playbackState, PlaybackState.paused);
+    });
+
+    test('a load error while paused stays on the track', () async {
+      cache.cached.add('s3');
+      cache.reachable = false;
+      await service.playAlbum(albumOf(3));
+      player.simulateBuffering();
+      await service.pause();
+
+      player.simulateLoadError();
+      await until(() => service.playbackState == PlaybackState.stopped,
+          'playback stops');
+      await pumpEventQueue();
+
+      expect(service.currentIndex, 0);
+      expect(player.loadedSources, [urlFor('s1')]);
+      expect(player.playing, isFalse);
     });
   });
 

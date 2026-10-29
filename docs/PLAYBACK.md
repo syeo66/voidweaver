@@ -41,6 +41,10 @@ The player's `seek()` completes once the target is ready or has failed (the erro
 
 After `stop()` or an error the player is idle, so `play()` and skips load the queue again (`_loadQueue()`) instead of seeking.
 
+## Pausing while a track loads
+
+While a track loads or buffers, `playbackState` is `loading`, and the play button stays usable with a spinner around it; `playWhenReady` decides between Pause and Play. Loads and skips that start playback (`_loadQueue()` with `play`, `_jumpTo()`) count themselves in `_startsInProgress` and only start the track if `_playPending` is still set when it's ready (`_startUnlessPaused()`). `pause()` clears it, `play()` during the load sets it again instead of loading anew. A track that was paused while it loaded stays paused and gets its start time on `play()`, like a restored song. A load error while paused doesn't continue at a downloaded track: playback stops on the failed one.
+
 ## Skips
 
 - `next()` and `previous()` seek within the sequence (`_jumpTo()`). Nothing is reloaded, and a cached target plays from the cache.

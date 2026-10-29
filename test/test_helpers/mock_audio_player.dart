@@ -48,6 +48,10 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
   /// item that takes a while to load.
   Completer<void>? seekGate;
 
+  /// While set, setting the sequence waits for it to complete, like a first
+  /// track that takes a while to load.
+  Completer<void>? loadGate;
+
   /// The gain of the item for [source] (in the notation of
   /// [sequenceSources]) in the current sequence.
   double? gainOfSource(String source) {
@@ -141,6 +145,10 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
     final index = initialIndex;
     loadedSources.add(_describe(_sequence[index]));
     _moveTo(index, initialPosition);
+    if (loadGate != null) {
+      _setState(playing, ProcessingState.buffering);
+      await loadGate!.future;
+    }
     if (_fails(index)) {
       _setState(playing, ProcessingState.idle);
       throw PlayerException(0, 'Network unreachable', index);
@@ -256,6 +264,9 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
   /// A load error for the current item, e.g. the network dropping while it
   /// streams.
   void simulateLoadError() => _failCurrent();
+
+  /// The current item running out of buffered data while it plays.
+  void simulateBuffering() => _setState(playing, ProcessingState.buffering);
 
   /// A position update without time passing, like after a seek. See
   /// [simulatePlayingTo] for playback.

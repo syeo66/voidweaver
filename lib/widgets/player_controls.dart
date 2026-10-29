@@ -336,17 +336,19 @@ class _ControlButtons extends StatelessWidget {
         AudioPlayerService,
         ({
           PlaybackState state,
+          bool playWhenReady,
           bool hasSong,
           bool hasNext,
         })>(
       selector: (context, service) => (
         state: service.playbackState,
+        playWhenReady: service.playWhenReady,
         hasSong: service.currentSong != null,
         hasNext: service.hasNext,
       ),
       // The skip buttons stay enabled during a skip: a press moves its target
-      // (see AudioPlayerService.next()), and the play button shows a
-      // spinner while a track loads
+      // (see AudioPlayerService.next()), and a spinner rings the play button
+      // while a track loads
       builder: (context, controls, child) {
         return Row(
           mainAxisSize: MainAxisSize.min,
@@ -358,7 +360,7 @@ class _ControlButtons extends StatelessWidget {
               enabled: controls.hasSong,
               onPressed: () => context.read<AudioPlayerService>().previous(),
             ),
-            _buildPlayPauseButton(controls.state),
+            _buildPlayPauseButton(controls.state, controls.playWhenReady),
             _buildSkipButton(
               icon: Icons.skip_next,
               tooltip: 'Next',
@@ -384,34 +386,40 @@ class _ControlButtons extends StatelessWidget {
     );
   }
 
-  Widget _buildPlayPauseButton(PlaybackState state) {
+  /// While a track loads or buffers, a spinner rings the button, which stays
+  /// usable: pausing then keeps playback from starting or continuing.
+  Widget _buildPlayPauseButton(PlaybackState state, bool playWhenReady) {
     return Builder(
       builder: (context) {
-        switch (state) {
-          case PlaybackState.playing:
-            return IconButton(
-              icon: const Icon(Icons.pause),
-              tooltip: 'Pause',
-              onPressed: () => context.read<AudioPlayerService>().pause(),
-            );
-          case PlaybackState.paused:
-          case PlaybackState.stopped:
-            return IconButton(
-              icon: const Icon(Icons.play_arrow),
-              tooltip: 'Play',
-              onPressed: () => context.read<AudioPlayerService>().play(),
-            );
-          case PlaybackState.loading:
-            return const Padding(
-              padding: EdgeInsets.all(8.0),
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, semanticsLabel: 'Loading'),
-              ),
-            );
-        }
+        final showPause = switch (state) {
+          PlaybackState.playing => true,
+          PlaybackState.loading => playWhenReady,
+          PlaybackState.paused || PlaybackState.stopped => false,
+        };
+        final button = showPause
+            ? IconButton(
+                icon: const Icon(Icons.pause),
+                tooltip: 'Pause',
+                onPressed: () => context.read<AudioPlayerService>().pause(),
+              )
+            : IconButton(
+                icon: const Icon(Icons.play_arrow),
+                tooltip: 'Play',
+                onPressed: () => context.read<AudioPlayerService>().play(),
+              );
+        if (state != PlaybackState.loading) return button;
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            const SizedBox(
+              width: 40,
+              height: 40,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, semanticsLabel: 'Loading'),
+            ),
+            button,
+          ],
+        );
       },
     );
   }

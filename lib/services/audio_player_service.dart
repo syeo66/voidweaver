@@ -103,6 +103,12 @@ class AudioPlayerService extends ChangeNotifier {
   // Where the skip in progress ends up; presses meanwhile move it, see _skip()
   int? _skipTarget;
 
+  // Loads and skips that start playback once their track is ready
+  // (_loadQueue() with `play`, _jumpTo()), and whether they still should:
+  // pause() during one clears it, play() sets it again
+  int _startsInProgress = 0;
+  bool _playPending = false;
+
   // Set when a song couldn't be loaded (e.g. offline at startup); the queue
   // is loaded again on the next play()
   bool _needsSourceReload = false;
@@ -179,6 +185,12 @@ class AudioPlayerService extends ChangeNotifier {
   Song? get currentSong => _currentSong;
   bool get hasNext => _currentIndex < _playlist.length - 1;
   bool get hasPrevious => _currentIndex > 0;
+
+  /// Whether playback runs, or starts once the track is ready. While
+  /// [playbackState] is loading, this tells a pause (during a load or
+  /// buffering) from playback that's about to continue.
+  bool get playWhenReady =>
+      _startsInProgress > 0 ? _playPending : _audioPlayer.playing;
 
   // Sleep timer getters
   bool get isSleepTimerActive => _isSleepTimerActive;
@@ -461,53 +473,69 @@ class AudioPlayerService extends ChangeNotifier {
   /// Hands the whole playlist to the player, starting at [startIndex] and
   /// [position]. The player plays cached tracks from the cache and streams
   /// the rest. If the start track can't be loaded and [play] is set,
-  /// continues from the next cached track.
+  /// continues from the next cached track. A pause() meanwhile cancels [play]:
+  /// the track stays loaded, paused.
   Future<void> _loadQueue(int startIndex,
       {Duration position = Duration.zero, bool play = true}) async {
     final generation = ++_generation;
     _awaitedIndex = null;
-
-    _setCurrentTrack(startIndex, position: position, playing: play);
-    _playbackState = PlaybackState.loading;
-    notifyListeners();
-    // Before creating the sources, so the start track gets its own gain
-    await _loadReplayGain(startIndex);
-    if (generation != _generation) return;
-
-    final sources = [
-      for (var i = 0; i < _playlist.length; i++) _sourceFor(generation, i)
-    ];
-
+    _playPending = play;
+    if (play) _startsInProgress++;
     try {
-      await _playerOp(() async {
-        if (generation != _generation) return;
-        _settingSources = true;
-        try {
-          await _audioPlayer.setAudioSources(sources,
-              initialIndex: startIndex, initialPosition: position);
-        } finally {
-          _settingSources = false;
-        }
-      });
-    } on PlayerInterruptedException {
-      // A newer _loadQueue() replaced the sequence
-      return;
-    } catch (e) {
+      _setCurrentTrack(startIndex, position: position, playing: play);
+      _playbackState = PlaybackState.loading;
+      notifyListeners();
+      // Before creating the sources, so the start track gets its own gain
+      await _loadReplayGain(startIndex);
       if (generation != _generation) return;
-      final next = play ? await _nextCachedIndex(startIndex) : null;
-      if (generation != _generation) return;
-      if (next == null) rethrow;
-      _log.warning(
-          '[offline] Could not load index $startIndex, continuing at cached index $next');
-      return _loadQueue(next);
-    }
-    if (generation != _generation) return;
 
-    _needsSourceReload = false;
-    if (play) {
-      _startPlayback();
-      _onTrackStarted();
+      final sources = [
+        for (var i = 0; i < _playlist.length; i++) _sourceFor(generation, i)
+      ];
+
+      try {
+        await _playerOp(() async {
+          if (generation != _generation) return;
+          _settingSources = true;
+          try {
+            await _audioPlayer.setAudioSources(sources,
+                initialIndex: startIndex, initialPosition: position);
+          } finally {
+            _settingSources = false;
+          }
+        });
+      } on PlayerInterruptedException {
+        // A newer _loadQueue() replaced the sequence
+        return;
+      } catch (e) {
+        if (generation != _generation) return;
+        final next = _playPending ? await _nextCachedIndex(startIndex) : null;
+        if (generation != _generation) return;
+        if (next == null) rethrow;
+        _log.warning(
+            '[offline] Could not load index $startIndex, continuing at cached index $next');
+        return await _loadQueue(next, play: _playPending);
+      }
+      if (generation != _generation) return;
+
+      _needsSourceReload = false;
+      if (play) _startUnlessPaused();
+    } finally {
+      if (play) _startsInProgress--;
     }
+  }
+
+  /// Starts playback of the track a load or skip has just made current,
+  /// unless pause() was pressed meanwhile. Then it stays paused, and play()
+  /// starts it as a new play (like a restored song).
+  void _startUnlessPaused() {
+    if (!_playPending) {
+      _currentSongStartTime = null;
+      notifyListeners();
+      return;
+    }
+    _startPlayback();
+    _onTrackStarted();
   }
 
   /// Moves playback to [index] within the current sequence.
@@ -519,27 +547,32 @@ class AudioPlayerService extends ChangeNotifier {
     }
 
     final generation = _generation;
-    // Inside the operation, so an index event for the old track arriving
-    // meanwhile isn't taken for an advance from the new one
-    await _playerOp(() async {
-      if (generation != _generation) return;
-      _setCurrentTrack(index, playing: true);
-      // Before seeking, so the track starts at its own gain
-      await _loadReplayGain(index);
-      if (generation != _generation) return;
-      _awaitedIndex = index;
-      await _seekToItem(index);
-    });
-    // The target failed to load: _onPlayerError() takes over, continuing at
-    // a cached track or stopping on this one
-    if (generation != _generation ||
-        _currentIndex != index ||
-        _needsSourceReload) {
-      return;
-    }
+    _playPending = true;
+    _startsInProgress++;
+    try {
+      // Inside the operation, so an index event for the old track arriving
+      // meanwhile isn't taken for an advance from the new one
+      await _playerOp(() async {
+        if (generation != _generation) return;
+        _setCurrentTrack(index, playing: true);
+        // Before seeking, so the track starts at its own gain
+        await _loadReplayGain(index);
+        if (generation != _generation) return;
+        _awaitedIndex = index;
+        await _seekToItem(index);
+      });
+      // The target failed to load: _onPlayerError() takes over, continuing
+      // at a cached track or stopping on this one
+      if (generation != _generation ||
+          _currentIndex != index ||
+          _needsSourceReload) {
+        return;
+      }
 
-    if (!_audioPlayer.playing) _startPlayback();
-    _onTrackStarted();
+      _startUnlessPaused();
+    } finally {
+      _startsInProgress--;
+    }
   }
 
   /// Seeks to the start of the item at [index]. The player's seek() completes
@@ -655,14 +688,15 @@ class AudioPlayerService extends ChangeNotifier {
     // again. Set right away, so _jumpTo() doesn't take its target for started.
     _needsSourceReload = true;
     _pendingResumePosition = Duration.zero;
-    unawaited(_continueAfterError(failedIndex, error));
+    unawaited(_continueAfterError(failedIndex, error, resume: playWhenReady));
   }
 
-  /// Continues at the next cached track after [failedIndex], or stops on it.
-  Future<void> _continueAfterError(
-      int failedIndex, PlayerException error) async {
+  /// Continues at the next cached track after [failedIndex] if [resume] is
+  /// set (it isn't when the track failed while paused), or stops on it.
+  Future<void> _continueAfterError(int failedIndex, PlayerException error,
+      {required bool resume}) async {
     final generation = _generation;
-    final next = await _nextCachedIndex(failedIndex);
+    final next = resume ? await _nextCachedIndex(failedIndex) : null;
     // The queue was replaced, or a skip took over, while looking
     if (_disposed || generation != _generation || _pendingPlayerOps > 0) {
       return;
@@ -705,6 +739,13 @@ class AudioPlayerService extends ChangeNotifier {
         'Play requested - currentSong: ${_currentSong?.title}, state: $_playbackState');
     if (_playlist.isEmpty) return;
 
+    if (_startsInProgress > 0) {
+      // Paused during a load or skip: it starts playback once it's done
+      _playPending = true;
+      notifyListeners();
+      return;
+    }
+
     if (_currentSong == null ||
         _needsSourceReload ||
         _audioPlayer.processingState == ProcessingState.idle) {
@@ -725,11 +766,18 @@ class AudioPlayerService extends ChangeNotifier {
     _startPlayback();
   }
 
+  /// Pauses, also while a track loads or buffers: a load or skip in progress
+  /// then doesn't start playback.
   Future<void> pause() async {
+    if (_startsInProgress > 0 && _playPending) {
+      _playPending = false;
+      notifyListeners();
+    }
     await _audioPlayer.pause();
   }
 
   Future<void> stop() async {
+    _playPending = false;
     await _audioPlayer.stop();
     _currentPosition = Duration.zero;
     _totalDuration = Duration.zero;
