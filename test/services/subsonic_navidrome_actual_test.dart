@@ -4,11 +4,9 @@ import 'package:xml/xml.dart';
 
 void main() {
   group('Subsonic Navidrome Real Server Response', () {
-    test(
-        'parses ReplayGain from actual Navidrome album response (The Facets of Propaganda)',
-        () {
-      // This is a snippet of the actual XML response from a Navidrome server
-      // for the album "Imperium Delirium" by Shadow of Intent
+    test('parses ReplayGain from an actual Navidrome song element', () {
+      // A <song> element from an actual Navidrome getAlbum response: "The
+      // Facets of Propaganda" from "Imperium Delirium" by Shadow of Intent
       final xml = '''
         <song 
           xmlns="http://subsonic.org/restapi"
