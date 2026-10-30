@@ -16,7 +16,6 @@ import 'network_config.dart';
 import 'network_errors.dart';
 import 'network_retry.dart';
 import 'replaygain_reader.dart';
-import '../utils/redact.dart';
 
 export '../models/subsonic_models.dart';
 
@@ -184,9 +183,11 @@ class SubsonicApi {
     } on TlsException {
       rethrow;
     } catch (e) {
+      // Rethrown as it is, so callers can still tell it by its type. Its
+      // message can contain the request URL, which the log redacts; the UI
+      // shows errors through NetworkErrorHelper, never their message.
       _log.warning('Network request failed: $uri', e);
-      // Other errors (e.g. the client's) can contain the request URL
-      throw Exception(redactCredentials('Network error: $e'));
+      rethrow;
     }
   }
 

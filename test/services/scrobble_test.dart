@@ -576,15 +576,12 @@ void main() {
       // Set up mock duration
       mockAudioPlayer.simulateDurationChange(const Duration(seconds: 180));
 
-      // Record the time before starting playback
-      final beforePlayback = DateTime.now();
+      // The service's clock when playback starts
+      final startedAt = mockAudioPlayer.now;
 
       // Play the album
       await audioPlayerService.playAlbum(album);
       await Future.delayed(const Duration(milliseconds: 100));
-
-      // Record the time after starting playback
-      final afterPlayback = DateTime.now();
 
       // Reset to check scrobble submission
       clearInteractions(mockApi);
@@ -598,16 +595,8 @@ void main() {
           playedAt: captureAnyNamed('playedAt')));
       verification.called(1);
 
-      // Verify the timestamp is reasonable (between before and after playback)
-      final capturedTimestamp = verification.captured.single as DateTime;
-      expect(
-          capturedTimestamp.isAfter(beforePlayback) ||
-              capturedTimestamp.isAtSameMomentAs(beforePlayback),
-          true);
-      expect(
-          capturedTimestamp.isBefore(afterPlayback) ||
-              capturedTimestamp.isAtSameMomentAs(afterPlayback),
-          true);
+      // The time the song started playing
+      expect(verification.captured.single, startedAt);
     });
   });
 }

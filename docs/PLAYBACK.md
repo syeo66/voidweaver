@@ -25,7 +25,7 @@ Every item in the sequence carries its own gain (`AudioSource.gain`, from `_gain
 - A gain read later (from a downloaded file, or by a range request) is set on the song's items with `_updateGains()`. The start track's gain is read before the queue is loaded, and a skip's target before seeking.
 - Changed settings apply to every item at once (`refreshReplayGainVolume()`).
 - Each switch to a new item is logged with the tag `VoidweaverGain` (`adb logcat -s VoidweaverGain`).
-- Track mode still changes the level between songs that run into each other (live albums, mixes), since each has its own gain. Album mode keeps one gain within an album. Smart mode picks between them by the queue's source (`_playlistSource == 'album'`, also after a restore).
+- Track mode still changes the level between songs that run into each other (live albums, mixes), since each has its own gain. Album mode keeps one gain within an album. Smart mode picks between them by the queue's source (`_playlistSource == QueueSource.album`, also after a restore).
 
 ## Downloads and the cache
 

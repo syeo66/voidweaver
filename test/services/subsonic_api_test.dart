@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -92,6 +93,20 @@ void main() {
 
       // Should not throw when disposing
       expect(() => api.dispose(), returnsNormally);
+    });
+  });
+
+  group('SubsonicApi request errors', () {
+    test('keep their type', () async {
+      await HttpOverrides.runZoned(() async {
+        final api = SubsonicApi(
+          serverUrl: 'https://music.example',
+          username: 'user',
+          password: 'pass',
+        );
+        addTearDown(api.dispose);
+        await expectLater(api.ping(), throwsA(isA<StateError>()));
+      }, createHttpClient: (_) => _ThrowingHttpClient());
     });
   });
 
@@ -324,4 +339,22 @@ void main() {
           ));
     });
   });
+}
+
+/// An HTTP client whose requests fail with an error the API doesn't expect.
+class _ThrowingHttpClient implements HttpClient {
+  @override
+  Duration? connectionTimeout;
+  @override
+  int? maxConnectionsPerHost;
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) =>
+      Future.error(StateError('unexpected'));
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

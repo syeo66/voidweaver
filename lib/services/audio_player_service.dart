@@ -22,6 +22,9 @@ enum PlaybackState {
   loading,
 }
 
+/// What the queue was started from. Saved with the queue by its [name].
+enum QueueSource { album, random, song }
+
 /// Identifies an item in the player's sequence: the playlist position it
 /// stands for, and the [AudioPlayerService._loadQueue] call that created it.
 /// Set as each source's tag, so index events map back to songs even while
@@ -76,7 +79,7 @@ class AudioPlayerService extends ChangeNotifier {
   Song? _currentSong;
 
   // Playlist source tracking for persistence
-  String? _playlistSource;
+  QueueSource? _playlistSource;
   String? _sourceId;
 
   // Incremented whenever the player's sequence is replaced. Sources and
@@ -291,7 +294,8 @@ class AudioPlayerService extends ChangeNotifier {
           'Attempting to restore playlist with ${savedState.playlist.length} songs');
 
       _playlist = savedState.playlist;
-      _playlistSource = savedState.playlistSource;
+      _playlistSource =
+          QueueSource.values.asNameMap()[savedState.playlistSource];
       _sourceId = savedState.sourceId;
       final resumeAt = savedState.currentPosition;
 
@@ -342,8 +346,8 @@ class AudioPlayerService extends ChangeNotifier {
         currentIndex: _currentIndex,
         currentPosition: _currentPosition,
         isPlaying: _playbackState == PlaybackState.playing,
-        lastUpdated: DateTime.now(),
-        playlistSource: _playlistSource,
+        lastUpdated: _clock(),
+        playlistSource: _playlistSource?.name,
         sourceId: _sourceId,
       );
 
@@ -372,7 +376,7 @@ class AudioPlayerService extends ChangeNotifier {
 
       _log.info('Playing album: ${album.name} with ${songs.length} songs');
       _playlist = List.of(songs);
-      _playlistSource = 'album';
+      _playlistSource = QueueSource.album;
       _sourceId = album.id;
       await _loadQueue(0);
     } catch (e) {
@@ -393,7 +397,7 @@ class AudioPlayerService extends ChangeNotifier {
 
       _log.info('Playing random songs: ${songs.length} songs loaded');
       _playlist = List.of(songs);
-      _playlistSource = 'random';
+      _playlistSource = QueueSource.random;
       _sourceId = count.toString();
       await _loadQueue(0);
     } catch (e) {
@@ -404,7 +408,7 @@ class AudioPlayerService extends ChangeNotifier {
 
   Future<void> playSong(Song song) async {
     _playlist = [song];
-    _playlistSource = 'song';
+    _playlistSource = QueueSource.song;
     _sourceId = song.id;
     try {
       await _loadQueue(0);
@@ -635,7 +639,7 @@ class AudioPlayerService extends ChangeNotifier {
     _currentSong = _playlist[index];
     _currentPosition = position;
     // A restored song gets its start time once it's resumed, see play()
-    _currentSongStartTime = playing ? DateTime.now() : null;
+    _currentSongStartTime = playing ? _clock() : null;
     // A song resumed past the threshold was scrobbled in its earlier session
     _currentSongScrobbled = position > Duration.zero &&
         _hasReachedScrobbleThreshold(
@@ -760,7 +764,7 @@ class AudioPlayerService extends ChangeNotifier {
 
     if (_currentSongStartTime == null) {
       // First play of a song restored from a previous session
-      _currentSongStartTime = DateTime.now();
+      _currentSongStartTime = _clock();
       _onTrackStarted();
     }
     _startPlayback();
@@ -786,7 +790,7 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   bool _canSkip() {
-    final now = DateTime.now();
+    final now = _clock();
     if (_lastSkipTime != null &&
         now.difference(_lastSkipTime!).inMilliseconds <= _skipDebounceMs) {
       return false;
@@ -963,8 +967,6 @@ class AudioPlayerService extends ChangeNotifier {
     if (song.replayGainTrackGain == null && song.replayGainAlbumGain == null) {
       _rgLog(
           '[ReplayGain] No ReplayGain in API response, reading from file...');
-      final streamUrl = _api.getStreamUrl(song.id);
-      _rgLog('[ReplayGain] Stream URL: $streamUrl');
       try {
         final data = await _audioCache.readReplayGain(song.id) ??
             await _api.readReplayGain(song.id);
@@ -1012,7 +1014,7 @@ class AudioPlayerService extends ChangeNotifier {
         albumGain: song.replayGainAlbumGain,
         trackPeak: song.replayGainTrackPeak,
         albumPeak: song.replayGainAlbumPeak,
-        fromAlbum: _playlistSource == 'album',
+        fromAlbum: _playlistSource == QueueSource.album,
       );
 
   /// Sets the gain of the items in the player's sequence (only those for
@@ -1044,7 +1046,7 @@ class AudioPlayerService extends ChangeNotifier {
 
     final hasTrackGain = trackGain != null;
     final hasAlbumGain = albumGain != null;
-    final rgMode = _settingsService.replayGainMode.toString().split('.').last;
+    final rgMode = _settingsService.replayGainMode.name;
 
     _rgLog('');
     _rgLog('='.padRight(80, '='));
@@ -1052,8 +1054,8 @@ class AudioPlayerService extends ChangeNotifier {
     _rgLog('='.padRight(80, '='));
     _rgLog(
         '[ReplayGain] Song: "${_currentSong!.title}" by "${_currentSong!.artist}" (id=${_currentSong!.id})');
-    _rgLog('[ReplayGain] Stream URL: ${_api.getStreamUrl(_currentSong!.id)}');
-    _rgLog('[ReplayGain] Mode: $rgMode (queue: ${_playlistSource ?? 'none'})');
+    _rgLog(
+        '[ReplayGain] Mode: $rgMode (queue: ${_playlistSource?.name ?? 'none'})');
     _rgLog(
         '[ReplayGain] TrackGain: ${trackGain?.toStringAsFixed(2) ?? 'null'} dB');
     _rgLog(

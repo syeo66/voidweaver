@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/settings_service.dart';
 import '../services/app_state.dart';
+import '../services/network_errors.dart';
 import '../services/replaygain_debug_logger.dart';
 import '../utils/validators.dart';
 import '../widgets/app_version.dart';
@@ -650,7 +651,8 @@ class _CacheSectionState extends State<_CacheSection> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to clear cache: $e'),
+          content: Text(NetworkErrorHelper.getErrorMessage(e,
+              context: 'Failed to clear cache')),
           duration: const Duration(seconds: 3),
         ),
       );
