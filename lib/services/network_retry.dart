@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:http/http.dart' as http;
-import 'package:http_plus/http_plus.dart' as http_plus;
 import 'package:logging/logging.dart';
 import 'network_config.dart';
 
@@ -9,11 +8,11 @@ final _log = Logger('network');
 /// Service for handling network requests with timeout and retry logic
 class NetworkRetryService {
   final NetworkConfig config;
-  final http_plus.HttpPlusClient _httpClient;
+  final http.Client _httpClient;
 
   NetworkRetryService({
     required this.config,
-    required http_plus.HttpPlusClient httpClient,
+    required http.Client httpClient,
   }) : _httpClient = httpClient;
 
   /// Execute an HTTP GET request with retry logic and timeout handling
@@ -130,6 +129,6 @@ class NetworkRetryService {
 
   /// Dispose resources
   void dispose() {
-    // HttpPlusClient disposal is handled by the caller (SubsonicApi)
+    // The HTTP client is closed by the caller (SubsonicApi)
   }
 }

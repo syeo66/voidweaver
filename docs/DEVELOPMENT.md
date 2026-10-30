@@ -29,7 +29,7 @@ Endpoints used: `ping` (checks the credentials on login), `getAlbumList2` (`type
 | Path | Purpose |
 |------|---------|
 | `lib/services/app_state.dart` | App-wide state: login, creates the API and player services, background sync every 5 minutes while the app is visible (`setVisible()`, driven by `AppRouter`'s lifecycle listener) |
-| `lib/services/subsonic_api.dart` | Subsonic client: token auth, response parsing, API cache, HTTP/2 via `http_plus` |
+| `lib/services/subsonic_api.dart` | Subsonic client: token auth, response parsing, API cache. Re-exports the models (`Album`, `Song`, `Artist`, `SearchResult`) from `lib/models/subsonic_models.dart` |
 | `lib/services/audio_player_service.dart` | Hands the playlist to the player and follows it; skips, load errors, ReplayGain gains, scrobbling, prefetching |
 | `packages/voidweaver_player/` | Local plugin: playlist player on Media3 ExoPlayer with a gain stage per item, and the Media3 media session for notification, lock screen and Bluetooth controls (Java on the Android side) |
 | `lib/services/api_cache.dart`, `audio_cache.dart`, `image_cache_manager.dart` | Caching, see [CACHING.md](CACHING.md) |

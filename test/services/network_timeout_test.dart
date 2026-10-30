@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:http2/transport.dart' as http2;
 import 'package:xml/xml.dart';
 
 import 'package:voidweaver/services/network_config.dart';
@@ -91,16 +90,12 @@ void main() {
       expect(config.shouldRetry(const FormatException('Bad format'), 1), false);
     });
 
-    test('retries the HTTP/1.1 and HTTP/2 clients\' connection errors', () {
+    test('retries the HTTP client\'s connection errors', () {
       const config = NetworkConfig.defaultConfig;
 
       expect(
           config.shouldRetry(
               http.ClientException('Connection closed before full header'), 1),
-          true);
-      expect(
-          config.shouldRetry(
-              http2.TransportConnectionException(0, 'terminated'), 1),
           true);
     });
 

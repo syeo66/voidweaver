@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/app_state.dart';
+import '../services/network_errors.dart';
 import '../utils/validators.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -217,7 +218,8 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Connection failed: $e'),
+            content: Text(NetworkErrorHelper.getErrorMessage(e,
+                context: 'Connection failed')),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

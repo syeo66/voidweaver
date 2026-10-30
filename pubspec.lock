@@ -381,14 +381,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.6.0"
-  http2:
-    dependency: "direct main"
-    description:
-      name: http2
-      sha256: "382d3aefc5bd6dc68c6b892d7664f29b5beb3251611ae946a98d35158a82bbfa"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.3.1"
   http_multi_server:
     dependency: transitive
     description:
@@ -405,14 +397,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.1.2"
-  http_plus:
-    dependency: "direct main"
-    description:
-      name: http_plus
-      sha256: "1f6ea2d7bbe55d08910b6489b64249d796074bbe0e7c748f3fc533c5fb6ce0ae"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.2.3"
   image:
     dependency: transitive
     description:

@@ -10,8 +10,6 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.6.0
-  http_plus: ^0.2.3
-  http2: ^2.3.1
   voidweaver_player:
     path: packages/voidweaver_player
   crypto: ^3.0.7

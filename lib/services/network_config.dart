@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
-import 'package:http2/transport.dart' as http2;
 
 /// Network timeout and retry configuration for different types of requests
 class NetworkConfig {
@@ -257,11 +256,10 @@ bool isTimeoutError(Object error) =>
         error.osError?.errorCode == SocketErrorCodes.timedOut);
 
 /// Whether [error] means the connection couldn't be made or broke off.
-/// `http.ClientException` comes from the HTTP/1.1 client (and implements
-/// [SocketException] when caused by one), `TransportException` from HTTP/2.
+/// `http.ClientException` comes from the HTTP client (and implements
+/// [SocketException] when caused by one).
 bool isConnectionError(Object error) =>
     !isTimeoutError(error) &&
     (error is NetworkConnectionException ||
         error is SocketException ||
-        error is http.ClientException ||
-        error is http2.TransportException);
+        error is http.ClientException);

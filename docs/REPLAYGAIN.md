@@ -15,7 +15,7 @@ The gain is `10^((gain + preamp) / 20)`, limited by the peak when clipping preve
 
 1. **Server response**: Navidrome includes ReplayGain in song entries (OpenSubsonic `<replayGain>` element or flat attributes). If present, nothing else is fetched.
 2. **Downloaded file**: for prefetched tracks, tags are read from the cached file (`ReplayGainReader.readFromFile`), which also works offline.
-3. **Range request**: otherwise the first 256 KB of the stream are fetched, plus more if the metadata is larger (ID3v2 tag, FLAC blocks up to the Vorbis comment, MP4 `moov` atom; `ReplayGainReader.readFromUrl`). If the server ignores the Range header and sends the whole file (e.g. a transcoded stream), the metadata is read from that response and then the connection is closed, so the audio isn't downloaded. This goes over a separate HTTP/1.1 client, because `http_plus` can't stop an HTTP/2 download. Starting the track waits for this, so it gives up after 3 seconds and the track plays at the fallback gain.
+3. **Range request**: otherwise the first 256 KB of the stream are fetched, plus more if the metadata is larger (ID3v2 tag, FLAC blocks up to the Vorbis comment, MP4 `moov` atom; `ReplayGainReader.readFromUrl`). If the server ignores the Range header and sends the whole file (e.g. a transcoded stream), the metadata is read from that response and then the connection is closed, so the audio isn't downloaded. Starting the track waits for this, so it gives up after 3 seconds and the track plays at the fallback gain.
 
 Supported tags:
 
