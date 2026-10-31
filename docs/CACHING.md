@@ -4,9 +4,11 @@ Three caches keep the app fast and usable offline. All of them can be cleared fr
 
 ## API responses (`ApiCache`)
 
-`SubsonicApi` wraps read calls in `ApiCache`, which keeps entries in memory and, for persistent ones, as JSON files in `api_cache/` in the app cache directory (one file per key, named by its MD5). Typed data is stored through `toJson`/`fromJson` codecs.
+`SubsonicApi` wraps read calls in `ApiCache`, which keeps entries in memory and, for persistent ones, as JSON files in `api_cache/<scope>/` in the app cache directory (one file per key, named by its MD5). Typed data is stored through `toJson`/`fromJson` codecs.
 
-Older versions kept persistent entries in SharedPreferences. On Android that's a single XML file, loaded whole at startup and rewritten whole on every change, including each playback position save, so a large library slowed both down. The first time the cache is used, those entries are moved to files (search results are dropped). Files are written to a temporary name and then renamed, and a corrupted file is deleted and fetched again.
+- **Scoped per login.** Each `SubsonicApi` has its own `ApiCache`, with the namespace `serverUrl|username`; the scope directory is the namespace's MD5. The memory cache and request deduplication belong to the instance, so a new login never gets the previous one's data or attaches to its requests. `SubsonicApi.dispose()` closes the cache: a fetch still running at logout returns to its caller but stores nothing, so it can't put the server's data back after logout removed it.
+
+Older versions kept persistent entries in SharedPreferences. On Android that's a single XML file, loaded whole at startup and rewritten whole on every change, including each playback position save, so a large library slowed both down. The version after that kept the files directly in `api_cache/`, without scopes. The first time the cache is used, both kinds of old entries are moved into the current login's scope (search results are dropped); they can only belong to it, since logout removes them. Files are written to a temporary name and then renamed, and a corrupted file is deleted and fetched again.
 
 | Call | TTL | Persistent |
 |------|-----|------------|
@@ -20,7 +22,7 @@ Older versions kept persistent entries in SharedPreferences. On Android that's a
 - **Offline fallback**: if a fetch fails, the expired entry is returned instead of the error. Expired entries are replaced but never deleted, so the last known library stays browsable offline.
 - **Versioned entries**: `getOrFetch(version: ...)` takes a cheap request for the version of the data on the server, stored with the entry. An expired entry with the same version is renewed (in memory only) instead of fetched again; a null version means unknown and fetches. The recently added album list uses `getLibraryVersion()`, the last scan and song count from `getScanStatus`, so the 5-minute background sync costs one small request until the server scans the library. Servers that don't report `lastScan` (it's an extension, Navidrome has it) get the full fetch every time. The recently played list has no version, since every play changes it: it's fetched again whenever it expires.
 - **Forced refresh**: `getOrFetch(forceRefresh: true)` fetches even if the entry hasn't expired, and still falls back to it offline. Pull-to-refresh on the album list uses it (`getAlbumList(forceRefresh: true)`).
-- **Clearing**: `SubsonicApi.clearCache()` (Settings, logout) removes every entry, in memory and persisted.
+- **Clearing**: `SubsonicApi.clearCache()` (Settings, logout) removes every entry, in memory and persisted, also those other logins left behind. It waits for writes in progress first, so none lands after the clear.
 
 `getRandomSongs` isn't cached, so each shuffle gets a fresh pick from subsoxy.
 

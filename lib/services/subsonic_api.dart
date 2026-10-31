@@ -45,7 +45,9 @@ class SubsonicApi {
   final String password;
   final String clientName = 'voidweaver';
   final String version = '1.16.1';
-  final ApiCache _cache = ApiCache();
+  // Scoped to the server and user, so another login never sees this one's
+  // data; closed in dispose()
+  late final ApiCache _cache = ApiCache(namespace: '$serverUrl|$username');
   late HttpClient _innerClient;
   late http.Client _httpClient;
   late NetworkRetryService _retryService;
@@ -532,8 +534,10 @@ class SubsonicApi {
     oldClient.close();
   }
 
-  /// Dispose the HTTP client and clean up resources
+  /// Dispose the HTTP client and clean up resources. Requests still running
+  /// fail or finish without caching their results; [clearCache] still works.
   void dispose() {
+    _cache.close();
     _retryService.dispose();
     _httpClient.close();
   }

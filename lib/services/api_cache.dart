@@ -47,45 +47,57 @@ class CacheEntry<T> {
   }
 }
 
-/// Request deduplication and caching service.
+/// Request deduplication and caching service for one login.
 ///
-/// Persistent entries are JSON files in `api_cache/` in the app cache
-/// directory, one per key. They used to be kept in SharedPreferences, which
-/// Android loads whole at startup and rewrites whole on every change (also on
-/// each playback position save); see [_migrateFromSharedPreferences].
+/// Each [SubsonicApi] has its own cache, scoped by its [namespace] (server and
+/// user): the memory cache and the requests in progress belong to the
+/// instance, and persistent entries are JSON files in
+/// `api_cache/<md5 of namespace>/` in the app cache directory, one per key.
+/// So one login never sees another's data, and after [close] (logout) a fetch
+/// that was still running stores nothing.
+///
+/// Persistent entries used to be kept in SharedPreferences, which Android
+/// loads whole at startup and rewrites whole on every change (also on each
+/// playback position save), and later directly in `api_cache/`; see
+/// [_migrateLegacyEntries].
 class ApiCache {
-  static final ApiCache _instance = ApiCache._internal();
-  factory ApiCache() => _instance;
-  ApiCache._internal() : _directoryProvider = _defaultDirectory;
+  ApiCache({required this.namespace}) : _rootProvider = _defaultRoot;
 
-  /// Keeps persistent entries in [directory]; without one, only in memory.
+  /// Keeps persistent entries under [directory]; without one, only in memory.
   @visibleForTesting
-  ApiCache.forTesting({Directory? directory})
-      : _directoryProvider = (() async => directory);
+  ApiCache.forTesting({Directory? directory, this.namespace = 'test'})
+      : _rootProvider = (() async => directory);
+
+  /// Identifies the login the entries belong to
+  final String namespace;
 
   // Old SharedPreferences entries are prefixed with this, see
-  // _migrateFromSharedPreferences()
+  // _migrateLegacyEntries()
   static const _legacyPrefix = 'cache_';
 
   final Map<String, CacheEntry<Object?>> _memoryCache = {};
   final Map<String, Completer<Object?>> _ongoingRequests = {};
-  final Future<Directory?> Function() _directoryProvider;
-  Future<Directory?>? _directory;
+  final Future<Directory?> Function() _rootProvider;
+  Future<_Storage?>? _storageFuture;
+  final Set<Future<void>> _pendingWrites = {};
+  bool _closed = false;
 
-  static Future<Directory?> _defaultDirectory() async =>
+  static Future<Directory?> _defaultRoot() async =>
       Directory('${(await getApplicationCacheDirectory()).path}/api_cache');
 
   /// Prepares the persistent storage. Called by every operation that needs
   /// it; persistence is off if it fails (e.g. in tests without plugins).
   Future<void> initialize() => _storage();
 
-  Future<Directory?> _storage() => _directory ??= () async {
+  Future<_Storage?> _storage() => _storageFuture ??= () async {
         try {
-          final directory = await _directoryProvider();
-          if (directory == null) return null;
-          await directory.create(recursive: true);
-          await _migrateFromSharedPreferences(directory);
-          return directory;
+          final root = await _rootProvider();
+          if (root == null) return null;
+          final scope =
+              Directory('${root.path}/${md5.convert(utf8.encode(namespace))}');
+          await scope.create(recursive: true);
+          await _migrateLegacyEntries(root, scope);
+          return _Storage(root, scope);
         } catch (e) {
           _log.warning('API cache is not persisted', e);
           return null;
@@ -95,23 +107,42 @@ class ApiCache {
   static File _fileFor(Directory directory, String key) =>
       File('${directory.path}/${md5.convert(utf8.encode(key))}.json');
 
-  /// Moves entries saved in SharedPreferences by older versions to files, so
-  /// the library stays browsable offline after the update. Search results
-  /// aren't persisted anymore and are dropped.
-  static Future<void> _migrateFromSharedPreferences(Directory directory) async {
+  /// Moves entries saved by older versions into [scope], so the library stays
+  /// browsable offline after the update. They belong to the current login,
+  /// because logging out removed them. Files directly in [root] are from the
+  /// version before scopes; SharedPreferences entries from the one before
+  /// that. Search results aren't persisted anymore and are dropped.
+  static Future<void> _migrateLegacyEntries(
+      Directory root, Directory scope) async {
+    var moved = 0;
+    await for (final entity in root.list()) {
+      if (entity is File && entity.path.endsWith('.json')) {
+        await entity.rename('${scope.path}/${entity.uri.pathSegments.last}');
+        moved++;
+      }
+    }
+
     final prefs = await SharedPreferences.getInstance();
     final keys =
         prefs.getKeys().where((k) => k.startsWith(_legacyPrefix)).toList();
-    if (keys.isEmpty) return;
     for (final prefKey in keys) {
       final key = prefKey.substring(_legacyPrefix.length);
       final json = prefs.getString(prefKey);
       if (json != null && !key.startsWith('search3?')) {
-        await _fileFor(directory, key).writeAsString(json);
+        await _fileFor(scope, key).writeAsString(json);
       }
       await prefs.remove(prefKey);
+      moved++;
     }
-    _log.info('Moved ${keys.length} API cache entries to files');
+    if (moved > 0) _log.info('Moved $moved API cache entries to $scope');
+  }
+
+  /// Stops storing results: fetches still running finish for their callers,
+  /// but their data isn't cached, in memory or on disk. For a logout, so
+  /// nothing writes the server's data again after it was removed.
+  void close() {
+    _closed = true;
+    _memoryCache.clear();
   }
 
   /// Generate cache key from request parameters
@@ -169,7 +200,7 @@ class ApiCache {
           persistentCached.isValid) {
         _log.fine('Cache HIT (persistent): $key');
         // Store in memory cache for faster access
-        _memoryCache[key] = persistentCached;
+        _remember(key, persistentCached);
         return persistentCached.data;
       }
     }
@@ -201,12 +232,14 @@ class ApiCache {
         result = cached.data as T;
         // Only in memory: rewriting the persistent entry just for its expiry
         // isn't worth it. After a restart the version is checked again.
-        _memoryCache[key] = CacheEntry<T>(
-          data: result,
-          expiresAt: DateTime.now().add(cacheDuration),
-          key: key,
-          version: currentVersion,
-        );
+        _remember(
+            key,
+            CacheEntry<T>(
+              data: result,
+              expiresAt: DateTime.now().add(cacheDuration),
+              key: key,
+              version: currentVersion,
+            ));
       } else {
         _log.fine('Cache MISS: $key');
         result = await fetcher();
@@ -218,11 +251,17 @@ class ApiCache {
           key: key,
           version: currentVersion,
         );
-        _memoryCache[key] = entry;
+        _remember(key, entry);
 
         // Store in persistent cache if enabled
-        if (usePersistentCache) {
-          await _setPersistentCache(key, entry, toJson);
+        if (usePersistentCache && !_closed) {
+          final write = _setPersistentCache(key, entry, toJson);
+          _pendingWrites.add(write);
+          try {
+            await write;
+          } finally {
+            _pendingWrites.remove(write);
+          }
         }
       }
 
@@ -233,7 +272,7 @@ class ApiCache {
       final stale = memoryCached ?? persistentCached;
       if (stale != null) {
         _log.warning('Cache STALE (fetch failed: $error): $key');
-        _memoryCache[key] = stale;
+        _remember(key, stale);
         completer.complete(stale.data as T);
         return stale.data as T;
       }
@@ -244,6 +283,10 @@ class ApiCache {
     }
   }
 
+  void _remember(String key, CacheEntry<Object?> entry) {
+    if (!_closed) _memoryCache[key] = entry;
+  }
+
   // Entries this long (in characters) are decoded on a background isolate,
   // so a large library doesn't stall the UI at startup
   static const _backgroundJsonThreshold = 64 * 1024;
@@ -251,9 +294,9 @@ class ApiCache {
   /// Get data from persistent cache, including expired entries
   Future<CacheEntry<T>?> _getPersistentCache<T>(
       String key, T Function(dynamic json)? fromJson) async {
-    final directory = await _storage();
-    if (directory == null) return null;
-    final file = _fileFor(directory, key);
+    final storage = await _storage();
+    if (storage == null) return null;
+    final file = _fileFor(storage.scope, key);
 
     try {
       if (!await file.exists()) return null;
@@ -273,9 +316,9 @@ class ApiCache {
   /// Set data in persistent cache
   Future<void> _setPersistentCache<T>(
       String key, CacheEntry<T> entry, Object? Function(T data)? toJson) async {
-    final directory = await _storage();
-    if (directory == null) return;
-    final file = _fileFor(directory, key);
+    final storage = await _storage();
+    if (storage == null) return;
+    final file = _fileFor(storage.scope, key);
 
     try {
       final json = {
@@ -309,21 +352,25 @@ class ApiCache {
   void clearEntry(String endpoint, [Map<String, String>? params]) {
     final key = _generateKey(endpoint, params);
     _memoryCache.remove(key);
-    unawaited(_storage().then((directory) async {
-      if (directory != null) await _delete(_fileFor(directory, key));
+    unawaited(_storage().then((storage) async {
+      if (storage != null) await _delete(_fileFor(storage.scope, key));
     }));
     _log.fine('Cache CLEARED: $key');
   }
 
-  /// Clear all cache entries, also those persisted and never loaded
+  /// Clear all cache entries, also those persisted and never loaded, and
+  /// those of other logins left behind. Waits for writes in progress first,
+  /// so none of them lands after the clear.
   Future<void> clearAll() async {
     _memoryCache.clear();
-    final directory = await _storage();
-    if (directory != null) {
+    final storage = await _storage();
+    await Future.wait(_pendingWrites.toList());
+    if (storage != null) {
       try {
-        await for (final entity in directory.list()) {
+        await for (final entity in storage.root.list()) {
           await entity.delete(recursive: true);
         }
+        if (!_closed) await storage.scope.create(recursive: true);
       } catch (e) {
         _log.warning('Error removing persistent cache entries', e);
       }
@@ -331,4 +378,13 @@ class ApiCache {
 
     _log.info('Cache CLEARED ALL');
   }
+}
+
+/// Where persistent entries are kept: [scope] for this login's, inside
+/// [root] with those of any other login
+class _Storage {
+  final Directory root;
+  final Directory scope;
+
+  const _Storage(this.root, this.scope);
 }

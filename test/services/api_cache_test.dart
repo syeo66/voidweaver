@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -5,6 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/api_cache.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
+
+/// The files under [directory], in all scopes
+List<File> filesIn(Directory directory) =>
+    directory.listSync(recursive: true).whereType<File>().toList();
 
 void main() {
   group('API Cache Tests', () {
@@ -238,7 +243,7 @@ void main() {
       final restarted = ApiCache.forTesting(directory: directory);
       await restarted.clearAll();
 
-      expect(directory.listSync(), isEmpty);
+      expect(filesIn(directory), isEmpty);
     });
 
     test('moves entries from SharedPreferences to files, except searches',
@@ -264,7 +269,7 @@ void main() {
           usePersistentCache: true);
 
       expect(result, 'artists');
-      expect(fresh.listSync(), hasLength(1));
+      expect(filesIn(fresh), hasLength(1));
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getKeys(), {'themeMode'});
     });
@@ -272,7 +277,7 @@ void main() {
     test('a corrupted file is dropped and fetched again', () async {
       await cache.getOrFetch<String>('endpoint', null, () async => 'saved',
           usePersistentCache: true);
-      final file = directory.listSync().single as File;
+      final file = filesIn(directory).single;
       file.writeAsStringSync('{not json');
 
       final restarted = ApiCache.forTesting(directory: directory);
@@ -417,6 +422,108 @@ void main() {
         );
         expect(result, 'data 1');
         expect(fetches, 1);
+      });
+    });
+
+    group('scopes', () {
+      Future<String> get(ApiCache cache, String value,
+              {bool persistent = true}) =>
+          cache.getOrFetch<String>('endpoint', null, () async => value,
+              usePersistentCache: persistent);
+
+      test('another login sees neither memory nor persisted entries', () async {
+        final serverA = ApiCache.forTesting(
+            directory: directory, namespace: 'https://a|user');
+        final serverB = ApiCache.forTesting(
+            directory: directory, namespace: 'https://b|user');
+
+        expect(await get(serverA, 'from A'), 'from A');
+        expect(await get(serverB, 'from B'), 'from B');
+
+        final restartedA = ApiCache.forTesting(
+            directory: directory, namespace: 'https://a|user');
+        expect(await get(restartedA, 'fetched again'), 'from A');
+      });
+
+      test('the same server with another user is another scope', () async {
+        final alice = ApiCache.forTesting(
+            directory: directory, namespace: 'https://a|alice');
+        final bob = ApiCache.forTesting(
+            directory: directory, namespace: 'https://a|bob');
+
+        await get(alice, 'alice');
+        expect(await get(bob, 'bob'), 'bob');
+      });
+
+      test('a fetch finishing after close() stores nothing', () async {
+        final fetch = Completer<String>();
+        final loggedOut = ApiCache.forTesting(directory: directory);
+        final result = loggedOut.getOrFetch<String>(
+            'endpoint', null, () => fetch.future,
+            usePersistentCache: true);
+        // Let it reach the fetcher
+        await Future<void>.delayed(Duration.zero);
+
+        loggedOut.close();
+        await loggedOut.clearAll();
+        fetch.complete('late');
+
+        // Its caller still gets the result, but nothing is kept
+        expect(await result, 'late');
+        expect(filesIn(directory), isEmpty);
+        final relogin = ApiCache.forTesting(directory: directory);
+        expect(await get(relogin, 'fresh'), 'fresh');
+      });
+
+      test('clearAll waits for a write in progress', () async {
+        final writing = Completer<void>();
+        final saving = cache.getOrFetch<List<String>>(
+            'large', null, () async => List.filled(200000, 'entry'),
+            usePersistentCache: true,
+            toJson: (data) {
+              // Called when the write starts; the list is then encoded on an
+              // isolate, so the write is still running when clearAll() starts
+              writing.complete();
+              return data;
+            },
+            fromJson: (json) => (json as List<dynamic>).cast<String>());
+        await writing.future;
+
+        await cache.clearAll();
+        await saving;
+
+        expect(filesIn(directory), isEmpty);
+      });
+
+      test('clearAll removes the entries of other logins too', () async {
+        final other = ApiCache.forTesting(
+            directory: directory, namespace: 'https://other|user');
+        await get(other, 'other');
+        await get(cache, 'mine');
+
+        await cache.clearAll();
+
+        expect(filesIn(directory), isEmpty);
+        // Still usable afterwards
+        await get(cache, 'again');
+        expect(filesIn(directory), hasLength(1));
+      });
+
+      test('moves entries of the version without scopes into the scope',
+          () async {
+        final fresh = await Directory.systemTemp.createTemp('api_cache_test');
+        addTearDown(() => fresh.delete(recursive: true));
+        final unscoped = ApiCache.forTesting(directory: fresh);
+        await get(unscoped, 'saved before the update');
+        // Where the version without scopes kept it
+        final file = filesIn(fresh).single;
+        file.renameSync('${fresh.path}/${file.uri.pathSegments.last}');
+        file.parent.deleteSync();
+
+        final updated =
+            ApiCache.forTesting(directory: fresh, namespace: 'https://a|user');
+        expect(await get(updated, 'fetched'), 'saved before the update');
+        expect(fresh.listSync().whereType<File>(), isEmpty);
       });
     });
 
