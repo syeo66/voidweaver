@@ -52,6 +52,13 @@ class SubsonicApi {
   late http.Client _httpClient;
   late NetworkRetryService _retryService;
   NetworkConfig _networkConfig;
+  bool _disposed = false;
+
+  /// Whether the server refused the credentials (e.g. the password was
+  /// changed on the server). Set by every request the server answers: an
+  /// answer other than an auth error clears it. Requests that don't reach
+  /// the server leave it as it is.
+  final ValueNotifier<bool> credentialsRejected = ValueNotifier(false);
 
   SubsonicApi({
     required this.serverUrl,
@@ -112,7 +119,28 @@ class SubsonicApi {
     Map<String, String>? extraParams,
     NetworkRequestType requestType = NetworkRequestType.metadata,
   ]) async {
-    return _parseBody(await _fetchBody(endpoint, extraParams, requestType));
+    return _watchCredentials(() async =>
+        _parseBody(await _fetchBody(endpoint, extraParams, requestType)));
+  }
+
+  /// Runs [request], updating [credentialsRejected] from its outcome
+  Future<T> _watchCredentials<T>(Future<T> Function() request) async {
+    try {
+      final result = await request();
+      _setCredentialsRejected(false);
+      return result;
+    } on SubsonicException catch (e) {
+      // The server checks the credentials first: any other error means it
+      // accepted them
+      _setCredentialsRejected(e.isAuthError);
+      rethrow;
+    }
+  }
+
+  void _setCredentialsRejected(bool rejected) {
+    if (_disposed || credentialsRejected.value == rejected) return;
+    if (rejected) _log.warning('The server rejected the credentials');
+    credentialsRejected.value = rejected;
   }
 
   /// Like [_makeRequest], but decodes and parses the response with [parse]
@@ -125,8 +153,8 @@ class SubsonicApi {
     NetworkRequestType requestType,
     T Function(XmlDocument doc) parse,
   ) async {
-    return parseInBackground(
-        await _fetchBody(endpoint, extraParams, requestType), parse);
+    return _watchCredentials(() async => parseInBackground(
+        await _fetchBody(endpoint, extraParams, requestType), parse));
   }
 
   /// Parses [body] with [parse] on a background isolate. Static, so the
@@ -537,6 +565,8 @@ class SubsonicApi {
   /// Dispose the HTTP client and clean up resources. Requests still running
   /// fail or finish without caching their results; [clearCache] still works.
   void dispose() {
+    _disposed = true;
+    credentialsRejected.dispose();
     _cache.close();
     _retryService.dispose();
     _httpClient.close();

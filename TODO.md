@@ -17,5 +17,4 @@
 - [ ] Battery optimization
 
 ## Tests
-- [ ] Integration tests for full user flows
-- [ ] Playback tests beyond the mocked player
+- [ ] More integration flows: offline (cached tracks), skips during loads, playback restore after a restart

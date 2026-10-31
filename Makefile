@@ -1,5 +1,5 @@
 # Voidweaver Flutter Project Makefile
-.PHONY: help setup analyze format test test-android check-emulator build-release clean doctor devices run install upgrade
+.PHONY: help setup analyze format test test-android test-integration check-emulator build-release clean doctor devices run install upgrade
 
 # Default target
 all: format analyze test
@@ -12,6 +12,7 @@ help:
 	@echo "  format        - Format code (dart format)"
 	@echo "  test          - Run the Dart tests (app and player plugin)"
 	@echo "  test-android  - Run the player plugin's JVM tests (Gradle, needs JAVA_HOME)"
+	@echo "  test-integration - Run the user-flow tests on a device/emulator (fake server, debug build)"
 	@echo "  check-emulator - Check media session, media keys and resumption in the running emulator"
 	@echo "  build-release - Build release APK (includes format, analyze, test)"
 	@echo "  clean         - Clean build artifacts"
@@ -40,7 +41,7 @@ upgrade:
 # Format code
 format: setup
 	@echo "Formatting Dart code..."
-	dart format lib/ test/ packages/voidweaver_player/lib/ packages/voidweaver_player/test/
+	dart format lib/ test/ integration_test/ packages/voidweaver_player/lib/ packages/voidweaver_player/test/
 	@echo "Code formatting complete."
 
 # Static analysis
@@ -61,6 +62,13 @@ test-android: setup
 	@echo "Running Android unit tests..."
 	cd android && ./gradlew :voidweaver_player:testDebugUnitTest
 	@echo "Android unit tests complete."
+
+# User flows on a device or emulator, against the fake Subsonic server
+# running in the app (integration_test/, debug build)
+test-integration: setup
+	@echo "Running integration tests..."
+	flutter test integration_test
+	@echo "Integration tests complete."
 
 # System integration of the release build in the running emulator
 # (tool/emulator_check.sh: media session, notification, media keys, resumption)

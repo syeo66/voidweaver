@@ -78,6 +78,11 @@ class AppState extends ChangeNotifier {
   SyncStatus get syncStatus => _syncStatus;
   DateTime? get lastSyncTime => _lastSyncTime;
 
+  /// Whether the server refused the saved credentials, e.g. because the
+  /// password was changed on the server. [updatePassword] fixes it without
+  /// logging out.
+  bool get credentialsRejected => _api?.credentialsRejected.value ?? false;
+
   /// Plays not yet scrobbled to the server; a logout drops them
   int get pendingScrobbles => _scrobbleQueue?.pendingSubmissions ?? 0;
 
@@ -133,6 +138,7 @@ class AppState extends ChangeNotifier {
         }
       }
       _api = api;
+      api.credentialsRejected.addListener(notifyListeners);
 
       _audioCache = AudioCache(namespace: serverUrl);
       _scrobbleQueue = ScrobbleQueue(api);
@@ -167,6 +173,32 @@ class AppState extends ChangeNotifier {
     // the home screen shows right away and fills in
     unawaited(loadAlbums());
     unawaited(_restorePlayback(_audioPlayerService!));
+  }
+
+  /// Logs in again with a new [password] for the same server and user, for
+  /// when the server rejected the saved one ([credentialsRejected]). Unlike
+  /// a logout this keeps the pending scrobbles, the saved queue and the
+  /// caches; the player is set up again, with the queue restored, paused.
+  ///
+  /// Throws if the server doesn't accept [password] (or can't be reached);
+  /// the current login stays as it is then.
+  Future<void> updatePassword(String password) async {
+    final current = _api;
+    if (current == null) throw StateError('Not logged in');
+    final check = SubsonicApi(
+      serverUrl: current.serverUrl,
+      username: current.username,
+      password: password,
+      networkConfig: _settingsService!.networkConfig,
+    );
+    try {
+      await check.ping();
+    } finally {
+      check.dispose();
+    }
+    // Logged out or in again meanwhile
+    if (!identical(current, _api)) return;
+    await configure(current.serverUrl, current.username, password);
   }
 
   /// Restores the queue saved by the last session, then plays it if a media

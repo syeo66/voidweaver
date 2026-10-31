@@ -73,6 +73,9 @@ class ScrobbleQueue {
     _startProcessingTimer();
     _log.info(
         'ScrobbleQueue initialized with ${_queue.length} pending requests');
+    // Plays left from the last session, or from a login whose password the
+    // server rejected, go out now rather than at the first timer tick
+    unawaited(_processQueue());
   }
 
   /// Queue a "now playing" notification

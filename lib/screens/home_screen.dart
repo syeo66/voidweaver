@@ -5,6 +5,7 @@ import '../services/app_state.dart';
 import '../services/image_cache_manager.dart';
 import '../services/audio_player_service.dart';
 import '../services/subsonic_api.dart';
+import '../widgets/credentials_banner.dart';
 import '../widgets/album_list.dart';
 import '../widgets/player_controls.dart';
 import '../widgets/sync_status_indicator.dart';
@@ -150,6 +151,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
+          const CredentialsBanner(),
           Expanded(
             child: IndexedStack(
               index: _currentIndex,
