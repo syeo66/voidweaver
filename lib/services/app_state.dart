@@ -151,6 +151,9 @@ class AppState extends ChangeNotifier {
       _startBackgroundSync();
       notifyListeners();
     } catch (e) {
+      // Saving the credentials can fail after the services were created;
+      // release them (the player's media session among them)
+      _disposeServices();
       _configurationError = NetworkErrorHelper.getErrorMessage(e);
       _error = _configurationError;
       _configurationLoadingState = LoadingState.error;

@@ -60,6 +60,7 @@ How the player's queue is followed, downloads swapped in, load errors, skips, sy
 ## Android
 
 - `MainActivity` gets its `FlutterEngine` from the plugin's `AppEngine`, which keeps it cached so Dart keeps running without the activity. `PlaybackService` starts the same engine without an activity to resume playback for a media button (see [PLAYBACK.md](PLAYBACK.md#bluetooth-and-system-controls)). It must not request audio focus (see [PLAYBACK.md](PLAYBACK.md#audio-focus)).
+- Backups are off: `allowBackup="false"`, plus `res/xml/data_extraction_rules.xml` because on Android 12+ `allowBackup` alone doesn't stop the transfer to a new device. The credentials are encrypted with a Keystore key that never leaves the device, so a restored copy can't be read. The settings share one SharedPreferences file with the saved queue and pending scrobbles, so they can't be backed up on their own.
 - The plugin's manifest declares `PlaybackService` (`foregroundServiceType="mediaPlayback"`) and its permissions; it's merged into the app's.
 - Versioning: the version name (`1.1.0`) comes from `pubspec.yaml` and is bumped by hand. The build number (`versionCode`) is the git commit count, set in `android/app/build.gradle.kts`, so it rises with every commit; the pubspec's `+N` or `--build-number` only wins if it's higher. CI checks out the full history for this. Settings shows both at the bottom.
 

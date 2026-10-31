@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nothing is backed up or moved to a new device (Android 12+; older
+     versions only look at allowBackup in the manifest). The credentials are
+     encrypted with a Keystore key that stays on this device, so a copy can't
+     be read elsewhere; the saved queue, pending scrobbles and caches belong
+     to the server login. Settings all share one SharedPreferences file with
+     those, so they can't be kept apart. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>
