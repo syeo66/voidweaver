@@ -50,6 +50,21 @@ void main() {
       expect(scrobbleQueue.queueSize, 1);
     });
 
+    test('counts only submissions as pending plays', () async {
+      when(mockApi.scrobbleNowPlaying(any))
+          .thenAnswer((_) => Future.delayed(const Duration(milliseconds: 100)));
+      when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
+          .thenAnswer((_) => Future.delayed(const Duration(milliseconds: 100)));
+      await scrobbleQueue.initialize();
+
+      await scrobbleQueue.queueNowPlaying('song1');
+      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
+      await scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now());
+
+      expect(scrobbleQueue.queueSize, 3);
+      expect(scrobbleQueue.pendingSubmissions, 2);
+    });
+
     test('should process now playing request successfully', () async {
       when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {});
 

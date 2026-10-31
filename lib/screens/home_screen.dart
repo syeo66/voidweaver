@@ -115,7 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.more_vert),
             onSelected: (value) {
               if (value == 'logout') {
-                unawaited(context.read<AppState>().clearConfiguration());
+                unawaited(_confirmLogout());
               } else if (value == 'settings') {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -210,6 +210,37 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+  }
+
+  /// Asks before logging out, which removes the credentials and the server's
+  /// data, including plays that haven't been scrobbled yet.
+  Future<void> _confirmLogout() async {
+    final appState = context.read<AppState>();
+    final pending = appState.pendingScrobbles;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Log out?'),
+        content: Text([
+          'You will have to log in again. Settings are kept.',
+          if (pending == 1)
+            '1 play hasn\'t been sent to the server yet and will be lost.'
+          else if (pending > 1)
+            '$pending plays haven\'t been sent to the server yet and will be lost.',
+        ].join('\n\n')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) await appState.clearConfiguration();
   }
 
   Widget _buildNowPlayingScreen() {

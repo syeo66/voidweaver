@@ -22,8 +22,12 @@ class _FakeAppState extends AppState {
   final AudioPlayerService _fakePlayer;
   final List<Album> _fakeAlbums;
   bool loggedOut = false;
+  int pending = 0;
 
   _FakeAppState(this._fakeApi, this._fakePlayer, this._fakeAlbums);
+
+  @override
+  int get pendingScrobbles => pending;
 
   @override
   SubsonicApi? get api => _fakeApi;
@@ -231,14 +235,46 @@ void main() {
         isNotNull);
   });
 
-  testWidgets('logs out from the menu', (tester) async {
-    await pumpHome(tester);
-
+  Future<void> openLogout(WidgetTester tester) async {
     await tester.tap(find.byIcon(Icons.more_vert));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Logout'));
     await tester.pumpAndSettle();
+  }
+
+  testWidgets('logs out from the menu once confirmed', (tester) async {
+    await pumpHome(tester);
+    await openLogout(tester);
+
+    expect(find.text('Log out?'), findsOneWidget);
+    expect(find.textContaining('sent to the server'), findsNothing);
+    expect(appState.loggedOut, isFalse);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Log out'));
+    await tester.pumpAndSettle();
 
     expect(appState.loggedOut, isTrue);
+  });
+
+  testWidgets('cancelling the logout keeps the login', (tester) async {
+    await pumpHome(tester);
+    await openLogout(tester);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Log out?'), findsNothing);
+    expect(appState.loggedOut, isFalse);
+  });
+
+  testWidgets('the logout warns about plays not yet scrobbled', (tester) async {
+    appState.pending = 3;
+    await pumpHome(tester);
+    await openLogout(tester);
+
+    expect(
+        find.textContaining(
+            '3 plays haven\'t been sent to the server yet and will be lost.'),
+        findsOneWidget);
   });
 }

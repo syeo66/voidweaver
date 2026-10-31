@@ -78,6 +78,9 @@ class AppState extends ChangeNotifier {
   SyncStatus get syncStatus => _syncStatus;
   DateTime? get lastSyncTime => _lastSyncTime;
 
+  /// Plays not yet scrobbled to the server; a logout drops them
+  int get pendingScrobbles => _scrobbleQueue?.pendingSubmissions ?? 0;
+
   // Enhanced loading state getters
   LoadingState get configurationLoadingState => _configurationLoadingState;
   String? get configurationError => _configurationError;

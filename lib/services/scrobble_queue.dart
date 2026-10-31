@@ -243,6 +243,11 @@ class ScrobbleQueue {
   /// Get current queue size
   int get queueSize => _queue.length;
 
+  /// Plays not yet sent to the server. Without the "now playing" requests,
+  /// which are dropped rather than retried anyway.
+  int get pendingSubmissions =>
+      _queue.where((r) => r.type == ScrobbleType.submission).length;
+
   /// Manually trigger queue processing (useful for testing or when network becomes available)
   Future<void> processQueue() async {
     await _processQueue();
