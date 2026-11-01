@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:logging/logging.dart';
 import '../services/settings_service.dart';
 import '../services/network_config.dart';
+
+final _log = Logger('advanced_network_dialog');
 
 class AdvancedNetworkSettingsDialog extends StatefulWidget {
   final SettingsService settingsService;
@@ -25,10 +28,16 @@ class _AdvancedNetworkSettingsDialogState
   late bool _enableRetryOnTimeout;
   late bool _enableRetryOnConnectionError;
 
+  /// The config the edited fields are applied to on save, so the settings
+  /// the dialog doesn't show (retry delays and backoff) are kept, or reset
+  /// with "Reset to Defaults"
+  late NetworkConfig _baseConfig;
+
   @override
   void initState() {
     super.initState();
     final config = widget.settingsService.networkConfig;
+    _baseConfig = config;
 
     _connectionTimeoutController = TextEditingController(
       text: config.connectionTimeout.inSeconds.toString(),
@@ -167,6 +176,7 @@ class _AdvancedNetworkSettingsDialogState
   void _resetToDefaults() {
     const defaultConfig = NetworkConfig.defaultConfig;
     setState(() {
+      _baseConfig = defaultConfig;
       _connectionTimeoutController.text =
           defaultConfig.connectionTimeout.inSeconds.toString();
       _requestTimeoutController.text =
@@ -182,62 +192,75 @@ class _AdvancedNetworkSettingsDialogState
     });
   }
 
-  void _saveSettings() async {
-    try {
-      final connectionTimeout = int.parse(_connectionTimeoutController.text);
-      final requestTimeout = int.parse(_requestTimeoutController.text);
-      final metadataTimeout = int.parse(_metadataTimeoutController.text);
-      final streamingTimeout = int.parse(_streamingTimeoutController.text);
-      final maxRetries = int.parse(_maxRetriesController.text);
-
-      // Validate inputs
-      if (connectionTimeout < 1 || connectionTimeout > 300) {
-        _showError('Connection timeout must be between 1 and 300 seconds');
-        return;
-      }
-      if (requestTimeout < 1 || requestTimeout > 600) {
-        _showError('Request timeout must be between 1 and 600 seconds');
-        return;
-      }
-      if (metadataTimeout < 1 || metadataTimeout > 300) {
-        _showError('Metadata timeout must be between 1 and 300 seconds');
-        return;
-      }
-      if (streamingTimeout < 1 || streamingTimeout > 1200) {
-        _showError('Streaming timeout must be between 1 and 1200 seconds');
-        return;
-      }
-      if (maxRetries < 0 || maxRetries > 10) {
-        _showError('Max retries must be between 0 and 10');
-        return;
-      }
-
-      // Create new config
-      final newConfig = NetworkConfig(
-        connectionTimeout: Duration(seconds: connectionTimeout),
-        requestTimeout: Duration(seconds: requestTimeout),
-        metadataTimeout: Duration(seconds: metadataTimeout),
-        streamingTimeout: Duration(seconds: streamingTimeout),
-        maxRetryAttempts: maxRetries,
-        enableRetryOnTimeout: _enableRetryOnTimeout,
-        enableRetryOnConnectionError: _enableRetryOnConnectionError,
-      );
-
-      await widget.settingsService.setNetworkConfig(newConfig);
-
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Network settings saved successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
+  Future<void> _saveSettings() async {
+    final connectionTimeout = _parse(_connectionTimeoutController);
+    final requestTimeout = _parse(_requestTimeoutController);
+    final metadataTimeout = _parse(_metadataTimeoutController);
+    final streamingTimeout = _parse(_streamingTimeoutController);
+    final maxRetries = _parse(_maxRetriesController);
+    if (connectionTimeout == null ||
+        requestTimeout == null ||
+        metadataTimeout == null ||
+        streamingTimeout == null ||
+        maxRetries == null) {
       _showError('Invalid input: Please enter valid numbers');
+      return;
     }
+
+    // Validate inputs
+    if (connectionTimeout < 1 || connectionTimeout > 300) {
+      _showError('Connection timeout must be between 1 and 300 seconds');
+      return;
+    }
+    if (requestTimeout < 1 || requestTimeout > 600) {
+      _showError('Request timeout must be between 1 and 600 seconds');
+      return;
+    }
+    if (metadataTimeout < 1 || metadataTimeout > 300) {
+      _showError('Metadata timeout must be between 1 and 300 seconds');
+      return;
+    }
+    if (streamingTimeout < 1 || streamingTimeout > 1200) {
+      _showError('Streaming timeout must be between 1 and 1200 seconds');
+      return;
+    }
+    if (maxRetries < 0 || maxRetries > 10) {
+      _showError('Max retries must be between 0 and 10');
+      return;
+    }
+
+    final newConfig = _baseConfig.copyWith(
+      connectionTimeout: Duration(seconds: connectionTimeout),
+      requestTimeout: Duration(seconds: requestTimeout),
+      metadataTimeout: Duration(seconds: metadataTimeout),
+      streamingTimeout: Duration(seconds: streamingTimeout),
+      maxRetryAttempts: maxRetries,
+      enableRetryOnTimeout: _enableRetryOnTimeout,
+      enableRetryOnConnectionError: _enableRetryOnConnectionError,
+    );
+
+    try {
+      await widget.settingsService.setNetworkConfig(newConfig);
+    } catch (e) {
+      _log.warning('Saving the network settings failed', e);
+      if (mounted) _showError('Could not save the network settings');
+      return;
+    }
+
+    if (!mounted) return;
+    // The dialog's context goes away with the pop
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.of(context).pop();
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Network settings saved successfully'),
+        backgroundColor: Colors.green,
+      ),
+    );
   }
+
+  static int? _parse(TextEditingController controller) =>
+      int.tryParse(controller.text.trim());
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(

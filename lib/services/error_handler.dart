@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 
@@ -13,41 +12,19 @@ class ErrorHandler {
   ErrorHandler._();
 
   final List<ErrorReporter> _reporters = [];
-  late final FlutterErrorDetails Function(Object error, StackTrace? stackTrace)
-      _errorDetailsBuilder;
 
   /// Initialize the global error handler.
-  /// This should be called early in main() before runApp().
+  /// This should be called early in main() before runApp(). Errors in async
+  /// code outside the framework reach [reportError] through the zone that
+  /// main() runs the app in.
   void initialize() {
     // Handle Flutter framework errors
-    FlutterError.onError = (FlutterErrorDetails details) {
-      _handleFlutterError(details);
-    };
+    FlutterError.onError = _handleFlutterError;
 
-    // Handle errors outside of Flutter framework (like in Isolates)
+    // Handle errors that reach the root isolate's dispatcher
     PlatformDispatcher.instance.onError = (error, stack) {
-      _handlePlatformError(error, stack);
+      _handleFlutterError(_errorDetails(error, stack, 'Platform error'));
       return true; // Indicate that we've handled the error
-    };
-
-    // Handle errors in async operations that don't bubble up to Flutter
-    runZonedGuarded(() {
-      // This zone captures any unhandled async errors
-    }, (error, stack) {
-      _handleAsyncError(error, stack);
-    });
-
-    _errorDetailsBuilder = (Object error, StackTrace? stackTrace) {
-      return FlutterErrorDetails(
-        exception: error,
-        stack: stackTrace,
-        library: 'error_handler',
-        context: ErrorDescription('Global error handler'),
-        informationCollector: () => [
-          DiagnosticsProperty('timestamp', DateTime.now().toIso8601String()),
-          DiagnosticsProperty('platform', defaultTargetPlatform.name),
-        ],
-      );
     };
 
     _log.fine('ErrorHandler initialized');
@@ -58,14 +35,34 @@ class ErrorHandler {
     _reporters.add(reporter);
   }
 
+  /// Remove a reporter added with [addReporter]
+  void removeReporter(ErrorReporter reporter) {
+    _reporters.remove(reporter);
+  }
+
+  FlutterErrorDetails _errorDetails(
+      Object error, StackTrace? stackTrace, String context) {
+    return FlutterErrorDetails(
+      exception: error,
+      stack: stackTrace,
+      library: 'error_handler',
+      context: ErrorDescription(context),
+      informationCollector: () => [
+        DiagnosticsProperty('timestamp', DateTime.now().toIso8601String()),
+        DiagnosticsProperty('platform', defaultTargetPlatform.name),
+      ],
+    );
+  }
+
   void _handleFlutterError(FlutterErrorDetails details) {
     // Always log to console in debug mode
     if (kDebugMode) {
       FlutterError.presentError(details);
     }
 
-    // Report to all registered reporters
-    for (final reporter in _reporters) {
+    // Report to all registered reporters; a copy, so a reporter may remove
+    // itself
+    for (final reporter in List.of(_reporters)) {
       try {
         reporter.reportError(details);
       } catch (e) {
@@ -75,48 +72,10 @@ class ErrorHandler {
     }
   }
 
-  void _handlePlatformError(Object error, StackTrace stack) {
-    final details = _errorDetailsBuilder(error, stack);
-    _handleFlutterError(details);
-  }
-
-  void _handleAsyncError(Object error, StackTrace stack) {
-    final details = _errorDetailsBuilder(error, stack);
-    _handleFlutterError(details);
-  }
-
   /// Manually report an error that was caught and handled
   void reportError(Object error, StackTrace? stackTrace, {String? context}) {
-    final details = FlutterErrorDetails(
-      exception: error,
-      stack: stackTrace,
-      library: 'error_handler',
-      context: ErrorDescription(context ?? 'Manually reported error'),
-    );
-    _handleFlutterError(details);
-  }
-
-  /// Run a function with error handling
-  T runWithErrorHandling<T>(T Function() function, {String? context}) {
-    try {
-      return function();
-    } catch (error, stackTrace) {
-      reportError(error, stackTrace, context: context);
-      rethrow;
-    }
-  }
-
-  /// Run an async function with error handling
-  Future<T> runAsyncWithErrorHandling<T>(
-    Future<T> Function() function, {
-    String? context,
-  }) async {
-    try {
-      return await function();
-    } catch (error, stackTrace) {
-      reportError(error, stackTrace, context: context);
-      rethrow;
-    }
+    _handleFlutterError(
+        _errorDetails(error, stackTrace, context ?? 'Manually reported error'));
   }
 }
 
