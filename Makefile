@@ -1,5 +1,5 @@
 # Voidweaver Flutter Project Makefile
-.PHONY: help setup analyze format test test-android test-integration check-apk check-emulator build-release clean doctor devices run install upgrade
+.PHONY: help setup analyze format test test-android test-integration check-apk check-emulator check-emulator-fake build-release clean doctor devices run install upgrade
 
 # Default target
 all: format analyze test
@@ -15,6 +15,7 @@ help:
 	@echo "  test-integration - Run the user-flow tests on a device/emulator (fake server, debug build)"
 	@echo "  check-apk     - Check the release APK for shrunk-away notification resources and session entries"
 	@echo "  check-emulator - Check media session, media keys and resumption in the running emulator"
+	@echo "  check-emulator-fake - The same against the fake server, no login needed (fresh app data)"
 	@echo "  build-release - Build release APK (includes format, analyze, test)"
 	@echo "  clean         - Clean build artifacts"
 	@echo "  doctor        - Check Flutter installation"
@@ -77,6 +78,12 @@ check-emulator: setup
 	flutter build apk --release
 	tool/check_release_apk.sh
 	tool/emulator_check.sh
+
+# The same checks without a real server or login: a release build that
+# trusts the tests' fake Subsonic server, which runs on this machine
+# (tool/emulator_check.sh --fake-server). Clears the app's data.
+check-emulator-fake: setup
+	tool/emulator_check.sh --fake-server --build
 
 # What R8 and the resource shrinker can break in the release APK, without a
 # device (tool/check_release_apk.sh: notification icons, manifest, classes)

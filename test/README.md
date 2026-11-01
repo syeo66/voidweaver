@@ -16,13 +16,15 @@ Tests need no device, network or platform plugins.
 flutter test integration_test -d emulator-5554   # or: make test-integration
 ```
 
-Each test starts from a fresh install (credentials and SharedPreferences cleared). CI runs them in an emulator. They use a debug build, so they don't replace `tool/emulator_check.sh` (release build, R8, media keys, resumption); see CLAUDE.md.
+Each test starts from a fresh install (credentials and SharedPreferences cleared). CI runs them in an emulator. They use a debug build, so they don't replace `tool/emulator_check.sh` (release build, R8, media keys, resumption), which CI runs afterwards in the same emulator against the fake server (see below and CLAUDE.md).
 
 ## Fake Subsonic server
 
 `test_helpers/fake_subsonic_server.dart` is a Subsonic server over HTTPS on localhost that answers like Navidrome (XML, errors as HTTP 200 with `status="failed"`, token auth): three albums of 4-second WAV tones, random songs, artists, search, scan status, scrobbles (recorded in `scrobbles`), cover art, and range requests for `stream`. Every request is recorded in `requests`; change `password` to simulate a password changed on the server.
 
-Clients have to trust its certificate: set `HttpOverrides.global = FakeSubsonicServer.httpOverrides` (in host tests after `TestWidgetsFlutterBinding.ensureInitialized()`, whose own overrides fail every request). Debug builds of the app trust it for localhost only (`android/app/src/debug/res/xml/network_security_config.xml`), so ExoPlayer can stream from it; release builds don't contain it. `tool/fake_server_cert.sh` generates the certificate and its CA. The server certificate is valid for 825 days, the most macOS accepts; when the tests fail with a handshake error, run the script again.
+Clients have to trust its certificate: set `HttpOverrides.global = FakeSubsonicServer.httpOverrides` (in host tests after `TestWidgetsFlutterBinding.ensureInitialized()`, whose own overrides fail every request). Debug builds of the app trust it for localhost only (`android/app/src/fakeServer/res/xml/network_security_config.xml`), so ExoPlayer can stream from it; the release APK doesn't (`tool/check_release_apk.sh` checks).
+
+`tool/fake_server.dart` runs it on the host with minute-long songs, for `tool/emulator_check.sh --fake-server`. That runs the system checks (media session, media keys, resumption) on a release build that differs from the real one only in trusting the server: `-PtrustFakeServer=true` adds the network security config, and `--dart-define=VOIDWEAVER_TEST_CA=...` makes Dart's HTTP clients trust the CA (`lib/utils/test_ca.dart`). The emulator reaches the server through `adb reverse`. `tool/fake_server_cert.sh` generates the certificate and its CA. The server certificate is valid for 825 days, the most macOS accepts; when the tests fail with a handshake error, run the script again.
 
 Host tests can use it too, for code that has to go through real HTTP (see `services/credentials_rejected_test.dart`).
 

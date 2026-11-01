@@ -63,6 +63,10 @@ class AppState extends ChangeNotifier {
   // Background sync only runs while the app is visible, see setVisible()
   bool _visible = true;
 
+  // What secure storage holds (server URL, username, password), as read at
+  // startup or last written; configure() only writes credentials that differ
+  (String, String, String)? _savedCredentials;
+
   // The timeouts last handed to the player, see _applyNetworkConfig()
   (Duration, Duration)? _playerTimeouts;
 
@@ -160,7 +164,12 @@ class AppState extends ChangeNotifier {
       _isConfigured = true;
       _configurationLoadingState = LoadingState.success;
 
-      await _saveServerConfig(serverUrl, username, password);
+      // Not on every start: the writes delay a resume for a media button, and
+      // one that failed would log out a user whose credentials are fine. A
+      // URL normalized above is saved again.
+      if (_savedCredentials != (serverUrl, username, password)) {
+        await _saveServerConfig(serverUrl, username, password);
+      }
       _startBackgroundSync();
       notifyListeners();
     } catch (e) {
@@ -392,7 +401,10 @@ class AppState extends ChangeNotifier {
       await _secureStorage.write(key: 'server_url', value: serverUrl);
       await _secureStorage.write(key: 'username', value: username);
       await _secureStorage.write(key: 'password', value: password);
+      _savedCredentials = (serverUrl, username, password);
     } catch (e) {
+      // Partly written, perhaps
+      _savedCredentials = null;
       _log.warning('Error saving secure credentials', e);
       rethrow;
     }
@@ -405,6 +417,7 @@ class AppState extends ChangeNotifier {
       final password = await _secureStorage.read(key: 'password');
 
       if (serverUrl != null && username != null && password != null) {
+        _savedCredentials = (serverUrl, username, password);
         await configure(serverUrl, username, password);
         return;
       }
@@ -425,6 +438,7 @@ class AppState extends ChangeNotifier {
     // Dispose first, so nothing writes the server's data again afterwards
     _disposeServices();
 
+    _savedCredentials = null;
     try {
       await _secureStorage.deleteAll();
       await Future.wait([

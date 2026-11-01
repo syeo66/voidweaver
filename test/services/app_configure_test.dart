@@ -50,6 +50,38 @@ void main() {
     expect(playerCalls, contains('dispose'));
   });
 
+  test('starting with saved credentials does not write them again', () async {
+    // Every write throws, as above: one would fail the start and log out
+    FlutterSecureStorage.setMockInitialValues(const {
+      'server_url': 'https://127.0.0.1:1',
+      'username': 'alice',
+      'password': 'secret',
+    });
+
+    final appState = AppState();
+    addTearDown(appState.dispose);
+    await appState.initialize();
+
+    expect(appState.isConfigured, isTrue);
+    expect(appState.api!.serverUrl, 'https://127.0.0.1:1');
+  });
+
+  test('a saved URL that is normalized on start is saved again', () async {
+    FlutterSecureStorage.setMockInitialValues({
+      'server_url': 'https://127.0.0.1:1/',
+      'username': 'alice',
+      'password': 'secret',
+    });
+
+    final appState = AppState();
+    addTearDown(appState.dispose);
+    await appState.initialize();
+
+    expect(appState.isConfigured, isTrue);
+    expect(await const FlutterSecureStorage().read(key: 'server_url'),
+        'https://127.0.0.1:1');
+  });
+
   test('hands the connection and streaming timeouts to the player', () async {
     FlutterSecureStorage.setMockInitialValues({});
     final appState = AppState();

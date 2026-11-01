@@ -8,6 +8,7 @@ import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'widgets/error_boundary.dart';
 import 'utils/log.dart';
+import 'utils/test_ca.dart';
 
 void main() async {
   // Run the app in a zone to catch async errors
@@ -15,6 +16,8 @@ void main() async {
     () async {
       WidgetsFlutterBinding.ensureInitialized();
       setUpLogging();
+      // Only in the build of tool/emulator_check.sh --fake-server
+      trustTestCa();
 
       // Initialize global error handling
       ErrorHandler.instance.initialize();

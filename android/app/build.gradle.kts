@@ -41,6 +41,20 @@ android {
         versionName = flutter.versionName
     }
 
+    // Trust in the fake Subsonic server of the tests (its CA, for localhost):
+    // always in debug builds (integration tests), and in a release build only
+    // with -PtrustFakeServer=true, for tool/emulator_check.sh --fake-server,
+    // which checks the media session of an R8-shrunk build in CI. The release
+    // APK that's installed never has it; tool/check_release_apk.sh fails if it
+    // does.
+    sourceSets.getByName("debug").res.srcDir("src/fakeServer/res")
+    if (providers.gradleProperty("trustFakeServer").orNull == "true") {
+        sourceSets.getByName("release") {
+            res.srcDir("src/fakeServer/res")
+            manifest.srcFile("src/fakeServer/AndroidManifest.xml")
+        }
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.

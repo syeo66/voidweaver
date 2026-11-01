@@ -58,7 +58,8 @@ class FakeScrobble {
 /// Navidrome: XML responses, errors as HTTP 200 with `status="failed"`,
 /// token authentication, range requests for `stream`.
 ///
-/// Runs on the host (`flutter test`) and inside the app on a device
+/// Runs on the host (`flutter test`, and `tool/fake_server.dart` for
+/// `tool/emulator_check.sh --fake-server`) and inside the app on a device
 /// (integration tests). Clients must trust its self-signed certificate,
 /// see [httpOverrides]; debug builds of the Android app trust it for
 /// localhost, so the native player streams from it too. See
@@ -117,12 +118,13 @@ class FakeSubsonicServer {
   /// The URL to log in with
   String get url => 'https://localhost:$port';
 
-  Future<void> start() async {
+  /// Listens on [port] of the loopback interface; by default on any free one.
+  Future<void> start({int port = 0}) async {
     final context = SecurityContext()
       ..useCertificateChainBytes(utf8.encode(fakeServerCertificate))
       ..usePrivateKeyBytes(utf8.encode(fakeServerPrivateKey));
-    _server =
-        await HttpServer.bindSecure(InternetAddress.loopbackIPv4, 0, context);
+    _server = await HttpServer.bindSecure(
+        InternetAddress.loopbackIPv4, port, context);
     _server!.listen((request) => unawaited(_handle(request)));
   }
 

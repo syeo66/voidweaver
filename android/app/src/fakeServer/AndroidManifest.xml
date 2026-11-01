@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Only in a release build made with -PtrustFakeServer=true, for
+         tool/emulator_check.sh in fake server mode: trusts the fake Subsonic
+         server like debug builds do, see res/xml/network_security_config.xml. Never
+         in the release APK that's installed or distributed;
+         tool/check_release_apk.sh fails if it is. -->
+    <application android:networkSecurityConfig="@xml/network_security_config" />
+</manifest>

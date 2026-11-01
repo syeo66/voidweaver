@@ -147,6 +147,31 @@ for class in \
 done
 
 echo
+echo "== No trust in the fake server"
+# The build of tool/emulator_check.sh --fake-server trusts the tests' fake
+# Subsonic server, whose private key is public; an APK that's installed must
+# not (see android/app/build.gradle.kts)
+if grep -q 'networkSecurityConfig' <<<"$manifest"; then
+  fail "no network security config in the manifest"
+else
+  pass "no network security config in the manifest"
+fi
+if [ -n "$(values raw/fake_subsonic_server)" ]; then
+  fail "no fake server CA among the resources"
+else
+  pass "no fake server CA among the resources"
+fi
+# The CA as the VOIDWEAVER_TEST_CA define has it: "-----BEGIN CERTIFICATE"
+# in base64. Counted, not grep -q: that stops reading at the first match, and
+# with pipefail unzip's broken pipe would turn the match into a miss.
+ca_matches=$(unzip -p "$APK" 'lib/*/libapp.so' | LC_ALL=C grep -cF 'LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0')
+if [ "${ca_matches:-0}" -gt 0 ]; then
+  fail "no test CA in the Dart code"
+else
+  pass "no test CA in the Dart code"
+fi
+
+echo
 if [ "$failures" -gt 0 ]; then
   echo "$failures check(s) failed"
   exit 1

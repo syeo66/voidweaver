@@ -5,7 +5,7 @@
 # process died. These are what unit tests can't catch, see CLAUDE.md.
 #
 # Needs a booted emulator with the app logged in (a fresh install can log in
-# with --login). Plays the first album on the home screen.
+# with --login), or --fake-server. Plays the first album on the home screen.
 #
 #   tool/emulator_check.sh            # install the APK in build/ and check
 #   tool/emulator_check.sh --build    # build the release APK first
@@ -13,6 +13,15 @@
 #   tool/emulator_check.sh --no-install  # check what's installed
 #   VOIDWEAVER_URL=https://... VOIDWEAVER_USER=... VOIDWEAVER_PASSWORD=... \
 #     tool/emulator_check.sh --login  # log in on a fresh install first
+#   tool/emulator_check.sh --fake-server --build   # no server or login needed
+#
+# --fake-server runs the tests' fake Subsonic server on this machine
+# (tool/fake_server.dart), reachable in the emulator as https://localhost
+# through `adb reverse`, clears the app's data and logs in to it. The APK has
+# to trust that server: --build makes a release build that does
+# (-PtrustFakeServer=true and the VOIDWEAVER_TEST_CA define, otherwise like
+# the release build, R8 included) and moves it to build/emulator-check/, so it's
+# never mistaken for the real one. CI runs this.
 #
 # Exits non-zero if a check fails.
 
@@ -22,15 +31,18 @@ SDK="${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}"
 ADB="$SDK/platform-tools/adb"
 PKG=red.ochsenbein.voidweaver
 APK=build/app/outputs/flutter-apk/app-release.apk
-build=false install=true login=false
+FAKE_SERVER_APK=build/emulator-check/app-release-trusts-fake-server.apk
+FAKE_SERVER_PORT="${FAKE_SERVER_PORT:-8443}"
+build=false install=true login=false fake_server=false apk_given=false
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --build) build=true ;;
-    --apk) APK="$2"; shift ;;
+    --apk) APK="$2"; apk_given=true; shift ;;
     --no-install) install=false ;;
     --login) login=true ;;
-    -h|--help) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --fake-server) fake_server=true login=true ;;
+    -h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -100,9 +112,58 @@ type_text() {
 
 "$ADB" get-state >/dev/null 2>&1 || { echo "No device. Start the emulator first (see CLAUDE.md)." >&2; exit 2; }
 
-if $build; then
+if $fake_server; then
+  $apk_given || APK="$FAKE_SERVER_APK"
+  export VOIDWEAVER_URL="https://localhost:$FAKE_SERVER_PORT"
+  export VOIDWEAVER_USER=alice VOIDWEAVER_PASSWORD=secret
+fi
+
+if $build && $fake_server; then
+  step "Building the release APK that trusts the fake server"
+  ca="$(base64 < android/app/src/fakeServer/res/raw/fake_subsonic_server.pem | tr -d '\n')"
+  flutter build apk --release -PtrustFakeServer=true \
+    --dart-define=VOIDWEAVER_TEST_CA="$ca" || exit 1
+  mkdir -p "$(dirname "$FAKE_SERVER_APK")"
+  # Out of the place of the real release APK
+  mv build/app/outputs/flutter-apk/app-release.apk "$FAKE_SERVER_APK"
+  rm -f build/app/outputs/flutter-apk/app-release.apk.sha1
+elif $build; then
   step "Building release APK"
   flutter build apk --release || exit 1
+fi
+
+server_pid=""
+cleanup() {
+  if [ -n "$server_pid" ]; then
+    kill "$server_pid" 2>/dev/null
+    for _ in $(seq 1 20); do
+      kill -0 "$server_pid" 2>/dev/null || break
+      sleep 0.5
+    done
+    kill -9 "$server_pid" 2>/dev/null
+    wait "$server_pid" 2>/dev/null
+    "$ADB" reverse --remove "tcp:$FAKE_SERVER_PORT" >/dev/null 2>&1
+  fi
+}
+trap cleanup EXIT
+
+if $fake_server; then
+  step "Starting the fake Subsonic server"
+  server_log="$(mktemp "${TMPDIR:-/tmp}/voidweaver-fake-server.XXXXXX")"
+  dart run tool/fake_server.dart "$FAKE_SERVER_PORT" >"$server_log" 2>&1 &
+  server_pid=$!
+  for _ in $(seq 1 120); do
+    grep -q 'Fake Subsonic server at' "$server_log" && break
+    kill -0 "$server_pid" 2>/dev/null || break
+    sleep 0.5
+  done
+  if ! grep -q 'Fake Subsonic server at' "$server_log"; then
+    echo "The fake server didn't start:" >&2
+    cat "$server_log" >&2
+    exit 2
+  fi
+  "$ADB" reverse "tcp:$FAKE_SERVER_PORT" "tcp:$FAKE_SERVER_PORT" >/dev/null || exit 2
+  pass "$(grep -m1 -o 'Fake Subsonic server at.*' "$server_log")"
 fi
 
 if $install; then
@@ -110,6 +171,11 @@ if $install; then
   [ -f "$APK" ] || { echo "No APK at $APK, run with --build." >&2; exit 2; }
   "$ADB" install -r "$APK" >/dev/null || { echo "Install failed" >&2; exit 1; }
   pass "installed"
+fi
+
+if $fake_server; then
+  # A fresh start at the login screen
+  "$ADB" shell pm clear "$PKG" >/dev/null || exit 2
 fi
 
 step "Starting the app"
