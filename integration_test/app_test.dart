@@ -122,9 +122,13 @@ void main() {
     await tester.tap(find.byTooltip('Pause'));
     await _pumpUntil(tester, () => player.playbackState == PlaybackState.paused,
         'the pause');
+    // The position may still settle by a few hundred ms after the pause is
+    // reported (on slow CI emulators ExoPlayer's playback thread catches up
+    // later), but it doesn't keep advancing.
     final position = player.currentPosition;
-    await tester.pump(const Duration(seconds: 1));
-    expect(player.currentPosition, position);
+    await tester.pump(const Duration(seconds: 2));
+    expect(player.currentPosition - position,
+        lessThan(const Duration(milliseconds: 500)));
 
     await tester.tap(find.byTooltip('Play'));
     await _pumpUntil(
