@@ -122,6 +122,29 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// ReplayGain values beyond these are treated as missing: no real track
+  /// needs them, so they come from a broken tag or a misread one (e.g. a
+  /// peak in the wrong scale). A gain of +60 dB would play very loud.
+  static const double maxReplayGainDb = 30.0;
+  static const double maxReplayGainPeak = 10.0;
+
+  /// [gain] in dB, or null if missing or out of range (also NaN, which
+  /// `double.tryParse('NaN')` produces)
+  static double? plausibleGain(double? gain) =>
+      gain != null && gain.isFinite && gain.abs() <= maxReplayGainDb
+          ? gain
+          : null;
+
+  /// [peak] as a linear sample value, or null if missing or out of range.
+  /// 0 is out of range too: dividing by it would be infinite.
+  static double? plausiblePeak(double? peak) =>
+      peak != null && peak.isFinite && peak > 0 && peak <= maxReplayGainPeak
+          ? peak
+          : null;
+
+  /// The linear gain for a track with these ReplayGain values. Values out of
+  /// range ([plausibleGain], [plausiblePeak]) count as missing, so album mode
+  /// falls back to the track's value and track mode to the fallback gain.
   double calculateVolumeAdjustment({
     double? trackGain,
     double? albumGain,
@@ -132,6 +155,11 @@ class SettingsService extends ChangeNotifier {
     if (_replayGainMode == ReplayGainMode.off) {
       return 1.0;
     }
+
+    trackGain = plausibleGain(trackGain);
+    albumGain = plausibleGain(albumGain);
+    trackPeak = plausiblePeak(trackPeak);
+    albumPeak = plausiblePeak(albumPeak);
 
     double gainToUse = 0.0;
     double peakToUse = 1.0;

@@ -11,6 +11,8 @@ ReplayGain adjusts playback volume so tracks play at a similar loudness. Setting
 
 The gain is `10^((gain + preamp) / 20)`, limited by the peak when clipping prevention is on. A track without a peak value counts as already at full scale, so with clipping prevention on its gain is never above 1. It can be above 1, so quiet tracks are raised too. Each track's gain is applied to its own samples inside the player, before they're mixed to the output, so it changes exactly where the track changes, also between gapless tracks (see [PLAYBACK.md](PLAYBACK.md#replaygain-per-track)). The device volume is left alone.
 
+Values out of range count as missing, whatever their source: gains beyond ±30 dB, peaks of 0 or less or above 10, and NaN or infinity (`SettingsService.plausibleGain` / `plausiblePeak`). Album mode then uses the track's value, and track mode the fallback gain. The debug log lists the values it ignored.
+
 ## Where the values come from
 
 1. **Server response**: Navidrome includes ReplayGain in song entries (OpenSubsonic `<replayGain>` element or flat attributes). If present, nothing else is fetched.

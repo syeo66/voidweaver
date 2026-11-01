@@ -198,6 +198,60 @@ void main() {
     });
   });
 
+  group('implausible values', () {
+    setUp(() async {
+      await settings.setReplayGainPreventClipping(false);
+      await settings.setReplayGainFallbackGain(-4);
+    });
+
+    test('a gain beyond ±30 dB plays at the fallback gain', () async {
+      await settings.setReplayGainMode(ReplayGainMode.track);
+
+      for (final gain in [60.0, -45.0, double.nan, double.infinity]) {
+        expect(settings.calculateVolumeAdjustment(trackGain: gain),
+            closeTo(dbToLinear(-4), 1e-9),
+            reason: 'trackGain $gain');
+      }
+    });
+
+    test('the limit itself is still used', () async {
+      await settings.setReplayGainMode(ReplayGainMode.track);
+
+      expect(settings.calculateVolumeAdjustment(trackGain: -30),
+          closeTo(dbToLinear(-30), 1e-9));
+    });
+
+    test('album mode falls back to the track gain', () async {
+      await settings.setReplayGainMode(ReplayGainMode.album);
+
+      expect(settings.calculateVolumeAdjustment(trackGain: -6, albumGain: 99),
+          closeTo(dbToLinear(-6), 1e-9));
+    });
+
+    test('a peak out of range counts as missing', () async {
+      await settings.setReplayGainMode(ReplayGainMode.track);
+      await settings.setReplayGainPreventClipping(true);
+
+      // Without a usable peak, full scale is assumed: no gain above 1
+      for (final peak in [0.0, -0.5, 32768.0, double.nan]) {
+        expect(
+            settings.calculateVolumeAdjustment(trackGain: 6, trackPeak: peak),
+            closeTo(1.0, 1e-9),
+            reason: 'trackPeak $peak');
+      }
+    });
+
+    test('album mode falls back to the track peak', () async {
+      await settings.setReplayGainMode(ReplayGainMode.album);
+      await settings.setReplayGainPreventClipping(true);
+
+      expect(
+          settings.calculateVolumeAdjustment(
+              albumGain: 6, trackPeak: 0.5, albumPeak: 1000),
+          closeTo(dbToLinear(6), 1e-9));
+    });
+  });
+
   test('settings survive a restart', () async {
     await settings.setReplayGainMode(ReplayGainMode.album);
     await settings.setReplayGainPreamp(3);

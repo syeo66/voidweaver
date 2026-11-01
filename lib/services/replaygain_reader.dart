@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -263,16 +262,6 @@ class ReplayGainReader {
       return vorbisData;
     } else {
       _log('✗ No ReplayGain data in Vorbis comments');
-    }
-
-    // Last resort: brute force search for ReplayGain strings anywhere in the data
-    _log('Attempting brute force search...');
-    final bruteForceData = _bruteForceSearch(bytes);
-    if (bruteForceData.hasAnyData) {
-      _log('✓ Found ReplayGain data via brute force search: $bruteForceData');
-      return bruteForceData;
-    } else {
-      _log('✗ No ReplayGain data via brute force search');
     }
 
     _log('⚠ WARNING: No ReplayGain metadata found after all parsing attempts!');
@@ -864,99 +853,6 @@ class ReplayGainReader {
       trackPeak: trackPeak,
       albumPeak: albumPeak,
     );
-  }
-
-  static ReplayGainData _bruteForceSearch(Uint8List bytes) {
-    try {
-      _log('Performing brute force search for ReplayGain metadata');
-
-      // Convert bytes to string with error handling
-      String textData;
-      try {
-        textData = utf8.decode(bytes, allowMalformed: true);
-      } catch (e) {
-        // Fallback to basic string conversion, filtering out problematic bytes
-        final filteredBytes = bytes
-            .where((b) => b >= 32 && b <= 126 || b == 10 || b == 13)
-            .toList();
-        textData = String.fromCharCodes(filteredBytes);
-      }
-
-      double? trackGain;
-      double? albumGain;
-      double? trackPeak;
-      double? albumPeak;
-
-      // Comprehensive search patterns for all possible ReplayGain tag formats
-      final patterns = [
-        // Standard ReplayGain patterns
-        RegExp(r'replaygain_track_gain[^-\d]*(-?\d+\.?\d*)',
-            caseSensitive: false),
-        RegExp(r'replaygain_album_gain[^-\d]*(-?\d+\.?\d*)',
-            caseSensitive: false),
-        RegExp(r'replaygain_track_peak[^\d]*(\d+\.?\d*)', caseSensitive: false),
-        RegExp(r'replaygain_album_peak[^\d]*(\d+\.?\d*)', caseSensitive: false),
-
-        // iTunes format
-        RegExp(
-            r'----:com\.apple\.iTunes:replaygain_track_gain[^-\d]*(-?\d+\.?\d*)',
-            caseSensitive: false),
-        RegExp(
-            r'----:com\.apple\.iTunes:replaygain_album_gain[^-\d]*(-?\d+\.?\d*)',
-            caseSensitive: false),
-        RegExp(
-            r'----:com\.apple\.iTunes:replaygain_track_peak[^\d]*(\d+\.?\d*)',
-            caseSensitive: false),
-        RegExp(
-            r'----:com\.apple\.iTunes:replaygain_album_peak[^\d]*(\d+\.?\d*)',
-            caseSensitive: false),
-
-        // Uppercase variants
-        RegExp(r'REPLAYGAIN_TRACK_GAIN[^-\d]*(-?\d+\.?\d*)',
-            caseSensitive: false),
-        RegExp(r'REPLAYGAIN_ALBUM_GAIN[^-\d]*(-?\d+\.?\d*)',
-            caseSensitive: false),
-        RegExp(r'REPLAYGAIN_TRACK_PEAK[^\d]*(\d+\.?\d*)', caseSensitive: false),
-        RegExp(r'REPLAYGAIN_ALBUM_PEAK[^\d]*(\d+\.?\d*)', caseSensitive: false),
-
-        // Alternative formats (MusicBrainz, foobar2000, etc.)
-        RegExp(r'RG_TRACK_GAIN[^-\d]*(-?\d+\.?\d*)', caseSensitive: false),
-        RegExp(r'RG_ALBUM_GAIN[^-\d]*(-?\d+\.?\d*)', caseSensitive: false),
-        RegExp(r'RG_TRACK_PEAK[^\d]*(\d+\.?\d*)', caseSensitive: false),
-        RegExp(r'RG_ALBUM_PEAK[^\d]*(\d+\.?\d*)', caseSensitive: false),
-      ];
-
-      for (final pattern in patterns) {
-        final match = pattern.firstMatch(textData);
-        if (match != null) {
-          final value = double.tryParse(match.group(1)!);
-          final patternStr = pattern.pattern.toLowerCase();
-
-          _log('Brute force found: ${match.group(0)} -> value: $value');
-
-          if (patternStr.contains('track_gain')) {
-            trackGain ??= value; // Only set if not already found
-          } else if (patternStr.contains('album_gain')) {
-            albumGain ??= value;
-          } else if (patternStr.contains('track_peak')) {
-            trackPeak ??= value;
-          } else if (patternStr.contains('album_peak')) {
-            albumPeak ??= value;
-          }
-        }
-      }
-
-      return ReplayGainData(
-        trackGain: trackGain,
-        albumGain: albumGain,
-        trackPeak: trackPeak,
-        albumPeak: albumPeak,
-      );
-    } catch (e, stackTrace) {
-      _log('Error in brute force search: $e');
-      _log('Stack trace: $stackTrace');
-      return const ReplayGainData();
-    }
   }
 
   /// Decodes UTF-16 encoded bytes to a String

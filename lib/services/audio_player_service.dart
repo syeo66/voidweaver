@@ -1070,8 +1070,22 @@ class AudioPlayerService extends ChangeNotifier {
         '[ReplayGain] Fallback: ${_settingsService.replayGainFallbackGain.toStringAsFixed(1)} dB');
     _rgLog(
         '[ReplayGain] Prevent Clipping: ${_settingsService.replayGainPreventClipping}');
-    _rgLog(
-        '[ReplayGain] Source: ${hasTrackGain || hasAlbumGain ? 'METADATA' : 'FALLBACK'}');
+    final ignored = [
+      if (hasTrackGain && SettingsService.plausibleGain(trackGain) == null)
+        'trackGain',
+      if (hasAlbumGain && SettingsService.plausibleGain(albumGain) == null)
+        'albumGain',
+      if (trackPeak != null && SettingsService.plausiblePeak(trackPeak) == null)
+        'trackPeak',
+      if (albumPeak != null && SettingsService.plausiblePeak(albumPeak) == null)
+        'albumPeak',
+    ];
+    if (ignored.isNotEmpty) {
+      _rgLog('[ReplayGain] Ignored, out of range: ${ignored.join(', ')}');
+    }
+    final usable = SettingsService.plausibleGain(trackGain) != null ||
+        SettingsService.plausibleGain(albumGain) != null;
+    _rgLog('[ReplayGain] Source: ${usable ? 'METADATA' : 'FALLBACK'}');
     _rgLog(
         '[ReplayGain] Final Gain Multiplier: ${volumeMultiplier.toStringAsFixed(6)} (${(volumeMultiplier * 100).toStringAsFixed(2)}%)');
     _rgLog('='.padRight(80, '='));

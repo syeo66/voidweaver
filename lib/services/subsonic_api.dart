@@ -182,10 +182,7 @@ class SubsonicApi {
         Uri.parse('$serverUrl/rest/$endpoint').replace(queryParameters: params);
 
     try {
-      final headers = {
-        'Content-Type': 'application/xml',
-        'User-Agent': 'voidweaver/1.0',
-      };
+      final headers = {'User-Agent': clientName};
 
       final response = await _retryService.getWithRetry(
         uri,

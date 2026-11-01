@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/app_state.dart';
@@ -24,9 +23,6 @@ void main() async {
 
       // Add error reporters
       ErrorHandler.instance.addReporter(ConsoleErrorReporter());
-      if (kDebugMode) {
-        ErrorHandler.instance.addReporter(MemoryErrorReporter());
-      }
 
       runApp(const MyApp());
     },
