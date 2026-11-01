@@ -106,10 +106,13 @@ jobs:
     # (debug build). Then the media session, notification, media keys and
     # playback resumption of an R8-shrunk release build, logged into the
     # fake server running on the runner (tool/emulator_check.sh). The
-    # script taps in 1080x2400 pixels, hence the Pixel 8 profile.
+    # script taps in 1080x2400 pixels, hence the Pixel 8 profile. The
+    # action's default cmdline-tools predate that profile, so pin a newer
+    # avdmanager (15641748 = cmdline-tools 21.0).
     - name: Run integration tests and system checks in an emulator
       uses: reactivecircus/android-emulator-runner@v2
       with:
+        cmdline-tools-version: 15641748
         api-level: 35
         arch: x86_64
         target: google_apis
