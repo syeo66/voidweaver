@@ -10,6 +10,7 @@ make analyze         # flutter analyze (keep it at 0 issues)
 make format          # dart format lib/ test/
 make build-release   # format + analyze + test + release APK
 make test-integration  # user flows on a device/emulator against a fake server (see test/README.md)
+make check-apk       # release APK, then checks it for shrunk-away notification icons and media session entries (tool/check_release_apk.sh, no device)
 make check-emulator  # release APK, then media session/keys/resumption checks in the running emulator (tool/emulator_check.sh, see CLAUDE.md)
 ```
 

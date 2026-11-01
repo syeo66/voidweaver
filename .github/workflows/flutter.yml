@@ -63,6 +63,11 @@ jobs:
     - name: Build Android APK
       run: flutter build apk --release
 
+    # Notification resources, media session manifest entries and classes,
+    # which R8 and the resource shrinker can remove without any test failing
+    - name: Check the release APK
+      run: tool/check_release_apk.sh
+
     # After the build, which generates the Gradle wrapper
     - name: Run player plugin JVM tests
       working-directory: android

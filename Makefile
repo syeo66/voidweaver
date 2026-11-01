@@ -1,5 +1,5 @@
 # Voidweaver Flutter Project Makefile
-.PHONY: help setup analyze format test test-android test-integration check-emulator build-release clean doctor devices run install upgrade
+.PHONY: help setup analyze format test test-android test-integration check-apk check-emulator build-release clean doctor devices run install upgrade
 
 # Default target
 all: format analyze test
@@ -13,6 +13,7 @@ help:
 	@echo "  test          - Run the Dart tests (app and player plugin)"
 	@echo "  test-android  - Run the player plugin's JVM tests (Gradle, needs JAVA_HOME)"
 	@echo "  test-integration - Run the user-flow tests on a device/emulator (fake server, debug build)"
+	@echo "  check-apk     - Check the release APK for shrunk-away notification resources and session entries"
 	@echo "  check-emulator - Check media session, media keys and resumption in the running emulator"
 	@echo "  build-release - Build release APK (includes format, analyze, test)"
 	@echo "  clean         - Clean build artifacts"
@@ -74,12 +75,20 @@ test-integration: setup
 # (tool/emulator_check.sh: media session, notification, media keys, resumption)
 check-emulator: setup
 	flutter build apk --release
+	tool/check_release_apk.sh
 	tool/emulator_check.sh
+
+# What R8 and the resource shrinker can break in the release APK, without a
+# device (tool/check_release_apk.sh: notification icons, manifest, classes)
+check-apk: setup
+	flutter build apk --release
+	tool/check_release_apk.sh
 
 # Build release APK with full validation
 build-release: format analyze test
 	@echo "Building release APK..."
 	flutter build apk --release
+	tool/check_release_apk.sh
 	@echo "Release APK built successfully."
 	@echo "APK location: build/app/outputs/flutter-apk/app-release.apk"
 

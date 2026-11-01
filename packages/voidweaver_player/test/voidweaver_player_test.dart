@@ -276,6 +276,15 @@ void main() {
       expect(await cache.sizeInBytes(), 0);
     });
 
+    test('passes the timeouts in milliseconds', () async {
+      await cache.setTimeouts(
+          connect: const Duration(seconds: 15),
+          read: const Duration(seconds: 60));
+
+      expect(platform.lastCall('network.setTimeouts').arguments,
+          {'connect': 15000, 'read': 60000});
+    });
+
     test('returns the head of a cached item', () async {
       platform.onPluginCall = (call) => Uint8List.fromList([1, 2, 3]);
 

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logging/logging.dart';
+import 'package:voidweaver_player/voidweaver_player.dart' show MediaCache;
 import 'subsonic_api.dart';
 import '../models/album_list_type.dart';
 import 'audio_player_service.dart';
@@ -12,6 +13,7 @@ import 'settings_service.dart';
 import 'playback_persistence.dart';
 import 'replaygain_debug_logger.dart';
 import 'scrobble_queue.dart';
+import 'network_config.dart';
 import 'network_errors.dart';
 import '../utils/validators.dart';
 
@@ -61,6 +63,9 @@ class AppState extends ChangeNotifier {
   // Background sync only runs while the app is visible, see setVisible()
   bool _visible = true;
 
+  // The timeouts last handed to the player, see _applyNetworkConfig()
+  (Duration, Duration)? _playerTimeouts;
+
   // Enhanced loading states
   LoadingState _configurationLoadingState = LoadingState.idle;
   String? _configurationError;
@@ -95,6 +100,8 @@ class AppState extends ChangeNotifier {
     _settingsService = SettingsService();
     await _settingsService!.initialize();
     _settingsService!.addListener(_applyNetworkConfig);
+    // Before anything streams
+    _applyNetworkConfig();
     // The app's theme comes from the settings
     notifyListeners();
 
@@ -216,9 +223,24 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Hands changed network settings (timeouts, retries) to the API
+  /// Hands changed network settings to the API (timeouts, retries) and to
+  /// the player, whose streaming and downloads use the connection and
+  /// streaming timeouts. Called on every settings change.
   void _applyNetworkConfig() {
-    _api?.networkConfig = _settingsService!.networkConfig;
+    final config = _settingsService!.networkConfig;
+    _api?.networkConfig = config;
+    _setPlayerTimeouts(config);
+  }
+
+  void _setPlayerTimeouts(NetworkConfig config) {
+    final timeouts = (config.connectionTimeout, config.streamingTimeout);
+    if (timeouts == _playerTimeouts) return;
+    _playerTimeouts = timeouts;
+    unawaited(const MediaCache()
+        .setTimeouts(connect: timeouts.$1, read: timeouts.$2)
+        .catchError((Object e) {
+      _log.warning('Could not set the player\'s timeouts', e);
+    }));
   }
 
   /// Removes downloaded audio, cached library data and cover art.

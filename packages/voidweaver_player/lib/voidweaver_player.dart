@@ -319,6 +319,17 @@ class MediaCache {
 
   const MediaCache();
 
+  /// Timeouts of the HTTP connections that playback and [prefetch] open
+  /// from now on, for all players: [connect] for connecting, [read] for
+  /// waiting for data on an open connection. Until this is called, Media3's
+  /// defaults (8 s each) apply.
+  Future<void> setTimeouts(
+          {required Duration connect, required Duration read}) =>
+      _channel.invokeMethod('network.setTimeouts', {
+        'connect': connect.inMilliseconds,
+        'read': read.inMilliseconds,
+      });
+
   /// Downloads [uri] completely into the cache under [key]. Downloads run one
   /// at a time. Throws if the download fails; what was downloaded stays
   /// cached and the next attempt continues from there.

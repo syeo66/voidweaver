@@ -36,6 +36,10 @@ final class MediaCache {
 
   @Nullable private static SimpleCache cache;
 
+  // For the HTTP connections of playback and downloads, set from Dart's network settings
+  private static volatile int connectTimeoutMs = DefaultHttpDataSource.DEFAULT_CONNECT_TIMEOUT_MILLIS;
+  private static volatile int readTimeoutMs = DefaultHttpDataSource.DEFAULT_READ_TIMEOUT_MILLIS;
+
   private MediaCache() {}
 
   static synchronized SimpleCache get(Context context) {
@@ -50,6 +54,15 @@ final class MediaCache {
               new StandaloneDatabaseProvider(context.getApplicationContext()));
     }
     return cache;
+  }
+
+  /**
+   * Timeouts of the HTTP connections that playback and downloads open from now on: for connecting,
+   * and for waiting for data on an open connection.
+   */
+  static void setTimeouts(int connectMs, int readMs) {
+    connectTimeoutMs = connectMs;
+    readTimeoutMs = readMs;
   }
 
   /** Data source factory for playback: cache first, network for whatever isn't cached. */
@@ -144,14 +157,17 @@ final class MediaCache {
    */
   static final class ErrorDocumentGuard implements DataSource {
     static final class Factory implements DataSource.Factory {
-      private final DefaultHttpDataSource.Factory http =
-          new DefaultHttpDataSource.Factory()
-              .setUserAgent("voidweaver")
-              .setAllowCrossProtocolRedirects(true);
-
       @Override
       public DataSource createDataSource() {
-        return new ErrorDocumentGuard(http.createDataSource());
+        // A new HTTP factory each time, so changed timeouts apply to the next connection
+        DataSource http =
+            new DefaultHttpDataSource.Factory()
+                .setUserAgent("voidweaver")
+                .setAllowCrossProtocolRedirects(true)
+                .setConnectTimeoutMs(connectTimeoutMs)
+                .setReadTimeoutMs(readTimeoutMs)
+                .createDataSource();
+        return new ErrorDocumentGuard(http);
       }
     }
 

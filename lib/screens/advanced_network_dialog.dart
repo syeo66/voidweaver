@@ -90,7 +90,7 @@ class _AdvancedNetworkSettingsDialogState
               _buildTimeoutField(
                 'Streaming Timeout (seconds)',
                 _streamingTimeoutController,
-                'Timeout for audio streaming requests',
+                'How long playback and downloads wait for audio data',
               ),
               const SizedBox(height: 16),
               _buildTimeoutField(

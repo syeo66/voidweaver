@@ -3,18 +3,24 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/app_state.dart';
+import 'package:voidweaver/services/network_config.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late List<String> playerCalls;
+  late List<Object?> timeoutCalls;
 
   setUp(() {
     playerCalls = [];
+    timeoutCalls = [];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('voidweaver_player'),
             (call) async {
       playerCalls.add(call.method);
+      if (call.method == 'network.setTimeouts') {
+        timeoutCalls.add(call.arguments);
+      }
       return null;
     });
     SharedPreferences.setMockInitialValues({});
@@ -42,5 +48,26 @@ void main() {
     // The player, and with it the media session, was released
     await pumpEventQueue();
     expect(playerCalls, contains('dispose'));
+  });
+
+  test('hands the connection and streaming timeouts to the player', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+    final appState = AppState();
+    addTearDown(appState.dispose);
+    await appState.initialize();
+    await pumpEventQueue();
+
+    expect(timeoutCalls, [
+      {'connect': 15000, 'read': 60000}
+    ]);
+
+    // Another setting: nothing new to send
+    await appState.settingsService!.setReplayGainPreamp(2.0);
+    await pumpEventQueue();
+    expect(timeoutCalls, hasLength(1));
+
+    await appState.settingsService!.setNetworkConfig(NetworkConfig.slowConfig);
+    await pumpEventQueue();
+    expect(timeoutCalls.last, {'connect': 30000, 'read': 120000});
   });
 }

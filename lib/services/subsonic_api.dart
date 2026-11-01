@@ -182,38 +182,24 @@ class SubsonicApi {
         Uri.parse('$serverUrl/rest/$endpoint').replace(queryParameters: params);
 
     try {
-      final headers = {'User-Agent': clientName};
-
       final response = await _retryService.getWithRetry(
         uri,
-        headers: headers,
+        headers: {'User-Agent': clientName},
         requestType: requestType,
         contextDescription: 'Subsonic API: $endpoint',
       );
-
-      if (response.statusCode == 200) {
-        return response.bodyBytes;
-      } else {
-        // Not the body: it can be a whole HTML error page
+      // Not the body: it can be a whole HTML error page
+      if (response.statusCode != 200) {
         throw HttpStatusException(response.statusCode);
       }
-    } on NetworkTimeoutException catch (e) {
-      _log.warning('Request timeout: $uri', e);
-      rethrow;
-    } on NetworkConnectionException catch (e) {
-      _log.warning('Connection error: $uri', e);
-      rethrow;
-    } on HttpStatusException {
-      rethrow;
-    } on SocketException {
-      rethrow;
-    } on TlsException {
-      rethrow;
+      return response.bodyBytes;
     } catch (e) {
-      // Rethrown as it is, so callers can still tell it by its type. Its
-      // message can contain the request URL, which the log redacts; the UI
-      // shows errors through NetworkErrorHelper, never their message.
-      _log.warning('Network request failed: $uri', e);
+      // The one log line per failed request (the retry service logs each
+      // attempt); callers only log what they do about it. Rethrown as it is,
+      // so callers can still tell it by its type. Its message can contain the
+      // request URL, which the log redacts; the UI shows errors through
+      // NetworkErrorHelper, never their message.
+      _log.warning('Request failed: $uri', e);
       rethrow;
     }
   }
@@ -347,21 +333,14 @@ class SubsonicApi {
       'getAlbum',
       {'id': id},
       () async {
-        try {
-          final doc = await _makeRequest(
-              'getAlbum', {'id': id}, NetworkRequestType.metadata);
-          final albumElements = doc.findAllElements('album');
-          if (albumElements.isEmpty) {
-            // Debug: log the full response to understand the structure
-            _log.fine(
-                () => 'getAlbum response for ID $id: ${doc.toXmlString()}');
-            throw const UserFacingException('Album not found');
-          }
-          return Album.fromXml(albumElements.first);
-        } catch (e) {
-          _log.warning('getAlbum failed for ID $id', e);
-          rethrow;
+        final doc = await _makeRequest(
+            'getAlbum', {'id': id}, NetworkRequestType.metadata);
+        final albumElements = doc.findAllElements('album');
+        if (albumElements.isEmpty) {
+          _log.fine(() => 'getAlbum response for ID $id: ${doc.toXmlString()}');
+          throw const UserFacingException('Album not found');
         }
+        return Album.fromXml(albumElements.first);
       },
       cacheDuration: const Duration(minutes: 10),
       usePersistentCache: true,
@@ -447,32 +426,17 @@ class SubsonicApi {
   /// Returns a SearchResult containing separate lists for each type.
   Future<SearchResult> search(String query,
       {int artistCount = 20, int albumCount = 20, int songCount = 20}) async {
+    final params = {
+      'query': query,
+      'artistCount': artistCount.toString(),
+      'albumCount': albumCount.toString(),
+      'songCount': songCount.toString(),
+    };
     return await _cache.getOrFetch<SearchResult>(
       'search3',
-      {
-        'query': query,
-        'artistCount': artistCount.toString(),
-        'albumCount': albumCount.toString(),
-        'songCount': songCount.toString(),
-      },
-      () async {
-        try {
-          final params = {
-            'query': query,
-            'artistCount': artistCount.toString(),
-            'albumCount': albumCount.toString(),
-            'songCount': songCount.toString(),
-          };
-
-          final doc = await _makeRequest(
-              'search3', params, NetworkRequestType.metadata);
-
-          return SearchResult.fromXml(doc);
-        } catch (e) {
-          _log.warning('Search failed', e);
-          rethrow;
-        }
-      },
+      params,
+      () async => SearchResult.fromXml(
+          await _makeRequest('search3', params, NetworkRequestType.metadata)),
       // Only in memory: every query would add an entry that's never read
       // again
       cacheDuration: const Duration(minutes: 5),
@@ -485,15 +449,8 @@ class SubsonicApi {
     return await _cache.getOrFetch<List<Artist>>(
       'getArtists',
       null,
-      () async {
-        try {
-          return await _makeLargeRequest('getArtists', null,
-              NetworkRequestType.metadata, _sortedArtistsFromXml);
-        } catch (e) {
-          _log.warning('Failed to get artists', e);
-          rethrow;
-        }
-      },
+      () => _makeLargeRequest('getArtists', null, NetworkRequestType.metadata,
+          _sortedArtistsFromXml),
       cacheDuration: const Duration(minutes: 15),
       usePersistentCache: true,
       toJson: (artists) => artists.map((a) => a.toJson()).toList(),
@@ -514,22 +471,8 @@ class SubsonicApi {
     return await _cache.getOrFetch<List<Album>>(
       'getArtist',
       {'id': artistId},
-      () async {
-        try {
-          final doc = await _makeRequest('getArtist', {'id': artistId});
-          final albums = <Album>[];
-
-          final albumElements = doc.findAllElements('album');
-          for (final element in albumElements) {
-            albums.add(Album.fromXml(element));
-          }
-
-          return albums;
-        } catch (e) {
-          _log.warning('Failed to get albums for artist $artistId', e);
-          rethrow;
-        }
-      },
+      () async =>
+          albumsFromXml(await _makeRequest('getArtist', {'id': artistId})),
       cacheDuration: const Duration(minutes: 10),
       usePersistentCache: true,
       toJson: _albumsToJson,
