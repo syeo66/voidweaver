@@ -106,17 +106,16 @@ jobs:
     # (debug build). Then the media session, notification, media keys and
     # playback resumption of an R8-shrunk release build, logged into the
     # fake server running on the runner (tool/emulator_check.sh). The
-    # script taps in 1080x2400 pixels, hence the Pixel 8 profile. The
-    # action's default cmdline-tools predate that profile, so pin a newer
-    # avdmanager (15641748 = cmdline-tools 21.0).
+    # script taps in 1080x2400 pixels, hence the Pixel 6 profile: same
+    # screen (1080x2400, 420dpi) as the local Pixel 8 AVD, but known to the
+    # runner's older avdmanager, which has no pixel_8.
     - name: Run integration tests and system checks in an emulator
       uses: reactivecircus/android-emulator-runner@v2
       with:
-        cmdline-tools-version: 15641748
         api-level: 35
         arch: x86_64
         target: google_apis
-        profile: pixel_8
+        profile: pixel_6
         disable-animations: true
         script: |
           flutter test integration_test
