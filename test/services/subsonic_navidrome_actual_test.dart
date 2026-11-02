@@ -60,6 +60,9 @@ void main() {
       expect(song.artist, 'Shadow of Intent');
       expect(song.track, 6);
       expect(song.duration, 319);
+      // Part of the audio cache key, and kept when the song is saved
+      expect(song.size, 12979081);
+      expect(Song.fromJson(song.toJson()).size, 12979081);
 
       // The CRITICAL assertions - ReplayGain MUST be parsed!
       expect(song.replayGainTrackGain, -12.68,

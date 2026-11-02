@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:voidweaver/models/subsonic_models.dart';
 import 'package:voidweaver/services/audio_cache.dart';
 import 'package:voidweaver_player/voidweaver_player.dart';
 
@@ -40,7 +41,13 @@ class FakeMediaCache implements MediaCache {
       {required Duration connect, required Duration read}) async {}
 }
 
+Song song(String id, {int? size}) =>
+    Song(id: id, title: id, artist: 'a', album: 'b', size: size);
+
 void main() {
+  final s1 = song('s1');
+  final s2 = song('s2');
+  final s3 = song('s3');
   late FakeMediaCache mediaCache;
   late AudioCache cache;
 
@@ -52,26 +59,39 @@ void main() {
   test('keys entries by server and song', () async {
     final other = AudioCache(namespace: 'https://b.test', cache: mediaCache);
 
-    await cache.prefetch('s1', 'https://a.test/rest/stream?id=s1');
+    await cache.prefetch(s1, 'https://a.test/rest/stream?id=s1');
 
     expect(mediaCache.prefetched, ['https://a.test|s1']);
-    expect(await cache.firstCached(['s1']), 's1');
-    expect(await other.firstCached(['s1']), isNull);
+    expect(await cache.firstCached([s1]), s1);
+    expect(await other.firstCached([s1]), isNull);
+  });
+
+  test('a song replaced on the server (another size) is a new entry', () async {
+    final before = song('s1', size: 1000);
+    final replaced = song('s1', size: 2000);
+
+    await cache.prefetch(before, 'url');
+
+    expect(mediaCache.prefetched, ['https://a.test|s1|1000']);
+    expect(await cache.firstCached([before]), before);
+    expect(await cache.firstCached([replaced]), isNull);
+    // Nor the entry of a song saved without a size
+    expect(await cache.firstCached([s1]), isNull);
   });
 
   test('a failed download reports false', () async {
     mediaCache.reachable = false;
 
-    expect(await cache.prefetch('s1', 'https://a.test/rest/stream?id=s1'),
-        isFalse);
+    expect(
+        await cache.prefetch(s1, 'https://a.test/rest/stream?id=s1'), isFalse);
   });
 
   test('firstCached keeps the order of the songs asked for', () async {
-    await cache.prefetch('s3', 'url');
-    await cache.prefetch('s2', 'url');
+    await cache.prefetch(s3, 'url');
+    await cache.prefetch(s2, 'url');
 
-    expect(await cache.firstCached(['s1', 's2', 's3']), 's2');
-    expect(await cache.firstCached(['s1']), isNull);
+    expect(await cache.firstCached([s1, s2, s3]), s2);
+    expect(await cache.firstCached([s1]), isNull);
     expect(await cache.firstCached([]), isNull);
   });
 
@@ -79,9 +99,9 @@ void main() {
     mediaCache.content['https://a.test|s1'] = Uint8List.fromList(
         'OggS....OpusTags....R128_TRACK_GAIN=-2304'.codeUnits);
 
-    final data = await cache.readReplayGain('s1');
+    final data = await cache.readReplayGain(s1);
 
     expect(data?.trackGain, closeTo(-4.0, 1e-9));
-    expect(await cache.readReplayGain('s2'), isNull);
+    expect(await cache.readReplayGain(s2), isNull);
   });
 }

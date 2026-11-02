@@ -493,7 +493,7 @@ class AudioPlayerService extends ChangeNotifier {
     return AudioSource.uri(Uri.parse(_api.getStreamUrl(song.id)),
         tag: tag,
         gain: gain,
-        cacheKey: _audioCache.keyFor(song.id),
+        cacheKey: _audioCache.keyFor(song),
         title: song.title,
         artist: song.artist,
         album: song.album,
@@ -752,11 +752,11 @@ class AudioPlayerService extends ChangeNotifier {
   Future<int?> _nextCachedIndex(int index) async {
     final playlist = _playlist;
     if (index + 1 >= playlist.length) return null;
-    final ids = [for (final song in playlist.sublist(index + 1)) song.id];
     try {
-      final id = await _audioCache.firstCached(ids);
-      if (id == null || !identical(playlist, _playlist)) return null;
-      final next = playlist.indexWhere((song) => song.id == id, index + 1);
+      final cached = await _audioCache.firstCached(playlist.sublist(index + 1));
+      if (cached == null || !identical(playlist, _playlist)) return null;
+      final next =
+          playlist.indexWhere((song) => song.id == cached.id, index + 1);
       return next < 0 ? null : next;
     } catch (e) {
       _log.warning('[audio_cache] Could not check the cache', e);
@@ -994,7 +994,7 @@ class AudioPlayerService extends ChangeNotifier {
       _rgLog(
           '[ReplayGain] No ReplayGain in API response, reading from file...');
       try {
-        final data = await _audioCache.readReplayGain(song.id) ??
+        final data = await _audioCache.readReplayGain(song) ??
             await _api.readReplayGain(song.id);
         _rgLog('[ReplayGain] File reading complete: '
             'TrackGain=${data.trackGain?.toStringAsFixed(2) ?? "null"}, '
@@ -1163,13 +1163,13 @@ class AudioPlayerService extends ChangeNotifier {
   /// completely cached.
   Future<bool> _preloadSingleTrack(List<Song> playlist, int index) async {
     final song = playlist[index];
-    if (!await _audioCache.prefetch(song.id, _api.getStreamUrl(song.id))) {
+    if (!await _audioCache.prefetch(song, _api.getStreamUrl(song.id))) {
       return false;
     }
     if (song.replayGainTrackGain != null || song.replayGainAlbumGain != null) {
       return true;
     }
-    final data = await _audioCache.readReplayGain(song.id);
+    final data = await _audioCache.readReplayGain(song);
     if (data == null) return true;
     _rgLog(
         '[ReplayGain] Preload read "${song.title}": Track=${data.trackGain}, Album=${data.albumGain}');

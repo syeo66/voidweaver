@@ -147,6 +147,11 @@ class Song {
   final int? track;
   final String? contentType;
   final String? suffix;
+
+  /// Size of the file on the server, in bytes. Part of the audio cache key,
+  /// so a file replaced on the server under the same id isn't played from an
+  /// old copy (see `AudioCache.keyFor()`).
+  final int? size;
   final double? replayGainTrackGain;
   final double? replayGainAlbumGain;
   final double? replayGainTrackPeak;
@@ -163,6 +168,7 @@ class Song {
     this.track,
     this.contentType,
     this.suffix,
+    this.size,
     this.replayGainTrackGain,
     this.replayGainAlbumGain,
     this.replayGainTrackPeak,
@@ -180,6 +186,7 @@ class Song {
     int? track,
     String? contentType,
     String? suffix,
+    int? size,
     double? replayGainTrackGain,
     double? replayGainAlbumGain,
     double? replayGainTrackPeak,
@@ -196,6 +203,7 @@ class Song {
       track: track ?? this.track,
       contentType: contentType ?? this.contentType,
       suffix: suffix ?? this.suffix,
+      size: size ?? this.size,
       replayGainTrackGain: replayGainTrackGain ?? this.replayGainTrackGain,
       replayGainAlbumGain: replayGainAlbumGain ?? this.replayGainAlbumGain,
       replayGainTrackPeak: replayGainTrackPeak ?? this.replayGainTrackPeak,
@@ -242,6 +250,7 @@ class Song {
       track: int.tryParse(element.getAttribute('track') ?? ''),
       contentType: element.getAttribute('contentType'),
       suffix: element.getAttribute('suffix'),
+      size: int.tryParse(element.getAttribute('size') ?? ''),
       replayGainTrackGain: replayGain('trackGain'),
       replayGainAlbumGain: replayGain('albumGain'),
       replayGainTrackPeak: replayGain('trackPeak'),
@@ -272,6 +281,7 @@ class Song {
         other.track == track &&
         other.contentType == contentType &&
         other.suffix == suffix &&
+        other.size == size &&
         other.replayGainTrackGain == replayGainTrackGain &&
         other.replayGainAlbumGain == replayGainAlbumGain &&
         other.replayGainTrackPeak == replayGainTrackPeak &&
@@ -291,6 +301,7 @@ class Song {
       track,
       contentType,
       suffix,
+      size,
       replayGainTrackGain,
       replayGainAlbumGain,
       replayGainTrackPeak,
@@ -310,6 +321,7 @@ class Song {
       'track': track,
       'contentType': contentType,
       'suffix': suffix,
+      'size': size,
       'replayGainTrackGain': replayGainTrackGain,
       'replayGainAlbumGain': replayGainAlbumGain,
       'replayGainTrackPeak': replayGainTrackPeak,
@@ -361,6 +373,7 @@ class Song {
       track: json['track'] as int?,
       contentType: json['contentType'] as String?,
       suffix: json['suffix'] as String?,
+      size: json['size'] as int?,
       replayGainTrackGain: trackGain,
       replayGainAlbumGain: albumGain,
       replayGainTrackPeak: trackPeak,

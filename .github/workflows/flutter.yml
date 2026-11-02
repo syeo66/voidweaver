@@ -2,7 +2,7 @@ name: Flutter CI/CD
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
@@ -18,6 +18,8 @@ jobs:
       with:
         flutter-version: '3.47.7'
         channel: 'stable'
+        # The SDK and the pub cache
+        cache: true
 
     - name: Install dependencies
       run: flutter pub get
@@ -56,6 +58,15 @@ jobs:
       with:
         flutter-version: '3.47.7'
         channel: 'stable'
+        # The SDK and the pub cache
+        cache: true
+
+    # Gradle User Home (wrapper, dependencies). The basic provider: the
+    # default one is proprietary.
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v6
+      with:
+        cache-provider: basic
 
     - name: Install dependencies
       run: flutter pub get
@@ -91,6 +102,15 @@ jobs:
       with:
         flutter-version: '3.47.7'
         channel: 'stable'
+        # The SDK and the pub cache
+        cache: true
+
+    # Gradle User Home (wrapper, dependencies). The basic provider: the
+    # default one is proprietary.
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v6
+      with:
+        cache-provider: basic
 
     - name: Install dependencies
       run: flutter pub get
