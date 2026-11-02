@@ -16,7 +16,7 @@ Tests need no device, network or platform plugins.
 flutter test integration_test -d emulator-5554   # or: make test-integration
 ```
 
-Each test starts from a fresh install (credentials and SharedPreferences cleared). CI runs them in an emulator. They use a debug build, so they don't replace `tool/emulator_check.sh` (release build, R8, media keys, resumption), which CI runs afterwards in the same emulator against the fake server (see below and [docs/ANDROID.md](../docs/ANDROID.md)).
+Each test starts from a fresh install (credentials and SharedPreferences cleared). CI runs them in an emulator. They use a debug build, so they don't replace `tool/emulator_check.sh` (release build, R8, media keys, resumption), which runs locally only, not in CI (see below and [docs/ANDROID.md](../docs/ANDROID.md)).
 
 ## Fake Subsonic server
 

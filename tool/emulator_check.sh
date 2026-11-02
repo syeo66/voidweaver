@@ -21,7 +21,7 @@
 # to trust that server: --build makes a release build that does
 # (-PtrustFakeServer=true and the VOIDWEAVER_TEST_CA define, otherwise like
 # the release build, R8 included) and moves it to build/emulator-check/, so it's
-# never mistaken for the real one. CI runs this.
+# never mistaken for the real one.
 #
 # Exits non-zero if a check fails, and saves a screenshot, the UI hierarchy
 # and logcat to build/emulator-check/diagnostics/. It stops at the first
@@ -132,7 +132,7 @@ tap_ui() {
   "$ADB" shell input tap $((($1 + $3) / 2)) $((($2 + $4) / 2))
 }
 
-# Screenshot, UI hierarchy and log, to see what went wrong (CI uploads them)
+# Screenshot, UI hierarchy and log, to see what went wrong
 DIAGNOSTICS=build/emulator-check/diagnostics
 save_diagnostics() {
   local name="$1"
@@ -235,7 +235,7 @@ HOME_SCREEN='content-desc="Recently (played|added)"'
 
 step "Starting the app"
 "$ADB" shell am start -W -n "$PKG/.MainActivity" >/dev/null
-# A slow emulator (CI's) can take far longer than a few seconds
+# A slow emulator can take far longer than a few seconds
 if $login; then
   wait_ui "$SETUP_SCREEN" 60 || fatal "no setup screen after 60s" start
 else
