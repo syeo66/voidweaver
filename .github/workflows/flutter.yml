@@ -140,3 +140,12 @@ jobs:
         script: |
           flutter test integration_test
           tool/emulator_check.sh --fake-server --build
+
+    # Screenshot, UI hierarchy and logcat from tool/emulator_check.sh
+    - name: Upload emulator check diagnostics
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: emulator-check-diagnostics
+        path: build/emulator-check/diagnostics/
+        if-no-files-found: ignore

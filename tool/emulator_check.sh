@@ -23,7 +23,9 @@
 # the release build, R8 included) and moves it to build/emulator-check/, so it's
 # never mistaken for the real one. CI runs this.
 #
-# Exits non-zero if a check fails.
+# Exits non-zero if a check fails, and saves a screenshot, the UI hierarchy
+# and logcat to build/emulator-check/diagnostics/. It stops at the first
+# failure that makes the rest meaningless (no app, no login, no playback).
 
 set -uo pipefail
 
@@ -42,7 +44,7 @@ while [ $# -gt 0 ]; do
     --no-install) install=false ;;
     --login) login=true ;;
     --fake-server) fake_server=true login=true ;;
-    -h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -101,6 +103,53 @@ expect_state() {
   else
     fail "$what: expected $want, got '$(session_state)' (active=$(session_active))"
   fi
+}
+
+# The UI hierarchy, one <node .../> per line. Flutter exposes its semantics
+# (labels, hints) to uiautomator. Empty while the screen doesn't settle.
+ui_nodes() {
+  "$ADB" shell uiautomator dump /sdcard/voidweaver_ui.xml >/dev/null 2>&1 || return 0
+  "$ADB" shell cat /sdcard/voidweaver_ui.xml | grep -o '<node [^>]*>'
+}
+
+# Waits up to $2 seconds (default 30) for a node matching the regex $1
+wait_ui() {
+  local pattern="$1" end=$((SECONDS + ${2:-30}))
+  while [ "$SECONDS" -lt "$end" ]; do
+    ui_nodes | grep -qE "$pattern" && return 0
+    sleep 1
+  done
+  return 1
+}
+
+# Taps the center of the first node matching the regex $1
+tap_ui() {
+  local bounds
+  bounds="$(ui_nodes | grep -m1 -E "$1" | grep -o 'bounds="[^"]*"')"
+  [ -n "$bounds" ] || return 1
+  # bounds="[x1,y1][x2,y2]"
+  set -- $(echo "$bounds" | tr -c '0-9' ' ')
+  "$ADB" shell input tap $((($1 + $3) / 2)) $((($2 + $4) / 2))
+}
+
+# Screenshot, UI hierarchy and log, to see what went wrong (CI uploads them)
+DIAGNOSTICS=build/emulator-check/diagnostics
+save_diagnostics() {
+  local name="$1"
+  mkdir -p "$DIAGNOSTICS"
+  "$ADB" exec-out screencap -p >"$DIAGNOSTICS/$name.png" 2>/dev/null
+  ui_nodes >"$DIAGNOSTICS/$name-ui.txt"
+  "$ADB" logcat -d >"$DIAGNOSTICS/$name-logcat.txt" 2>/dev/null
+  echo "        saved $DIAGNOSTICS/$name.png, -ui.txt, -logcat.txt"
+}
+
+# A failure that makes every later check meaningless: stop here
+fatal() {
+  fail "$1"
+  save_diagnostics "$2"
+  echo
+  echo "Stopped after $failures failed check(s)."
+  exit 1
 }
 
 # `input text` needs spaces as %s and shell metacharacters escaped
@@ -178,16 +227,28 @@ if $fake_server; then
   "$ADB" shell pm clear "$PKG" >/dev/null || exit 2
 fi
 
+rm -rf "$DIAGNOSTICS"
+
+# The setup screen and the home screen (its album list order toggle)
+SETUP_SCREEN='content-desc="Voidweaver Setup"'
+HOME_SCREEN='content-desc="Recently (played|added)"'
+
 step "Starting the app"
-"$ADB" shell am start -n "$PKG/.MainActivity" >/dev/null
-sleep 5
+"$ADB" shell am start -W -n "$PKG/.MainActivity" >/dev/null
+# A slow emulator (CI's) can take far longer than a few seconds
+if $login; then
+  wait_ui "$SETUP_SCREEN" 60 || fatal "no setup screen after 60s" start
+else
+  wait_ui "$HOME_SCREEN" 60 || fatal "no home screen after 60s (logged in?)" start
+fi
+pass "app started"
 
 if $login; then
   : "${VOIDWEAVER_URL:?set VOIDWEAVER_URL}" "${VOIDWEAVER_USER:?set VOIDWEAVER_USER}"
   : "${VOIDWEAVER_PASSWORD:?set VOIDWEAVER_PASSWORD}"
   step "Logging in"
-  # Coordinates and key sequence from docs/ANDROID.md (1080x2400)
-  "$ADB" shell input tap 540 1186
+  # Key sequence from docs/ANDROID.md: tab between the fields
+  tap_ui 'hint="Server URL' || fatal "no server URL field" login
   type_text "$VOIDWEAVER_URL"
   key 61
   type_text "$VOIDWEAVER_USER"
@@ -195,13 +256,18 @@ if $login; then
   type_text "$VOIDWEAVER_PASSWORD"
   key 66
   sleep 1
-  "$ADB" shell input tap 540 1817
-  sleep 8
+  tap_ui 'content-desc="Connect"' || fatal "no Connect button" login
+  wait_ui "$HOME_SCREEN" 60 || fatal "no home screen 60s after Connect" login
+  pass "logged in"
 fi
 
 step "Playback from the app"
-"$ADB" shell input tap 400 550   # first album card, below the list order toggle
-expect_state PLAYING "after tapping the first album"
+# The first album card: its label is "title, artist, n songs • duration"
+tap_ui 'content-desc="[^"]*&#10;[0-9]+ songs? ' || fatal "no album on the home screen" home
+if ! wait_state PLAYING 30; then
+  fatal "after tapping the first album: expected PLAYING, got '$(session_state)' (active=$(session_active))" playback
+fi
+pass "after tapping the first album: PLAYING"
 if [ "$(session_active)" = true ]; then pass "session active"; else fail "session not active (active=$(session_active))"; fi
 count="$(session_count)"
 if [ "$count" = 1 ]; then pass "one session"; else fail "$count sessions, expected 1"; fi
@@ -311,5 +377,6 @@ if [ "$failures" -eq 0 ]; then
   echo "All checks passed."
 else
   echo "$failures check(s) failed."
+  save_diagnostics end
   exit 1
 fi
