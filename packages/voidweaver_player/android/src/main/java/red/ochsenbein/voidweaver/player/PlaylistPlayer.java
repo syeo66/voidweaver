@@ -155,6 +155,11 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
         case "setGain":
           gainProcessor.setGain(call.argument("id"), ((Number) call.argument("gain")).floatValue());
           break;
+        case "setVolume":
+          // The player's volume, on top of the item gains: it applies to whatever is playing,
+          // also across a track change (the sleep timer's fade-out)
+          player.setVolume(((Number) call.argument("volume")).floatValue());
+          break;
         case "play":
           PlaybackService.ensureStarted(context);
           player.play();

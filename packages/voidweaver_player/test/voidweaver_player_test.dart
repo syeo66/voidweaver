@@ -229,6 +229,26 @@ void main() {
     });
   });
 
+  test('setVolume sends only changes, clamped to 0..1', () async {
+    expect(player.volume, 1.0);
+
+    await player.setVolume(1.0);
+    await player.setVolume(0.25);
+    await player.setVolume(0.25);
+    await player.setVolume(-0.5);
+    await player.setVolume(2.0);
+
+    expect([
+      for (final call in platform.calls)
+        if (call.method == 'setVolume') call.arguments
+    ], [
+      {'volume': 0.25},
+      {'volume': 0.0},
+      {'volume': 1.0},
+    ]);
+    expect(player.volume, 1.0);
+  });
+
   test('setGain sends only changed gains', () async {
     final a = source('a', gain: 0.5);
     await player.setAudioSources([a]);

@@ -216,6 +216,20 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
     _gains[source.id] = gain;
   }
 
+  /// Every volume set, in order
+  final List<double> volumes = [];
+
+  @override
+  double volume = 1.0;
+
+  @override
+  Future<void> setVolume(double volume) async {
+    volume = volume.clamp(0.0, 1.0);
+    if (volume == this.volume) return;
+    this.volume = volume;
+    volumes.add(volume);
+  }
+
   @override
   Future<void> dispose() async {
     await _positionController.close();

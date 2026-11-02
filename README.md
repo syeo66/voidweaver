@@ -29,7 +29,7 @@ subsoxy answers `getRandomSongs` with weighted picks based on your listening his
 - Scrobbles are queued and retried, so play counts aren't lost while offline
 - Configurable scrobble threshold (minimum play time or percentage, whichever comes first)
 - Queue and playback position restored on restart
-- Sleep timer, dark mode, landscape layouts
+- Sleep timer that fades out over its last 30 seconds, dark mode, landscape layouts
 - Network presets (Fast/Default/Slow) and adjustable timeouts
 
 ## Building

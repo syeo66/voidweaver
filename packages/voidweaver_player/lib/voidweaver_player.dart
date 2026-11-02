@@ -268,6 +268,20 @@ class VoidweaverPlayer {
     return _invoke('setGain', {'id': source.id, 'gain': gain});
   }
 
+  /// The player's volume, from 0 (silent) to 1 (full, the default).
+  double get volume => _volume;
+  double _volume = 1.0;
+
+  /// Sets the player's volume, clamped to 0..1. It applies on top of the
+  /// item gains, to whatever is playing when it changes, also across a track
+  /// change. The device volume is left alone.
+  Future<void> setVolume(double volume) {
+    volume = volume.clamp(0.0, 1.0);
+    if (volume == _volume) return Future.value();
+    _volume = volume;
+    return _invoke('setVolume', {'volume': volume});
+  }
+
   /// Starts or resumes playback. Completes right away.
   Future<void> play() => _invoke('play');
 

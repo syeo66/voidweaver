@@ -1,3 +1,4 @@
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:voidweaver/services/audio_player_service.dart';
 import 'package:voidweaver_player/voidweaver_player.dart';
@@ -159,7 +160,130 @@ void main() {
 
       expect(service.isSleepTimerActive, false);
     });
+
+    group('fade out', () {
+      const fade = AudioPlayerService.sleepFadeDuration;
+
+      /// Runs [body] in fake time with a service whose clock follows it
+      void inFakeTime(
+          void Function(void Function(Duration) elapse,
+                  AudioPlayerService service, _RecordingPlayer player)
+              body) {
+        fakeAsync((async) {
+          final start = DateTime(2026, 1, 1, 23);
+          final player = _RecordingPlayer();
+          final service = AudioPlayerService(mockApi, mockSettingsService,
+              audioPlayer: player, clock: () => start.add(async.elapsed));
+          body(async.elapse, service, player);
+          service.dispose();
+          async.flushMicrotasks();
+        });
+      }
+
+      test('lowers the volume over the last seconds, then pauses at full', () {
+        inFakeTime((elapse, service, player) {
+          service.startSleepTimer(const Duration(minutes: 10));
+
+          elapse(const Duration(minutes: 10) - fade - Duration(seconds: 1));
+          expect(player.volumes, isEmpty);
+
+          elapse(const Duration(seconds: 1) + fade ~/ 2);
+          // Half the fade left: (1/2)^3
+          expect(player.volume, closeTo(0.125, 0.01));
+          for (var i = 1; i < player.volumes.length; i++) {
+            expect(player.volumes[i], lessThan(player.volumes[i - 1]));
+          }
+          expect(player.events, isNot(contains('pause')));
+
+          elapse(fade ~/ 2);
+          expect(service.isSleepTimerActive, false);
+          // Silent until the pause, full volume for the next play
+          expect(player.events.sublist(player.events.length - 3),
+              ['volume 0.0', 'pause', 'volume 1.0']);
+
+          elapse(const Duration(minutes: 1));
+          expect(player.volume, 1.0);
+        });
+      });
+
+      test('cancelling during the fade restores full volume', () {
+        inFakeTime((elapse, service, player) {
+          service.startSleepTimer(const Duration(minutes: 5));
+          elapse(const Duration(minutes: 5) - fade ~/ 3);
+          expect(player.volume, lessThan(0.5));
+
+          service.cancelSleepTimer();
+          expect(player.volume, 1.0);
+
+          elapse(const Duration(minutes: 5));
+          expect(player.volume, 1.0);
+          expect(player.events, isNot(contains('pause')));
+        });
+      });
+
+      test('extending during the fade restores full volume until the new end',
+          () {
+        inFakeTime((elapse, service, player) {
+          service.startSleepTimer(const Duration(minutes: 5));
+          elapse(const Duration(minutes: 5) - fade ~/ 2);
+          expect(player.volume, lessThan(1.0));
+
+          service.extendSleepTimer(const Duration(minutes: 15));
+          expect(player.volume, 1.0);
+
+          elapse(const Duration(minutes: 15) - fade ~/ 2);
+          expect(player.volume, 1.0);
+          elapse(fade ~/ 2);
+          expect(player.volume, closeTo(0.125, 0.01));
+          elapse(fade);
+          expect(player.events, contains('pause'));
+          expect(player.volume, 1.0);
+        });
+      });
+
+      test('a timer shorter than the fade fades over all of it', () {
+        inFakeTime((elapse, service, player) {
+          final short = fade ~/ 2;
+          service.startSleepTimer(short);
+          elapse(short ~/ 2);
+          expect(player.volume, closeTo(0.125, 0.01));
+        });
+      });
+
+      test('a new timer during the fade restores full volume', () {
+        inFakeTime((elapse, service, player) {
+          service.startSleepTimer(const Duration(minutes: 1));
+          elapse(const Duration(minutes: 1) - fade ~/ 2);
+          expect(player.volume, lessThan(1.0));
+
+          service.startSleepTimer(const Duration(minutes: 30));
+          expect(player.volume, 1.0);
+          elapse(fade);
+          expect(player.volume, 1.0);
+        });
+      });
+    });
   });
+}
+
+/// Records volume changes and pauses in the order the service makes them
+class _RecordingPlayer extends MockAudioPlayer {
+  final List<String> events = [];
+
+  @override
+  Future<void> setVolume(double volume) {
+    final before = this.volume;
+    // Recorded at the call, like pause(): the fake sets it right away
+    final done = super.setVolume(volume);
+    if (this.volume != before) events.add('volume ${this.volume}');
+    return done;
+  }
+
+  @override
+  Future<void> pause() async {
+    events.add('pause');
+    await super.pause();
+  }
 }
 
 class _FailingPausePlayer extends MockAudioPlayer {

@@ -77,6 +77,15 @@ ExoPlayer owns audio focus (`setAudioAttributes(..., handleAudioFocus = true)` i
 
 Don't request focus anywhere else, including native code. Android treats each focus listener as a separate client. An earlier `voidweaver/audio_focus` channel in `MainActivity` pushed the player's listener down the stack, so when an interruption ended Android notified the wrong listener and playback never resumed.
 
+## Sleep timer
+
+The sleep timer (`startSleepTimer()`) pauses playback when it runs out. Over its last 30 s (`AudioPlayerService.sleepFadeDuration`, or the whole timer if it's shorter) it fades the volume out, so the music doesn't stop mid-phrase.
+
+- The fade uses the player's volume (`VoidweaverPlayer.setVolume()`, ExoPlayer's `setVolume()`), not the item gains: it has to carry on across a track change, and it applies on top of the ReplayGain gains. The device volume is left alone.
+- Every 250 ms the volume is set from the time left on the timer's clock, so the fade ends with the timer even if steps run late. The curve is cubic: loudness follows the level in dB, so a linear ramp would sound almost unchanged until the last few seconds.
+- At the end the volume goes to 0, the player pauses, and the volume goes back to 1 for the next play. The player handles its calls in order, so the pause is never heard at full volume.
+- Cancelling, extending or starting a new timer during the fade puts the volume back to 1 right away.
+
 ## Restoring playback
 
 `PlaybackPersistenceService` saves the queue, index and position (throttled to every 5 s while playing, and after every track change). On start, `restorePlaybackState()` loads the saved song paused. It runs while the home screen is already shown; if the user starts playback first, the restore gives up and leaves the new queue alone.

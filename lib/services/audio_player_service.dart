@@ -135,8 +135,19 @@ class AudioPlayerService extends ChangeNotifier {
   Duration _lastPosition = Duration.zero;
   DateTime? _lastPositionTime;
 
+  /// How long the sleep timer fades the volume out before it pauses
+  static const sleepFadeDuration = Duration(seconds: 30);
+
+  /// How often the volume changes during the fade
+  static const _sleepFadeStep = Duration(milliseconds: 250);
+
   // Sleep timer state
   Timer? _sleepTimer;
+  // Until the fade starts, then for each of its steps
+  Timer? _sleepFadeTimer;
+  // How long the current timer's fade lasts: sleepFadeDuration, or the whole
+  // timer if it's shorter
+  Duration _sleepFadeLength = sleepFadeDuration;
   Duration? _sleepTimerDuration;
   DateTime? _sleepTimerStartTime;
   bool _isSleepTimerActive = false;
@@ -1185,31 +1196,18 @@ class AudioPlayerService extends ChangeNotifier {
 
   /// Starts the sleep timer with the specified duration
   void startSleepTimer(Duration duration) {
-    // Cancel any existing timer
-    _sleepTimer?.cancel();
-
     _sleepTimerDuration = duration;
     _sleepTimerStartTime = _clock();
     _isSleepTimerActive = true;
 
     _log.info('Sleep timer started for ${_formatDuration(duration)}');
-
-    // Start the timer
-    _sleepTimer = Timer(duration, () {
-      _onSleepTimerComplete();
-    });
-
+    _scheduleSleepTimer(duration);
     notifyListeners();
   }
 
   /// Cancels the active sleep timer
   void cancelSleepTimer() {
-    _sleepTimer?.cancel();
-    _sleepTimer = null;
-    _sleepTimerDuration = null;
-    _sleepTimerStartTime = null;
-    _isSleepTimerActive = false;
-
+    _resetSleepTimer();
     _log.info('Sleep timer canceled');
     notifyListeners();
   }
@@ -1220,38 +1218,85 @@ class AudioPlayerService extends ChangeNotifier {
 
     final currentRemaining = sleepTimerRemaining;
     if (currentRemaining != null) {
-      // Cancel current timer and start a new one with extended duration
-      _sleepTimer?.cancel();
-
       final newDuration = currentRemaining + extension;
       _sleepTimerDuration = _sleepTimerDuration! + extension;
 
       _log.info(
           'Sleep timer extended by ${_formatDuration(extension)}, new remaining: ${_formatDuration(newDuration)}');
-
-      _sleepTimer = Timer(newDuration, () {
-        _onSleepTimerComplete();
-      });
-
+      _scheduleSleepTimer(newDuration);
       notifyListeners();
     }
+  }
+
+  /// (Re)schedules the end of the sleep timer in [remaining], and the fade
+  /// out before it. A fade in progress is undone: the volume is back to full.
+  void _scheduleSleepTimer(Duration remaining) {
+    _sleepTimer?.cancel();
+    _stopSleepFade();
+    _sleepTimer = Timer(remaining, _onSleepTimerComplete);
+    // A timer shorter than the fade fades over all of it
+    _sleepFadeLength =
+        remaining < sleepFadeDuration ? remaining : sleepFadeDuration;
+    _sleepFadeTimer = Timer(remaining - _sleepFadeLength, _startSleepFade);
+  }
+
+  void _startSleepFade() {
+    _log.info('Sleep timer fading out');
+    _sleepFadeTimer = Timer.periodic(_sleepFadeStep, (_) => _applySleepFade());
+    _applySleepFade();
+  }
+
+  /// Sets the volume for the time left. Taken from the clock, not counted in
+  /// steps, so the fade ends with the timer even if steps run late. Cubic,
+  /// for a fade that sounds even: loudness follows the level in dB, which a
+  /// linear ramp would keep high until the last few seconds.
+  void _applySleepFade() {
+    final remaining = sleepTimerRemaining;
+    if (remaining == null || _sleepFadeLength <= Duration.zero) return;
+    final fraction =
+        (remaining.inMicroseconds / _sleepFadeLength.inMicroseconds)
+            .clamp(0.0, 1.0);
+    _setVolume(pow(fraction, 3).toDouble());
+  }
+
+  /// Stops the fade, back at full volume if it had started.
+  void _stopSleepFade() {
+    _sleepFadeTimer?.cancel();
+    _sleepFadeTimer = null;
+    _setVolume(1.0);
+  }
+
+  void _setVolume(double volume) {
+    if (_disposed) return;
+    unawaited(_audioPlayer.setVolume(volume).catchError((Object e) {
+      _log.warning('Could not set the volume', e);
+    }));
   }
 
   /// Called when the sleep timer expires
   void _onSleepTimerComplete() {
     _log.info('Sleep timer expired - pausing playback');
 
+    // Silent until paused, then back to full volume for the next play. The
+    // player handles its calls in order, so the volume comes after the pause.
+    _sleepFadeTimer?.cancel();
+    _sleepFadeTimer = null;
+    _setVolume(0.0);
     unawaited(pause().catchError((Object e) {
       _log.warning('Sleep timer could not pause playback', e);
     }));
+    _resetSleepTimer();
+    notifyListeners();
+  }
 
-    // Reset timer state
+  /// Ends the sleep timer and any fade, at full volume.
+  void _resetSleepTimer() {
+    _sleepTimer?.cancel();
     _sleepTimer = null;
+    _stopSleepFade();
     _sleepTimerDuration = null;
     _sleepTimerStartTime = null;
     _isSleepTimerActive = false;
-
-    notifyListeners();
   }
 
   @override
@@ -1269,6 +1314,7 @@ class AudioPlayerService extends ChangeNotifier {
     unawaited(_errorSubscription?.cancel());
     unawaited(_commandSubscription?.cancel());
     _sleepTimer?.cancel();
+    _sleepFadeTimer?.cancel();
     // Not disposed here: AppState owns it and keeps it across logins
     _persistence?.flushPendingPositionSave();
     _scrobbleQueue.dispose();
