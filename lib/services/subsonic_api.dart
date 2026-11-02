@@ -114,13 +114,16 @@ class SubsonicApi {
     };
   }
 
+  /// Without [retry], a failed request isn't sent again, see
+  /// [scrobbleSubmission].
   Future<XmlDocument> _makeRequest(
     String endpoint, [
     Map<String, String>? extraParams,
     NetworkRequestType requestType = NetworkRequestType.metadata,
+    bool retry = true,
   ]) async {
-    return _watchCredentials(() async =>
-        _parseBody(await _fetchBody(endpoint, extraParams, requestType)));
+    return _watchCredentials(() async => _parseBody(
+        await _fetchBody(endpoint, extraParams, requestType, retry: retry)));
   }
 
   /// Runs [request], updating [credentialsRejected] from its outcome
@@ -171,8 +174,9 @@ class SubsonicApi {
   Future<Uint8List> _fetchBody(
     String endpoint,
     Map<String, String>? extraParams,
-    NetworkRequestType requestType,
-  ) async {
+    NetworkRequestType requestType, {
+    bool retry = true,
+  }) async {
     final params = _getAuthParams();
     if (extraParams != null) {
       params.addAll(extraParams);
@@ -187,6 +191,7 @@ class SubsonicApi {
         headers: {'User-Agent': clientName},
         requestType: requestType,
         contextDescription: 'Subsonic API: $endpoint',
+        retry: retry,
       );
       // Not the body: it can be a whole HTML error page
       if (response.statusCode != 200) {
@@ -407,6 +412,12 @@ class SubsonicApi {
   /// Submits a scrobble for a played song.
   /// This updates play counts and last played timestamp.
   /// Throws on failure, so [ScrobbleQueue] can keep the request and retry.
+  ///
+  /// Sent once, without the retries of other requests: after a timeout the
+  /// server may have counted the play already, and Navidrome counts every
+  /// submission it receives (subsoxy drops a repeat within half the song's
+  /// length, but passes it on). The queue's own retry is the only one, so a
+  /// lost answer costs one extra submission at most.
   Future<void> scrobbleSubmission(String songId, {DateTime? playedAt}) async {
     final params = {
       'id': songId,
@@ -418,7 +429,7 @@ class SubsonicApi {
       params['time'] = playedAt.millisecondsSinceEpoch.toString();
     }
 
-    await _makeRequest('scrobble', params);
+    await _makeRequest('scrobble', params, NetworkRequestType.metadata, false);
     _log.info('Scrobble submission sent for song: $songId');
   }
 

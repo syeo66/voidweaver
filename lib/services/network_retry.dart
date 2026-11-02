@@ -15,17 +15,21 @@ class NetworkRetryService {
     required http.Client httpClient,
   }) : _httpClient = httpClient;
 
-  /// Execute an HTTP GET request with retry logic and timeout handling
+  /// Execute an HTTP GET request with retry logic and timeout handling.
+  /// Without [retry] the request is sent once: for requests that aren't safe
+  /// to repeat, because a timeout doesn't tell whether the server got them.
   Future<http.Response> getWithRetry(
     Uri uri, {
     Map<String, String>? headers,
     NetworkRequestType requestType = NetworkRequestType.general,
     String? contextDescription,
+    bool retry = true,
   }) async {
     return _executeWithRetry(
       () => _httpClient.get(uri, headers: headers),
       requestType: requestType,
       contextDescription: contextDescription ?? 'GET $uri',
+      maxAttempts: retry ? config.maxRetryAttempts : 1,
     );
   }
 
@@ -34,17 +38,18 @@ class NetworkRetryService {
     Future<http.Response> Function() request, {
     required NetworkRequestType requestType,
     required String contextDescription,
+    required int maxAttempts,
   }) async {
     final stopwatch = Stopwatch()..start();
     Object? lastError;
     int attemptNumber = 0;
 
-    while (attemptNumber < config.maxRetryAttempts) {
+    while (attemptNumber < maxAttempts) {
       attemptNumber++;
 
       try {
         _log.fine(
-            'Network request attempt $attemptNumber/${config.maxRetryAttempts}: $contextDescription');
+            'Network request attempt $attemptNumber/$maxAttempts: $contextDescription');
 
         final response = await _executeWithTimeout(request, requestType);
 
@@ -60,13 +65,14 @@ class NetworkRetryService {
             error);
 
         // Check if we should retry this error
-        if (!config.shouldRetry(error, attemptNumber)) {
+        if (attemptNumber >= maxAttempts ||
+            !config.shouldRetry(error, attemptNumber)) {
           _log.fine('Not retrying error', error);
           break;
         }
 
         // Don't wait after the last attempt
-        if (attemptNumber < config.maxRetryAttempts) {
+        if (attemptNumber < maxAttempts) {
           final retryDelay = config.calculateRetryDelay(attemptNumber);
 
           _log.fine('Retrying in ${retryDelay.inMilliseconds}ms...');

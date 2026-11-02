@@ -86,6 +86,11 @@ class AudioPlayerService extends ChangeNotifier {
   // events from an older generation are ignored.
   int _generation = 0;
 
+  // Incremented whenever a new queue is requested (an album, random songs,
+  // a song); a start whose songs arrive after a newer request is dropped,
+  // see _startQueue()
+  int _queueRequests = 0;
+
   // Changes to the player's index or sequence run one at a time, see
   // _playerOp(). While one runs, index events are ignored.
   Future<void> _playerOps = Future.value();
@@ -361,52 +366,73 @@ class AudioPlayerService extends ChangeNotifier {
     _persistence!.schedulePositionSave(_persistedState());
   }
 
-  Future<void> playAlbum(Album album) async {
+  Future<void> playAlbum(Album album) =>
+      _startQueue('album ${album.name}', QueueSource.album, album.id, () async {
+        var songs = album.songs;
+        if (songs.isEmpty) {
+          _log.fine(
+              'Album ${album.name} has no songs, trying to fetch from API...');
+          songs = (await _api.getAlbum(album.id)).songs;
+        }
+        if (songs.isEmpty) {
+          throw const UserFacingException('Album has no songs');
+        }
+        return songs;
+      });
+
+  Future<void> playRandomSongs([int count = 50]) =>
+      _startQueue('random songs', QueueSource.random, count.toString(),
+          () async {
+        final songs = await _api.getRandomSongs(count);
+        if (songs.isEmpty) {
+          throw const UserFacingException('No random songs available');
+        }
+        return songs;
+      });
+
+  /// Replaces the queue with the songs [fetch] returns and plays it from the
+  /// start. Shows loading meanwhile. If [fetch] fails (e.g. offline), the
+  /// current queue keeps playing, or stays paused, as if nothing happened.
+  /// Only the last of several starts in a row takes over.
+  Future<void> _startQueue(String description, QueueSource source,
+      String sourceId, Future<List<Song>> Function() fetch) async {
+    final request = ++_queueRequests;
+    final previousState = _playbackState;
+    _playbackState = PlaybackState.loading;
+    notifyListeners();
+
+    final List<Song> songs;
     try {
-      _playbackState = PlaybackState.loading;
-      notifyListeners();
-
-      var songs = album.songs;
-      if (songs.isEmpty) {
-        _log.fine(
-            'Album ${album.name} has no songs, trying to fetch from API...');
-        songs = (await _api.getAlbum(album.id)).songs;
-      }
-      if (songs.isEmpty) throw const UserFacingException('Album has no songs');
-
-      _log.info('Playing album: ${album.name} with ${songs.length} songs');
-      _playlist = List.of(songs);
-      _playlistSource = QueueSource.album;
-      _sourceId = album.id;
-      await _loadQueue(0);
+      songs = await fetch();
     } catch (e) {
-      _onLoadFailed('Failed to play album: $e');
+      _log.warning('Could not start $description', e);
+      // Unless the player reported a state meanwhile (a pause, the next
+      // track), which is the current one
+      if (request == _queueRequests &&
+          _playbackState == PlaybackState.loading) {
+        _playbackState = previousState;
+        notifyListeners();
+      }
       rethrow;
     }
-  }
+    // Another album or random was started meanwhile
+    if (request != _queueRequests) return;
 
-  Future<void> playRandomSongs([int count = 50]) async {
+    _log.info('Playing $description: ${songs.length} songs');
+    _playlist = List.of(songs);
+    _playlistSource = source;
+    _sourceId = sourceId;
     try {
-      _playbackState = PlaybackState.loading;
-      notifyListeners();
-
-      final songs = await _api.getRandomSongs(count);
-      if (songs.isEmpty) {
-        throw const UserFacingException('No random songs available');
-      }
-
-      _log.info('Playing random songs: ${songs.length} songs loaded');
-      _playlist = List.of(songs);
-      _playlistSource = QueueSource.random;
-      _sourceId = count.toString();
       await _loadQueue(0);
     } catch (e) {
-      _onLoadFailed('Failed to play random songs: $e');
+      _onLoadFailed('Failed to play $description: $e');
       rethrow;
     }
   }
 
   Future<void> playSong(Song song) async {
+    // An album or random still being fetched doesn't replace this one
+    ++_queueRequests;
     _playlist = [song];
     _playlistSource = QueueSource.song;
     _sourceId = song.id;

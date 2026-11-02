@@ -41,6 +41,8 @@ The player's `seek()` completes once the target is ready or has failed (the erro
 
 After `stop()` or an error the player is idle, so `play()` and skips load the queue again (`_loadQueue()`) instead of seeking.
 
+Starting an album or random songs (`_startQueue()`) fetches the songs before it touches the queue. If that fails (offline, an album that isn't cached, no random songs), the current queue plays on, or stays paused, and the state shown while fetching goes back to what it was, unless the player reported a newer one meanwhile. Only a failure after the new queue was handed to the player stops playback (`_onLoadFailed()`). When several starts overlap, the last one wins: songs that arrive for an earlier one are dropped (`_queueRequests`).
+
 ## Pausing while a track loads
 
 While a track loads or buffers, `playbackState` is `loading`, and the play button stays usable with a spinner around it; `playWhenReady` decides between Pause and Play. Loads and skips that start playback (`_loadQueue()` with `play`, `_jumpTo()`) count themselves in `_startsInProgress` and only start the track if `_playPending` is still set when it's ready (`_startUnlessPaused()`). `pause()` clears it, `play()` during the load sets it again instead of loading anew. A track that was paused while it loaded stays paused and gets its start time on `play()`, like a restored song. A load error while paused doesn't continue at a downloaded track: playback stops on the failed one.
@@ -96,5 +98,6 @@ Requests go through `ScrobbleQueue`, never directly to the API. The queue:
 - keeps a submission that can't be sent (network error, HTTP error, or the server refusing the credentials) at the front and stops there, so later requests never overtake it. It's retried on the next timer tick or the next queued request, and dropped only after 7 days.
 - drops a submission the server rejects for itself (a `status="failed"` response that isn't an auth error, e.g. unknown song)
 - drops a "now playing" that fails, since it would be stale by the time it's retried
+- is the only retry for submissions: `scrobbleSubmission()` sends once, without the retries of other requests. A submission whose answer timed out may have been counted already. subsoxy drops a repeat of the same song from the same client within half the song's length, but passes every submission on to Navidrome, which counts each one. So a lost answer costs one extra play count in Navidrome at most, rather than one per retry.
 
 subsoxy uses these scrobbles to tell plays from skips, so the queue's ordering and `playedAt` timestamps matter. That's also why `scrobbleNowPlaying()` and `scrobbleSubmission()` throw on failure: the queue has to know.

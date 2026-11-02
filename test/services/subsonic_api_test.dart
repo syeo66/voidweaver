@@ -110,6 +110,41 @@ void main() {
     });
   });
 
+  group('SubsonicApi retries', () {
+    // A connection error, which other requests retry
+    final refused = SocketException('Connection refused');
+    final config = NetworkConfig.defaultConfig.copyWith(
+        initialRetryDelay: Duration.zero, maxRetryDelay: Duration.zero);
+
+    Future<int> attemptsOf(Future<void> Function(SubsonicApi api) request) {
+      final client = _ThrowingHttpClient(refused);
+      return HttpOverrides.runZoned(() async {
+        final api = SubsonicApi(
+          serverUrl: 'https://music.example',
+          username: 'user',
+          password: 'pass',
+          networkConfig: config,
+        );
+        addTearDown(api.dispose);
+        await expectLater(request(api), throwsA(anything));
+        return client.attempts;
+      }, createHttpClient: (_) => client);
+    }
+
+    test('retry other requests after a connection error', () async {
+      expect(await attemptsOf((api) => api.ping()), config.maxRetryAttempts);
+    });
+
+    // The server may have counted a submission whose answer was lost;
+    // ScrobbleQueue retries it later
+    test('send a scrobble submission only once', () async {
+      expect(
+          await attemptsOf((api) =>
+              api.scrobbleSubmission('song1', playedAt: DateTime(2026, 11, 2))),
+          1);
+    });
+  });
+
   group('SubsonicApi network config', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({});
@@ -343,14 +378,25 @@ void main() {
 
 /// An HTTP client whose requests fail with an error the API doesn't expect.
 class _ThrowingHttpClient implements HttpClient {
+  _ThrowingHttpClient([Object? error])
+      : error = error ?? StateError('unexpected');
+
+  /// What every request fails with
+  final Object error;
+
+  /// Requests made so far
+  int attempts = 0;
+
   @override
   Duration? connectionTimeout;
   @override
   int? maxConnectionsPerHost;
 
   @override
-  Future<HttpClientRequest> openUrl(String method, Uri url) =>
-      Future.error(StateError('unexpected'));
+  Future<HttpClientRequest> openUrl(String method, Uri url) {
+    attempts++;
+    return Future.error(error);
+  }
 
   @override
   void close({bool force = false}) {}

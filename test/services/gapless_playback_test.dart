@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:voidweaver_player/voidweaver_player.dart'
     show ProcessingState, SystemCommandType;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:voidweaver/services/network_errors.dart';
 import 'package:voidweaver/services/replaygain_reader.dart';
 import 'package:voidweaver/services/audio_player_service.dart';
 import 'package:voidweaver/services/settings_service.dart';
@@ -159,6 +161,103 @@ void main() {
 
       // Only the new track's downloads try s3: a first attempt, five retries
       expect(cache.attempts['s3'], before + 6);
+    });
+  });
+
+  group('starting a queue that can\'t be fetched', () {
+    Future<void> playing(Album playingAlbum) async {
+      await service.playAlbum(playingAlbum);
+      await until(() => service.playbackState == PlaybackState.playing,
+          'the album plays');
+    }
+
+    test('keeps the album playing when random songs fail', () async {
+      final current = albumOf(3);
+      await playing(current);
+      when(mockApi.getRandomSongs(any))
+          .thenThrow(const SocketException('offline'));
+
+      await expectLater(
+          service.playRandomSongs(), throwsA(isA<SocketException>()));
+
+      expect(service.playbackState, PlaybackState.playing);
+      expect(player.playing, isTrue);
+      expect(service.playlist.map((s) => s.id), ['s1', 's2', 's3']);
+      expect(service.currentSong?.id, 's1');
+      expect(
+          player.sequenceSources, [urlFor('s1'), urlFor('s2'), urlFor('s3')]);
+    });
+
+    test('keeps the album playing when another album fails', () async {
+      await playing(albumOf(2));
+      when(mockApi.getAlbum('other'))
+          .thenThrow(const SocketException('offline'));
+
+      await expectLater(
+          service.playAlbum(
+              Album(id: 'other', name: 'Other', artist: 'Artist', songs: [])),
+          throwsA(isA<SocketException>()));
+
+      expect(service.playbackState, PlaybackState.playing);
+      expect(player.playing, isTrue);
+      expect(service.playlist.map((s) => s.id), ['s1', 's2']);
+    });
+
+    test('keeps a paused album paused', () async {
+      await playing(albumOf(2));
+      await service.pause();
+      await until(
+          () => service.playbackState == PlaybackState.paused, 'the pause');
+      when(mockApi.getRandomSongs(any)).thenAnswer((_) async => <Song>[]);
+
+      await expectLater(
+          service.playRandomSongs(), throwsA(isA<UserFacingException>()));
+
+      expect(service.playbackState, PlaybackState.paused);
+      expect(player.playing, isFalse);
+    });
+
+    test('shows loading while fetching', () async {
+      await playing(albumOf(2));
+      final songs = Completer<List<Song>>();
+      when(mockApi.getRandomSongs(any)).thenAnswer((_) => songs.future);
+
+      final start = service.playRandomSongs();
+      expect(service.playbackState, PlaybackState.loading);
+
+      songs.completeError(const SocketException('offline'));
+      await expectLater(start, throwsA(isA<SocketException>()));
+      expect(service.playbackState, PlaybackState.playing);
+    });
+
+    test('keeps a state the player reported meanwhile', () async {
+      await playing(albumOf(2));
+      final songs = Completer<List<Song>>();
+      when(mockApi.getRandomSongs(any)).thenAnswer((_) => songs.future);
+
+      final start = service.playRandomSongs();
+      // Paused from the notification while the request runs
+      await service.pause();
+      await until(
+          () => service.playbackState == PlaybackState.paused, 'the pause');
+
+      songs.completeError(const SocketException('offline'));
+      await expectLater(start, throwsA(isA<SocketException>()));
+      expect(service.playbackState, PlaybackState.paused);
+    });
+
+    test('lets the last of two starts take over', () async {
+      cache.reachable = false;
+      final slow = Completer<List<Song>>();
+      when(mockApi.getRandomSongs(any)).thenAnswer((_) => slow.future);
+
+      final random = service.playRandomSongs();
+      await service.playAlbum(albumOf(2));
+      slow.complete([song('r1'), song('r2'), song('r3')]);
+      await random;
+
+      expect(service.playlist.map((s) => s.id), ['s1', 's2']);
+      expect(player.sequenceSources, [urlFor('s1'), urlFor('s2')]);
     });
   });
 
