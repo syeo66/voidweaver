@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Checks a release APK for what R8 and the resource shrinker can break
 # silently: the resources Media3's notification uses (the notification, lock
-# screen player and Bluetooth controls die without them, see CLAUDE.md), and
-# the manifest entries and classes of the media session. Needs no device and
-# no Java, only aapt2 from the Android SDK's build-tools, so CI runs it after
-# the release build. It doesn't replace tool/emulator_check.sh.
+# screen player and Bluetooth controls die without them, see
+# docs/ANDROID.md), and the manifest entries and classes of the media
+# session. Needs no device and no Java, only aapt2 from the Android SDK's
+# build-tools, so CI runs it after the release build. It doesn't replace
+# tool/emulator_check.sh.
 #
 #   tool/check_release_apk.sh            # build/app/outputs/flutter-apk/app-release.apk
 #   tool/check_release_apk.sh some.apk

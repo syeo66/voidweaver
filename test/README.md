@@ -16,7 +16,7 @@ Tests need no device, network or platform plugins.
 flutter test integration_test -d emulator-5554   # or: make test-integration
 ```
 
-Each test starts from a fresh install (credentials and SharedPreferences cleared). CI runs them in an emulator. They use a debug build, so they don't replace `tool/emulator_check.sh` (release build, R8, media keys, resumption), which CI runs afterwards in the same emulator against the fake server (see below and CLAUDE.md).
+Each test starts from a fresh install (credentials and SharedPreferences cleared). CI runs them in an emulator. They use a debug build, so they don't replace `tool/emulator_check.sh` (release build, R8, media keys, resumption), which CI runs afterwards in the same emulator against the fake server (see below and [docs/ANDROID.md](../docs/ANDROID.md)).
 
 ## Fake Subsonic server
 
@@ -35,7 +35,7 @@ cd packages/voidweaver_player && flutter test        # Dart API over a mocked me
 cd android && ./gradlew :voidweaver_player:testDebugUnitTest   # Java, on the JVM with Robolectric
 ```
 
-The Java tests (`packages/voidweaver_player/android/src/test/`) cover `GainAudioProcessor` (gain per item, switched at the item boundary, clipping), `SessionPlayer` (commands forwarded to Dart, the offered commands, idle after an error shown as paused) and `MediaCache.ErrorDocumentGuard`. `FakePlayer` stands in for the ExoPlayer. They need `JAVA_HOME` set (see CLAUDE.md) but no device; they don't replace testing in the emulator.
+The Java tests (`packages/voidweaver_player/android/src/test/`) cover `GainAudioProcessor` (gain per item, switched at the item boundary, clipping), `SessionPlayer` (commands forwarded to Dart, the offered commands, idle after an error shown as paused) and `MediaCache.ErrorDocumentGuard`. `FakePlayer` stands in for the ExoPlayer. They need `JAVA_HOME` set (see [docs/ANDROID.md](../docs/ANDROID.md#environment)) but no device; they don't replace testing in the emulator.
 
 ## Layout
 

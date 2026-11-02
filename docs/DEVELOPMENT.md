@@ -11,7 +11,7 @@ make format          # dart format lib/ test/
 make build-release   # format + analyze + test + release APK
 make test-integration  # user flows on a device/emulator against a fake server (see test/README.md)
 make check-apk       # release APK, then checks it for shrunk-away notification icons and media session entries (tool/check_release_apk.sh, no device)
-make check-emulator  # release APK, then media session/keys/resumption checks in the running emulator (tool/emulator_check.sh, see CLAUDE.md)
+make check-emulator  # release APK, then media session/keys/resumption checks in the running emulator (tool/emulator_check.sh, see docs/ANDROID.md)
 make check-emulator-fake  # the same against the fake Subsonic server, no login needed; clears the app's data (CI runs this)
 ```
 
@@ -62,6 +62,8 @@ State is managed with Provider. Services take optional dependencies (`Voidweaver
 How the player's queue is followed, downloads swapped in, load errors, skips, system controls and audio focus are described in [PLAYBACK.md](PLAYBACK.md). Read it before changing `audio_player_service.dart` or the plugin.
 
 ## Android
+
+Testing the native layer (media session, notification, media keys, R8) in the emulator, the setup it needs, and known pitfalls are in [ANDROID.md](ANDROID.md).
 
 - `MainActivity` gets its `FlutterEngine` from the plugin's `AppEngine`, which keeps it cached so Dart keeps running without the activity. `PlaybackService` starts the same engine without an activity to resume playback for a media button (see [PLAYBACK.md](PLAYBACK.md#bluetooth-and-system-controls)). It must not request audio focus (see [PLAYBACK.md](PLAYBACK.md#audio-focus)).
 - Backups are off: `allowBackup="false"`, plus `res/xml/data_extraction_rules.xml` because on Android 12+ `allowBackup` alone doesn't stop the transfer to a new device. The credentials are encrypted with a Keystore key that never leaves the device, so a restored copy can't be read. The settings share one SharedPreferences file with the saved queue and pending scrobbles, so they can't be backed up on their own.

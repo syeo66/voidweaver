@@ -2,7 +2,7 @@
 # Checks the system integration of a release build in a running emulator:
 # media session, notification, media keys (the path Bluetooth/AVRCP buttons
 # use), the gapless move to the next track and playback resumption after the
-# process died. These are what unit tests can't catch, see CLAUDE.md.
+# process died. These are what unit tests can't catch, see docs/ANDROID.md.
 #
 # Needs a booted emulator with the app logged in (a fresh install can log in
 # with --login), or --fake-server. Plays the first album on the home screen.
@@ -110,7 +110,7 @@ type_text() {
   "$ADB" shell input text "$escaped"
 }
 
-"$ADB" get-state >/dev/null 2>&1 || { echo "No device. Start the emulator first (see CLAUDE.md)." >&2; exit 2; }
+"$ADB" get-state >/dev/null 2>&1 || { echo "No device. Start the emulator first (see docs/ANDROID.md)." >&2; exit 2; }
 
 if $fake_server; then
   $apk_given || APK="$FAKE_SERVER_APK"
@@ -186,7 +186,7 @@ if $login; then
   : "${VOIDWEAVER_URL:?set VOIDWEAVER_URL}" "${VOIDWEAVER_USER:?set VOIDWEAVER_USER}"
   : "${VOIDWEAVER_PASSWORD:?set VOIDWEAVER_PASSWORD}"
   step "Logging in"
-  # Coordinates and key sequence from CLAUDE.md (1080x2400)
+  # Coordinates and key sequence from docs/ANDROID.md (1080x2400)
   "$ADB" shell input tap 540 1186
   type_text "$VOIDWEAVER_URL"
   key 61
