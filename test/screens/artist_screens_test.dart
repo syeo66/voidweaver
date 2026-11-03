@@ -55,6 +55,9 @@ void main() {
       expect(find.text('Artist B'), findsOneWidget);
 
       await tester.tap(find.text('Artist A'));
+      // A frame to build the albums view, which starts the request, and one
+      // for its answer
+      await tester.pump();
       await tester.pump();
 
       expect(find.text('A album 0'), findsOneWidget);
@@ -102,6 +105,7 @@ void main() {
       await tester.tap(find.byIcon(Icons.arrow_back));
       await tester.pump();
       await tester.tap(find.text('Artist B'));
+      await tester.pump();
       await tester.pump();
       expect(find.text('B album 0'), findsOneWidget);
 

@@ -5,6 +5,7 @@ import '../services/app_state.dart';
 import '../services/image_cache_manager.dart';
 import '../services/subsonic_api.dart';
 import 'artist_detail_screen.dart';
+import '../widgets/album_tile.dart';
 import '../services/network_errors.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -359,23 +360,9 @@ class _SearchScreenState extends State<SearchScreen>
       title: Text(album.name),
       subtitle: Text(album.artist),
       onTap: () async {
-        try {
-          final appState = context.read<AppState>();
-          final fullAlbum = await appState.api!.getAlbum(album.id);
-          if (fullAlbum.songs.isNotEmpty && mounted) {
-            await appState.audioPlayerService?.playAlbum(fullAlbum);
-            if (mounted) {
-              Navigator.of(context).pop(); // Return to home screen
-            }
-          }
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                  content: Text(NetworkErrorHelper.getErrorMessage(e,
-                      context: 'Failed to play album'))),
-            );
-          }
+        // Search results have no songs: playAlbum() fetches them
+        if (await playAlbumWithFeedback(context, album) && mounted) {
+          Navigator.of(context).pop(); // Return to home screen
         }
       },
     );

@@ -5,6 +5,7 @@ import '../services/app_state.dart';
 import '../services/image_cache_manager.dart';
 import '../services/subsonic_api.dart';
 import '../services/network_errors.dart';
+import '../widgets/artist_albums_view.dart';
 
 class ArtistScreen extends StatefulWidget {
   const ArtistScreen({super.key});
@@ -15,14 +16,10 @@ class ArtistScreen extends StatefulWidget {
 
 class _ArtistScreenState extends State<ArtistScreen> {
   List<Artist> _artists = [];
-  List<Album> _albums = [];
+  // Its albums are shown instead of the artists
   Artist? _selectedArtist;
   bool _isLoadingArtists = false;
-  bool _isLoadingAlbums = false;
   String? _errorMessage;
-  // Incremented for every album request and when going back to the artists;
-  // a response to an older one is dropped
-  int _albumsGeneration = 0;
 
   @override
   void initState() {
@@ -56,60 +53,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
     }
   }
 
-  Future<void> _loadArtistAlbums(Artist artist) async {
-    final api = context.read<AppState>().api;
-    final generation = ++_albumsGeneration;
-    setState(() {
-      _selectedArtist = artist;
-      _isLoadingAlbums = api != null;
-      _albums = [];
-      _errorMessage = null;
-    });
-    if (api == null) return;
-
-    try {
-      final albums = await api.getArtistAlbums(artist.id);
-      if (!mounted || generation != _albumsGeneration) return;
-      setState(() {
-        _albums = albums;
-        _isLoadingAlbums = false;
-      });
-    } catch (e) {
-      if (!mounted || generation != _albumsGeneration) return;
-      setState(() {
-        _isLoadingAlbums = false;
-        _errorMessage = NetworkErrorHelper.getErrorMessage(e,
-            context: 'Failed to load albums for ${artist.name}');
-      });
-    }
-  }
-
-  Future<void> _playAlbum(Album album) async {
-    try {
-      final appState = context.read<AppState>();
-      await appState.audioPlayerService?.playAlbum(album);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(NetworkErrorHelper.getErrorMessage(e,
-                context: 'Failed to play album')),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
-    }
-  }
-
-  void _backToArtists() {
-    // An album request still running is dropped, see _albumsGeneration
-    _albumsGeneration++;
-    setState(() {
-      _isLoadingAlbums = false;
-      _selectedArtist = null;
-      _albums = [];
-      _errorMessage = null;
-    });
+  void _showArtist(Artist? artist) {
+    setState(() => _selectedArtist = artist);
   }
 
   @override
@@ -118,7 +63,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
       appBar: AppBar(
         title: Text(_selectedArtist?.name ?? 'Artists'),
         leading: _selectedArtist != null
-            ? BackButton(onPressed: _backToArtists)
+            ? BackButton(onPressed: () => _showArtist(null))
             : null,
       ),
       body: _buildBody(),
@@ -126,6 +71,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   Widget _buildBody() {
+    final artist = _selectedArtist;
+    if (artist != null) {
+      // Keyed, so another artist's albums never show up, see
+      // ArtistAlbumsView
+      return ArtistAlbumsView(key: ValueKey(artist.id), artist: artist);
+    }
+
     if (_errorMessage != null) {
       return Center(
         child: Column(
@@ -144,9 +96,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
             ),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: _selectedArtist != null
-                  ? () => _loadArtistAlbums(_selectedArtist!)
-                  : _loadArtists,
+              onPressed: _loadArtists,
               child: const Text('Retry'),
             ),
           ],
@@ -154,11 +104,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
       );
     }
 
-    if (_selectedArtist == null) {
-      return _buildArtistList();
-    } else {
-      return _buildAlbumList();
-    }
+    return _buildArtistList();
   }
 
   Widget _buildArtistList() {
@@ -216,7 +162,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
           ? Text('${artist.albumCount} albums')
           : null,
       trailing: const Icon(Icons.chevron_right),
-      onTap: () => _loadArtistAlbums(artist),
+      onTap: () => _showArtist(artist),
     );
   }
 
@@ -239,148 +185,6 @@ class _ArtistScreenState extends State<ArtistScreen> {
         style: TextStyle(
           color: Theme.of(context).colorScheme.onSurfaceVariant,
           fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAlbumList() {
-    if (_isLoadingAlbums) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Loading albums...'),
-          ],
-        ),
-      );
-    }
-
-    if (_albums.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.album_outlined,
-                size: 64,
-                color: Theme.of(context).colorScheme.onSurfaceVariant),
-            const SizedBox(height: 16),
-            const Text('No albums found for this artist'),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _selectedArtist != null
-                  ? () => _loadArtistAlbums(_selectedArtist!)
-                  : null,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Refresh'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _selectedArtist != null
-          ? () => _loadArtistAlbums(_selectedArtist!)
-          : () async {},
-      child: GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          childAspectRatio: 0.8,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-        ),
-        itemCount: _albums.length,
-        itemBuilder: (context, index) {
-          final album = _albums[index];
-          return _buildAlbumCard(album);
-        },
-      ),
-    );
-  }
-
-  Widget _buildAlbumCard(Album album) {
-    final appState = context.read<AppState>();
-    final api = appState.api;
-
-    return Card(
-      elevation: 2,
-      child: InkWell(
-        onTap: () => _playAlbum(album),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(4),
-                  ),
-                ),
-                child: album.coverArt != null && api != null
-                    ? ImageCacheManager.buildCoverArt(
-                        api: api,
-                        coverArtId: album.coverArt!,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest,
-                          child: const Center(
-                            child: CircularProgressIndicator(),
-                          ),
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest,
-                          child: Icon(
-                            Icons.music_note,
-                            size: 48,
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      )
-                    : Icon(
-                        Icons.music_note,
-                        size: 48,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    album.name,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (album.songCount != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      '${album.songCount} songs',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
         ),
       ),
     );

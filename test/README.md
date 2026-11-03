@@ -41,7 +41,7 @@ The Java tests (`packages/voidweaver_player/android/src/test/`) cover `GainAudio
 
 - `services/`: one file per service (API cache, audio cache, scrobble queue, playback restore, ReplayGain parsing and gain calculation, skips, gapless playback and system controls, timeouts, HTTPS enforcement, disposal)
 - `utils/`: validators and formatting helpers
-- `widgets/`: error boundaries, album list, player controls, search screen (debounce, stale responses), sync status indicator
+- `widgets/`: error boundaries, album list, album tiles (playing on tap, the error shown), player controls, search screen (debounce, stale responses), sync status indicator
 - `screens/`: home and settings screens, in portrait and landscape at a phone's size (`tester.view`); artist screens (responses arriving after the screen is gone or the user went back); the advanced network settings dialog (validation, keeping the settings it doesn't show)
 - `fixtures/replaygain/`: sample tag data for the parser tests
 - `test_helpers/mock_audio_player.dart`: fake `VoidweaverPlayer` holding a sequence, like the real one; `simulateTrackTransition()`, `simulateCompletion()`, `simulateLoadError()`, `simulateSystemCommand()`, `failingUrls`, `gainOfSource()` etc. Like the real player, a `seek()` to an item in `failingUrls` reports the error, then completes.
