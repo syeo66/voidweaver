@@ -56,7 +56,7 @@ class FakeScrobble {
 
 /// A Subsonic server over HTTPS on localhost for tests, answering like
 /// Navidrome: XML responses, errors as HTTP 200 with `status="failed"`,
-/// token authentication, range requests for `stream`.
+/// token authentication, range requests for `stream` and `download`.
 ///
 /// Runs on the host (`flutter test`, and `tool/fake_server.dart` for
 /// `tool/emulator_check.sh --fake-server`) and inside the app on a device
@@ -67,7 +67,7 @@ class FakeScrobble {
 ///
 /// Endpoints: ping, getAlbumList2, getAlbum, getArtists, getArtist, search3,
 /// getRandomSongs, getScanStatus, scrobble, stream (a WAV tone per song),
-/// getCoverArt (a PNG).
+/// download (the same WAV, see [downloadsEnabled]), getCoverArt (a PNG).
 class FakeSubsonicServer {
   FakeSubsonicServer({
     this.username = 'alice',
@@ -99,6 +99,10 @@ class FakeSubsonicServer {
   String password;
 
   final List<FakeAlbum> albums;
+
+  /// Whether `download` serves the file. Otherwise it answers like Navidrome
+  /// with `EnableDownloads` off: a Subsonic error (code 50).
+  bool downloadsEnabled = true;
 
   /// Every request answered, oldest first
   final List<FakeRequest> requests = [];
@@ -184,6 +188,11 @@ class FakeSubsonicServer {
         case 'scrobble':
           return _scrobble(response, params);
         case 'stream':
+          return _stream(request, params['id']);
+        case 'download':
+          if (!downloadsEnabled) {
+            return _xmlError(response, 50, 'downloads are disabled');
+          }
           return _stream(request, params['id']);
         case 'getCoverArt':
           response.headers.contentType = ContentType('image', 'png');

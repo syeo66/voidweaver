@@ -252,6 +252,21 @@ class MockSubsonicApi extends _i1.Mock implements _i6.SubsonicApi {
       ) as String);
 
   @override
+  String getDownloadUrl(String? id) => (super.noSuchMethod(
+        Invocation.method(
+          #getDownloadUrl,
+          [id],
+        ),
+        returnValue: _i7.dummyValue<String>(
+          this,
+          Invocation.method(
+            #getDownloadUrl,
+            [id],
+          ),
+        ),
+      ) as String);
+
+  @override
   _i8.Future<_i5.ReplayGainData> readReplayGain(String? id) =>
       (super.noSuchMethod(
         Invocation.method(

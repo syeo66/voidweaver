@@ -111,6 +111,24 @@ void main() {
     expect(ascii.decode(await response.expand((b) => b).toList()), 'RIFF');
   });
 
+  group('SubsonicApi.readReplayGain', () {
+    test('reads the tags from the original file', () async {
+      await api().readReplayGain('s-1');
+      expect(server.requestsTo('download').single.params['id'], 's-1');
+      expect(server.requestsTo('stream'), isEmpty);
+    });
+
+    test('reads from the stream when the server refuses downloads', () async {
+      server.downloadsEnabled = false;
+      final client = api();
+      await client.readReplayGain('s-1');
+      expect(server.requestsTo('download'), hasLength(1));
+      expect(server.requestsTo('stream').single.params['id'], 's-1');
+      // Refused for the permission, not the credentials
+      expect(client.credentialsRejected.value, isFalse);
+    });
+  });
+
   group('AppState', () {
     /// Logged in with saved credentials ('secret'), like at startup, so
     /// they aren't checked

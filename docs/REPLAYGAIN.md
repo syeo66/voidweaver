@@ -17,11 +17,11 @@ Values out of range count as missing, whatever their source: gains beyond ±30 d
 
 1. **Server response**: Navidrome includes ReplayGain in song entries (OpenSubsonic `<replayGain>` element or flat attributes). If present, nothing else is fetched.
 2. **Downloaded file**: for prefetched tracks, tags are read from the cached file (`ReplayGainReader.readFromFile`), which also works offline.
-3. **Range request**: otherwise the first 256 KB of the stream are fetched, plus more if the metadata is larger (ID3v2 tag, FLAC blocks up to the Vorbis comment, MP4 `moov` atom; `ReplayGainReader.readFromUrl`). If the server ignores the Range header and sends the whole file (e.g. a transcoded stream), the metadata is read from that response and then the connection is closed, so the audio isn't downloaded. Starting the track waits for this, so it gives up after 3 seconds and the track plays at the fallback gain.
+3. **Range request**: otherwise the first 256 KB of the original file are fetched through `download`, which the server never transcodes, so the tags are still there (a transcoded `stream` can lose them). If the server refuses the download (an error status, or a Subsonic error such as Navidrome's "downloads are disabled" when `EnableDownloads` is off or the user lacks the permission), the same is read from `stream` instead (`SubsonicApi.readReplayGain`). subsoxy passes both through without counting them as plays. More is fetched if the metadata is larger (ID3v2 tag, FLAC blocks up to the Vorbis comment, MP4 `moov` atom; `ReplayGainReader.readFromUrl`). If the server ignores the Range header and sends the whole file (e.g. a transcoded stream), the metadata is read from that response and then the connection is closed, so the audio isn't downloaded. Starting the track waits for this, so it gives up after 3 seconds (both requests together) and the track plays at the fallback gain.
 
 Supported tags:
 
-- ID3v2.3/2.4 `TXXX` frames (MP3)
+- ID3v2.3/2.4 `TXXX` frames (MP3), in any text encoding (Latin-1, UTF-16 with or without BOM, UTF-8), also after an extended header
 - Vorbis comments (FLAC, Ogg)
 - APE tags
 - MP4/M4A iTunes-style `ilst` tags (only when `moov` comes before the audio data)

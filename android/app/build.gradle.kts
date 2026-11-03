@@ -44,9 +44,9 @@ android {
     // Trust in the fake Subsonic server of the tests (its CA, for localhost):
     // always in debug builds (integration tests), and in a release build only
     // with -PtrustFakeServer=true, for tool/emulator_check.sh --fake-server,
-    // which checks the media session of an R8-shrunk build in CI. The release
-    // APK that's installed never has it; tool/check_release_apk.sh fails if it
-    // does.
+    // which checks the media session of an R8-shrunk build (locally only: CI
+    // doesn't run it, see docs/ANDROID.md). The release APK that's installed
+    // never has it; tool/check_release_apk.sh fails if it does.
     sourceSets.getByName("debug").res.srcDir("src/fakeServer/res")
     if (providers.gradleProperty("trustFakeServer").orNull == "true") {
         sourceSets.getByName("release") {

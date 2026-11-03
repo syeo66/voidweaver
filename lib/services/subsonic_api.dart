@@ -385,11 +385,26 @@ class SubsonicApi {
     return uri.toString();
   }
 
+  /// URL of the original file of the song [id], never transcoded. Servers
+  /// can refuse it (Navidrome with downloads disabled, or for a user without
+  /// the permission), unlike [getStreamUrl].
+  String getDownloadUrl(String id) {
+    final params = _getAuthParams();
+    params['id'] = id;
+
+    final uri =
+        Uri.parse('$serverUrl/rest/download').replace(queryParameters: params);
+    return uri.toString();
+  }
+
   /// ReplayGain tags of the song [id], read from the start of its file, for
-  /// songs the server sends no ReplayGain data for. No data after a few
-  /// seconds, see [ReplayGainReader.readFromUrl].
+  /// songs the server sends no ReplayGain data for. Read from the original
+  /// file ([getDownloadUrl]): a stream the server transcodes may have lost
+  /// the tags. From the stream if the server refuses the download. No data
+  /// after a few seconds, see [ReplayGainReader.readFromUrl].
   Future<ReplayGainData> readReplayGain(String id) =>
-      ReplayGainReader.readFromUrl(getStreamUrl(id), client: _httpClient);
+      ReplayGainReader.readFromUrl(getDownloadUrl(id),
+          fallbackUrl: getStreamUrl(id), client: _httpClient);
 
   /// URL of the cover art [id], scaled by the server to [size] pixels
   String getCoverArtUrl(String id, {int size = 300}) {

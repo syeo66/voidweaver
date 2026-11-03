@@ -54,25 +54,44 @@ class ReplayGainReader {
   static const Duration defaultUrlTimeout = Duration(seconds: 3);
 
   /// Reads ReplayGain metadata from the start of the file at [url] through
-  /// [client] (see `SubsonicApi.readReplayGain`). Playback waits for this, so
-  /// after [timeout] it gives up and returns no data (the fallback gain
-  /// applies) rather than hold it up on a stalled connection.
+  /// [client] (see `SubsonicApi.readReplayGain`). If the server refuses [url]
+  /// (an error status, or a Subsonic error response instead of audio), reads
+  /// from [fallbackUrl] instead. Playback waits for this, so after [timeout]
+  /// (for both) it gives up and returns no data (the fallback gain applies)
+  /// rather than hold it up on a stalled connection.
   static Future<ReplayGainData> readFromUrl(String url,
       {required http.Client client,
+      String? fallbackUrl,
       Duration timeout = defaultUrlTimeout}) async {
-    _log('Reading ReplayGain metadata from: $url');
-    final head = _UrlHead(client, url);
+    _UrlHead? head;
+    var timedOut = false;
+    Future<ReplayGainData> read() async {
+      for (final candidate in [url, if (fallbackUrl != null) fallbackUrl]) {
+        if (timedOut) break;
+        _log('Reading ReplayGain metadata from: $candidate');
+        final current = head = _UrlHead(client, candidate);
+        try {
+          final data = await readFromHead(current.read);
+          if (!current.refused) return data;
+        } finally {
+          await current.close();
+        }
+        _log('The server refused the request');
+      }
+      return const ReplayGainData();
+    }
+
     try {
-      return await readFromHead(head.read).timeout(timeout);
+      return await read().timeout(timeout);
     } on TimeoutException {
       _log('Reading ReplayGain metadata timed out after $timeout');
+      timedOut = true;
+      await head?.close();
       return const ReplayGainData();
     } catch (e, stackTrace) {
       _log('Error reading ReplayGain metadata: $e');
       _log('Stack trace: $stackTrace');
       return const ReplayGainData();
-    } finally {
-      await head.close();
     }
   }
 
@@ -280,19 +299,13 @@ class ReplayGainReader {
     // Parse ID3v2 header
     final version = bytes[3];
     final revision = bytes[4];
-    // final flags = bytes[5]; // Unused for now
+    final flags = bytes[5];
 
-    // Calculate tag size (synchsafe integer for v2.4, regular for v2.3)
-    int tagSize;
-    if (version >= 4) {
-      tagSize =
-          (bytes[6] << 21) | (bytes[7] << 14) | (bytes[8] << 7) | bytes[9];
-    } else {
-      // ID3v2.3 and earlier use regular integers
-      tagSize =
-          (bytes[6] << 21) | (bytes[7] << 14) | (bytes[8] << 7) | bytes[9];
-    }
-    tagSize += 10; // Include header size
+    // The tag size is a synchsafe integer in every version, not counting the
+    // 10 byte header
+    var tagSize =
+        (bytes[6] << 21) | (bytes[7] << 14) | (bytes[8] << 7) | bytes[9];
+    tagSize += 10;
 
     if (tagSize > bytes.length) {
       tagSize = bytes.length; // Use available data
@@ -306,8 +319,24 @@ class ReplayGainReader {
     double? trackPeak;
     double? albumPeak;
 
-    // Parse frames
+    // Parse frames, after the extended header if there is one
     int offset = 10;
+    if (flags & 0x40 != 0 && bytes.length >= 14) {
+      if (version >= 4) {
+        // Synchsafe, counting its own size field
+        offset += (bytes[10] << 21) |
+            (bytes[11] << 14) |
+            (bytes[12] << 7) |
+            bytes[13];
+      } else {
+        // A plain integer, not counting its own size field
+        offset += 4 +
+            ((bytes[10] << 24) |
+                (bytes[11] << 16) |
+                (bytes[12] << 8) |
+                bytes[13]);
+      }
+    }
     while (offset + 10 < tagSize) {
       // Frame header
       final frameId = String.fromCharCodes(bytes.sublist(offset, offset + 4));
@@ -378,8 +407,8 @@ class ReplayGainReader {
     String value;
 
     // Handle different text encodings
-    if (encoding == 1) {
-      // UTF-16 with BOM
+    if (encoding == 1 || encoding == 2) {
+      // UTF-16: with a BOM (1), or big-endian without one (2, ID3v2.4)
       // Find description (null-terminated, 2 bytes per char)
       int descEnd = offset;
       while (descEnd + 1 < frameData.length &&
@@ -391,7 +420,9 @@ class ReplayGainReader {
 
       // Determine endianness and skip BOM if present
       int descStart = offset;
-      bool isLittleEndian = true; // Default to LE (most common in ID3v2)
+      // Without a BOM: little-endian for encoding 1, the most common in
+      // ID3v2, big-endian for encoding 2
+      bool isLittleEndian = encoding == 1;
 
       if (descEnd - offset >= 2) {
         if (frameData[offset] == 0xFF && frameData[offset + 1] == 0xFE) {
@@ -434,7 +465,8 @@ class ReplayGainReader {
         valueIsLittleEndian,
       ).trim();
     } else {
-      // ISO-8859-1 or ASCII (encoding == 0)
+      // ISO-8859-1 (0) or UTF-8 (3): the ReplayGain descriptions and values
+      // are ASCII in both
       // Find the description (null-terminated)
       int descEnd = offset;
       while (descEnd < frameData.length && frameData[descEnd] != 0) {
@@ -901,6 +933,11 @@ class _UrlHead {
   // Nothing more to read: the end of the file, an error or [close]
   bool _ended = false;
 
+  /// Whether the server answered the first request with something other
+  /// than the file: an error status, or a Subsonic error response (XML or
+  /// JSON with HTTP 200, e.g. Navidrome's "downloads are disabled")
+  bool refused = false;
+
   /// At least [length] bytes from the start of the file, or fewer if it
   /// ends sooner; null if nothing could be read.
   Future<Uint8List?> read(int length) async {
@@ -914,6 +951,14 @@ class _UrlHead {
         if (_ended) {
           // Closed meanwhile
           await response.stream.listen(null).cancel();
+          break;
+        }
+        if (start == 0 && _isSubsonicResponse(response)) {
+          ReplayGainReader._log('Got a Subsonic response instead of audio: '
+              '${response.headers['content-type']}');
+          await response.stream.listen(null).cancel();
+          refused = true;
+          _ended = true;
           break;
         }
         if (response.statusCode == 206) {
@@ -930,6 +975,7 @@ class _UrlHead {
               'Failed to fetch audio data: ${response.statusCode}');
           // Without reading the body
           await response.stream.listen(null).cancel();
+          if (start == 0) refused = true;
           _ended = true;
           break;
         }
@@ -944,6 +990,11 @@ class _UrlHead {
       }
     }
     return _bytes.isEmpty ? null : _bytes.toBytes();
+  }
+
+  static bool _isSubsonicResponse(http.StreamedResponse response) {
+    final type = response.headers['content-type']?.toLowerCase() ?? '';
+    return type.contains('xml') || type.contains('json');
   }
 
   /// Stops reading, also a read in progress
