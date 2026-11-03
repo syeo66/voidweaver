@@ -149,7 +149,7 @@ class _PlaylistStripState extends State<PlaylistStrip> {
                     final isCurrentSong = index == _currentIndex;
 
                     return _PlaylistItem(
-                      key: ValueKey('playlist-item-${song.id}'),
+                      key: ValueKey('playlist-item-$index'),
                       song: song,
                       isCurrentSong: isCurrentSong,
                       api: widget.api,
@@ -185,7 +185,7 @@ class _PlaylistStripState extends State<PlaylistStrip> {
               final isCurrentSong = index == _currentIndex;
 
               return _PlaylistItem(
-                key: ValueKey('playlist-item-${song.id}'),
+                key: ValueKey('playlist-item-$index'),
                 song: song,
                 isCurrentSong: isCurrentSong,
                 api: widget.api,

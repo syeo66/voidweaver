@@ -461,20 +461,26 @@ class AppState extends ChangeNotifier {
     _disposeServices();
 
     _savedCredentials = null;
-    try {
-      await _secureStorage.deleteAll();
-      await Future.wait([
-        if (api != null) api.clearCache(),
-        if (scrobbleQueue != null) scrobbleQueue.clear(),
-        if (_persistenceService != null)
-          _persistenceService!.clearPlaybackState(),
-        ImageCacheManager.clearCache(),
-      ]);
-    } catch (e) {
-      _log.warning('Error clearing configuration', e);
+    // Each on its own, so one that fails doesn't leave the others' data
+    Future<void> clear(String what, Future<void> Function() step) async {
+      try {
+        await step();
+      } catch (e) {
+        _log.warning('Logout could not clear $what', e);
+      }
     }
 
-    _albums.clear();
+    await Future.wait([
+      clear('the credentials', _secureStorage.deleteAll),
+      if (api != null) clear('the library cache', api.clearCache),
+      if (scrobbleQueue != null)
+        clear('the pending scrobbles', scrobbleQueue.clear),
+      if (_persistenceService != null)
+        clear('the saved queue', _persistenceService!.clearPlaybackState),
+      clear('the cover art', ImageCacheManager.clearCache),
+    ]);
+
+    _albums = [];
     // A load still running is dropped, see loadAlbums()
     _isLoading = false;
     _albumError = null;

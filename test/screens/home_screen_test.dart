@@ -153,8 +153,28 @@ void main() {
         // A phone in landscape has only room for the covers, not the label
         expect(find.text('Playlist: 1 of 2'),
             portrait ? findsOneWidget : findsNothing);
-        expect(find.byKey(const ValueKey('playlist-item-s1')), findsOneWidget);
-        expect(find.byKey(const ValueKey('playlist-item-s2')), findsOneWidget);
+        expect(find.byKey(const ValueKey('playlist-item-0')), findsOneWidget);
+        expect(find.byKey(const ValueKey('playlist-item-1')), findsOneWidget);
+      });
+
+      testWidgets('Now Playing shows a song that is in the queue twice',
+          (tester) async {
+        _setOrientation(tester, orientation);
+        await pumpHome(tester);
+        final repeated = Album(
+          id: 'album2',
+          name: 'Second Album',
+          artist: 'Album Artist',
+          songs: [song('s1'), song('s2'), song('s1')],
+        );
+        await tester.runAsync(() => service.playAlbum(repeated));
+        await tester.pump();
+        await openNowPlaying(tester);
+
+        expect(tester.takeException(), isNull);
+        for (var i = 0; i < 3; i++) {
+          expect(find.byKey(ValueKey('playlist-item-$i')), findsOneWidget);
+        }
       });
 
       testWidgets('Now Playing follows a skip', (tester) async {
@@ -186,7 +206,7 @@ void main() {
     await openNowPlaying(tester);
 
     expect(find.text('Playlist: 1 of 2'), findsOneWidget);
-    expect(find.byKey(const ValueKey('playlist-item-s2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('playlist-item-1')), findsOneWidget);
   });
 
   testWidgets('the sleep timer can be started and cancelled', (tester) async {

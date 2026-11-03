@@ -91,6 +91,15 @@ void main() {
     await tester.pump();
   }
 
+  /// Lets a seek from the slider reach the player. It waits for the player
+  /// operations before it, which ran in runAsync() (see [playAlbum]), so it
+  /// continues outside the fake clock.
+  Future<void> seekDone(WidgetTester tester) async {
+    await tester.pump();
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await tester.pump();
+  }
+
   IconButton buttonWithIcon(WidgetTester tester, IconData icon) =>
       tester.widget<IconButton>(find.widgetWithIcon(IconButton, icon));
 
@@ -203,7 +212,7 @@ void main() {
     await playAlbum(tester);
 
     await tester.tap(find.byType(Slider));
-    await tester.pump();
+    await seekDone(tester);
 
     // A tap in the middle of the slider seeks to the middle of the song
     expect(player.position.inSeconds, closeTo(90, 2));
@@ -241,7 +250,7 @@ void main() {
     expect(tester.widget<Slider>(slider).value, dragged);
 
     await gesture.up();
-    await tester.pump();
+    await seekDone(tester);
 
     expect(player.seeks, hasLength(1));
     expect(player.seeks.single.inMilliseconds / 180000, closeTo(dragged, 0.01));

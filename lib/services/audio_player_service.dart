@@ -102,6 +102,10 @@ class AudioPlayerService extends ChangeNotifier {
   // an index event can still be from before the seek: after previous(), the
   // old track's index would look like an advance.
   int? _awaitedIndex;
+  // The _loadQueue() call that hasn't handed its sequence to the player yet,
+  // and where a seek meanwhile moved its start, see seekTo()
+  int? _preparingLoad;
+  Duration? _seekBeforeLoad;
 
   // Skips
   DateTime? _lastSkipTime;
@@ -492,6 +496,8 @@ class AudioPlayerService extends ChangeNotifier {
       {Duration position = Duration.zero, bool play = true}) async {
     final generation = ++_generation;
     _awaitedIndex = null;
+    _preparingLoad = generation;
+    _seekBeforeLoad = null;
     _playPending = play;
     if (play) _startsInProgress++;
     try {
@@ -510,10 +516,14 @@ class AudioPlayerService extends ChangeNotifier {
       try {
         await _playerOp(() async {
           if (generation != _generation) return;
+          // Later seeks wait for this operation
+          final start = _seekBeforeLoad ?? position;
+          _preparingLoad = null;
+          _seekBeforeLoad = null;
           _settingSources = true;
           try {
             await _audioPlayer.setAudioSources(sources,
-                initialIndex: startIndex, initialPosition: position);
+                initialIndex: startIndex, initialPosition: start);
           } finally {
             _settingSources = false;
           }
@@ -877,8 +887,24 @@ class AudioPlayerService extends ChangeNotifier {
     }
   }
 
-  Future<void> seekTo(Duration position) async {
-    await _audioPlayer.seek(position);
+  /// Seeks within the current track. After a load or skip in progress, so
+  /// it lands on the track that one makes current rather than the one before
+  /// it, and isn't overwritten by its start position.
+  Future<void> seekTo(Duration position) {
+    if (_preparingLoad == _generation) {
+      // The load hasn't set its sequence yet: start it there instead
+      _seekBeforeLoad = position;
+      _currentPosition = position;
+      return Future.value();
+    }
+    final generation = _generation;
+    final index = _currentIndex;
+    return _playerOp(() async {
+      // The queue was replaced, or the track changed, meanwhile: the position
+      // was meant for the track before
+      if (generation != _generation || index != _currentIndex) return;
+      await _audioPlayer.seek(position);
+    });
   }
 
   /// Scrobbles the current play of the current song once it has been heard

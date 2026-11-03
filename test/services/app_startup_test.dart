@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_secure_storage/test/test_flutter_secure_storage_platform.dart';
+import 'package:flutter_secure_storage_platform_interface/flutter_secure_storage_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/app_state.dart';
@@ -61,4 +63,31 @@ void main() {
     expect(notified, isFalse);
     expect(appState.albumError, isNull);
   });
+
+  test('a logout that cannot remove the credentials still clears the rest',
+      () async {
+    final temp = await Directory.systemTemp.createTemp();
+    addTearDown(() => temp.delete(recursive: true));
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+            const MethodChannel('plugins.flutter.io/path_provider'),
+            (_) async => temp.path);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('playbackQueue', '{}');
+    FlutterSecureStoragePlatform.instance = _FailingDeleteStorage();
+
+    await appState.clearConfiguration();
+
+    expect(appState.isConfigured, isFalse);
+    expect(prefs.containsKey('playbackQueue'), isFalse);
+  });
+}
+
+/// Secure storage whose deleteAll() fails, like a Keystore error
+class _FailingDeleteStorage extends TestFlutterSecureStoragePlatform {
+  _FailingDeleteStorage() : super({});
+
+  @override
+  Future<void> deleteAll({required Map<String, String> options}) async =>
+      throw PlatformException(code: 'keystore', message: 'unavailable');
 }

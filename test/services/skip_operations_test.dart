@@ -366,4 +366,47 @@ void main() {
           .called(1);
     });
   });
+
+  group('seekTo()', () {
+    test('during a slow skip seeks in the track it skips to', () async {
+      await service.playAlbum(album(3));
+      player.seekGate = Completer();
+
+      final skipping = service.next();
+      // Under way: the app shows the track it skips to
+      await settle();
+      expect(service.currentIndex, 1);
+      final seeking = service.seekTo(const Duration(seconds: 60));
+      player.seekGate!.complete();
+      await skipping;
+      await seeking;
+
+      expect(player.currentIndex, 1);
+      expect(player.position, const Duration(seconds: 60));
+    });
+
+    test('before a new queue is loaded moves where it starts', () async {
+      final reading = Completer<ReplayGainData>();
+      when(mockApi.readReplayGain(any)).thenAnswer((_) => reading.future);
+      final unread =
+          Album(id: 'album2', name: 'Album', artist: 'Artist', songs: [
+        Song(
+            id: 'u1',
+            title: 'Title u1',
+            artist: 'Artist',
+            album: 'Album',
+            duration: 180)
+      ]);
+
+      final starting = service.playAlbum(unread);
+      await settle();
+      await service.seekTo(const Duration(seconds: 30));
+      expect(service.currentPosition, const Duration(seconds: 30));
+      reading.complete(const ReplayGainData());
+      await starting;
+
+      expect(player.position, const Duration(seconds: 30));
+      expect(service.currentPosition, const Duration(seconds: 30));
+    });
+  });
 }
