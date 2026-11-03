@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:logging/logging.dart';
 import '../services/audio_player_service.dart';
+import '../utils/format.dart';
 
 final _log = Logger('player_controls');
 
@@ -196,7 +197,7 @@ class _ProgressSectionState extends State<_ProgressSection> {
                 children: [
                   for (final time in [current, total])
                     Text(
-                      _formatDuration(time),
+                      formatClock(time),
                       style: TextStyle(
                         color: colors.onSurfaceVariant,
                         fontSize: 12,
@@ -279,7 +280,7 @@ class _SleepTimerCountdownState extends State<_SleepTimerCountdown> {
   Widget build(BuildContext context) {
     final remaining = context.read<AudioPlayerService>().sleepTimerRemaining;
     return Text(
-      'Sleep timer: ${remaining != null ? _formatDuration(remaining) : "0:00"}',
+      'Sleep timer: ${remaining != null ? formatClock(remaining) : "0:00"}',
       style: const TextStyle(
         fontSize: 12,
         color: Colors.orange,
@@ -423,10 +424,4 @@ class _ControlButtons extends StatelessWidget {
       },
     );
   }
-}
-
-String _formatDuration(Duration duration) {
-  final minutes = duration.inMinutes;
-  final seconds = duration.inSeconds % 60;
-  return '${minutes.toString().padLeft(1, '0')}:${seconds.toString().padLeft(2, '0')}';
 }

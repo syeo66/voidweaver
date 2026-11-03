@@ -28,7 +28,7 @@ class _StubAppState extends AppState {
   List<Album> get albums => stubAlbums;
 
   @override
-  String? get error => stubError;
+  String? get albumError => stubError;
 
   @override
   bool get isLoading => stubLoading;

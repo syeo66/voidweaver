@@ -11,6 +11,7 @@ import 'playback_persistence.dart';
 import 'scrobble_queue.dart';
 import 'audio_cache.dart';
 import 'network_errors.dart';
+import '../utils/format.dart';
 
 final _log = Logger('audio_player');
 final _rgLogger = Logger('replaygain');
@@ -978,12 +979,6 @@ class AudioPlayerService extends ChangeNotifier {
     }
   }
 
-  String _formatDuration(Duration duration) {
-    final minutes = duration.inMinutes;
-    final seconds = duration.inSeconds % 60;
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-  }
-
   /// Logs to both the console (debug builds, see setUpLogging()) and the
   /// persistent ReplayGain debug log (only when the user has enabled it in
   /// Settings).
@@ -1200,7 +1195,7 @@ class AudioPlayerService extends ChangeNotifier {
     _sleepTimerStartTime = _clock();
     _isSleepTimerActive = true;
 
-    _log.info('Sleep timer started for ${_formatDuration(duration)}');
+    _log.info('Sleep timer started for ${formatClock(duration)}');
     _scheduleSleepTimer(duration);
     notifyListeners();
   }
@@ -1222,7 +1217,7 @@ class AudioPlayerService extends ChangeNotifier {
       _sleepTimerDuration = _sleepTimerDuration! + extension;
 
       _log.info(
-          'Sleep timer extended by ${_formatDuration(extension)}, new remaining: ${_formatDuration(newDuration)}');
+          'Sleep timer extended by ${formatClock(extension)}, new remaining: ${formatClock(newDuration)}');
       _scheduleSleepTimer(newDuration);
       notifyListeners();
     }

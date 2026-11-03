@@ -60,8 +60,9 @@ class AppState extends ChangeNotifier {
   SettingsService? _settingsService;
   PlaybackPersistenceService? _persistenceService;
   List<Album> _albums = [];
+  // The album list's load: running, and why the last one failed
   bool _isLoading = false;
-  String? _error;
+  String? _albumError;
   bool _isConfigured = false;
   SyncStatus _syncStatus = SyncStatus.idle;
   Timer? _syncTimer;
@@ -79,10 +80,9 @@ class AppState extends ChangeNotifier {
   // The timeouts last handed to the player, see _applyNetworkConfig()
   (Duration, Duration)? _playerTimeouts;
 
-  // Enhanced loading states
+  // The login: its progress, and why it failed
   LoadingState _configurationLoadingState = LoadingState.idle;
   String? _configurationError;
-  String? _albumError;
 
   SubsonicApi? get api => _api;
   AudioPlayerService? get audioPlayerService => _audioPlayerService;
@@ -90,8 +90,13 @@ class AppState extends ChangeNotifier {
   List<Album> get albums => _albums;
   AlbumListType get albumListType =>
       _settingsService?.albumListType ?? AlbumListType.recent;
+
+  /// Whether the album list is being loaded, see [loadAlbums]
   bool get isLoading => _isLoading;
-  String? get error => _error;
+
+  /// Why the last load of the album list failed; cleared by the next load
+  /// or background sync that succeeds
+  String? get albumError => _albumError;
   bool get isConfigured => _isConfigured;
   SyncStatus get syncStatus => _syncStatus;
   DateTime? get lastSyncTime => _lastSyncTime;
@@ -104,10 +109,11 @@ class AppState extends ChangeNotifier {
   /// Plays not yet scrobbled to the server; a logout drops them
   int get pendingScrobbles => _scrobbleQueue?.pendingSubmissions ?? 0;
 
-  // Enhanced loading state getters
+  /// The progress of [configure], for the login screen
   LoadingState get configurationLoadingState => _configurationLoadingState;
+
+  /// Why the last [configure] failed, for the login screen
   String? get configurationError => _configurationError;
-  String? get albumError => _albumError;
 
   Future<void> initialize() async {
     _settingsService = SettingsService();
@@ -186,9 +192,9 @@ class AppState extends ChangeNotifier {
       // release them (the player's media session among them)
       _disposeServices();
       _configurationError = NetworkErrorHelper.getErrorMessage(e);
-      _error = _configurationError;
       _configurationLoadingState = LoadingState.error;
       _isConfigured = false;
+      // A load of the previous login's albums is dropped, see loadAlbums()
       _isLoading = false;
       notifyListeners();
       rethrow;
@@ -287,7 +293,6 @@ class AppState extends ChangeNotifier {
     final type = albumListType;
 
     _isLoading = true;
-    _error = null;
     _albumError = null;
     notifyListeners();
 
@@ -301,9 +306,8 @@ class AppState extends ChangeNotifier {
       _lastSyncTime = DateTime.now();
     } catch (e) {
       if (!identical(api, _api) || type != albumListType) return;
-      _error = NetworkErrorHelper.getErrorMessage(e,
+      _albumError = NetworkErrorHelper.getErrorMessage(e,
           context: 'Failed to load albums');
-      _albumError = _error;
     }
     _isLoading = false;
     notifyListeners();
@@ -331,7 +335,7 @@ class AppState extends ChangeNotifier {
       _albums = newAlbums;
       _syncStatus = SyncStatus.success;
       _lastSyncTime = DateTime.now();
-      _error = null;
+      _albumError = null;
     } catch (e) {
       if (!identical(api, _api)) return;
       if (type != albumListType) {
@@ -505,15 +509,12 @@ class AppState extends ChangeNotifier {
     _albums.clear();
     // A load still running is dropped, see loadAlbums()
     _isLoading = false;
+    _albumError = null;
     _isConfigured = false;
-    _error = null;
     _syncStatus = SyncStatus.idle;
     _lastSyncTime = null;
-
-    // Reset loading states
     _configurationLoadingState = LoadingState.idle;
     _configurationError = null;
-    _albumError = null;
 
     notifyListeners();
   }

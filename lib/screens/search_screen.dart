@@ -7,6 +7,7 @@ import '../services/subsonic_api.dart';
 import 'artist_detail_screen.dart';
 import '../widgets/album_tile.dart';
 import '../services/network_errors.dart';
+import '../utils/format.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -384,8 +385,9 @@ class _SearchScreenState extends State<SearchScreen>
           : const Icon(Icons.music_note),
       title: Text(song.title),
       subtitle: Text('${song.artist} • ${song.album}'),
-      trailing:
-          song.duration != null ? Text(_formatDuration(song.duration!)) : null,
+      trailing: song.duration != null
+          ? Text(formatClock(Duration(seconds: song.duration!)))
+          : null,
       onTap: () async {
         try {
           final appState = context.read<AppState>();
@@ -404,11 +406,5 @@ class _SearchScreenState extends State<SearchScreen>
         }
       },
     );
-  }
-
-  String _formatDuration(int seconds) {
-    final minutes = seconds ~/ 60;
-    final remainingSeconds = seconds % 60;
-    return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
   }
 }

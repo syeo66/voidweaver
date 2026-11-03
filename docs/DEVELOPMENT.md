@@ -55,6 +55,8 @@ State is managed with Provider. Services take optional dependencies (`Voidweaver
 - The analyzer runs with `strict-casts`, `strict-raw-types`, `discarded_futures` and `unawaited_futures`. Cast JSON values explicitly (`json['id'] as String?`), and mark fire-and-forget futures with `unawaited(...)`, adding `.catchError` when a failure needs more than the zone's error report.
 - When the server rejects the saved credentials (an auth error from any request, also the scrobble queue's retries), `SubsonicApi.credentialsRejected` is set and the home screen shows `CredentialsBanner`, which asks for the new password (`AppState.updatePassword()`). That logs in again for the same server and user, keeping the pending scrobbles, the saved queue and the caches, which a logout would drop. Any other answer from the server clears the flag.
 - Let exceptions keep their type (rethrow rather than wrapping them in `Exception('...: $e')`) and show them with `NetworkErrorHelper.getErrorMessage(e, context: '...')`, never with `toString()`. Throw `UserFacingException` for errors whose message is meant for the user.
+- Format durations and sizes with `lib/utils/format.dart`: `formatClock()` for playback times and track lengths (`3:05`), `formatHoursMinutes()` for longer spans (`1h 5m`), `formatBytes()`.
+- Screens stay thin: their sections and dialogs live in `lib/widgets/` (`now_playing_view.dart`, `playlist_strip.dart`, `sleep_timer_dialog.dart`, and the Settings sections in `lib/widgets/settings/`).
 - `AudioPlayerService` doesn't notify its listeners for position updates (several a second). Widgets that show the position listen to `AudioPlayerService.position`.
 
 ## Playback internals

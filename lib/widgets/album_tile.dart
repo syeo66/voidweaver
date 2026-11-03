@@ -4,6 +4,7 @@ import '../services/app_state.dart';
 import '../services/image_cache_manager.dart';
 import '../services/network_errors.dart';
 import '../services/subsonic_api.dart';
+import '../utils/format.dart';
 
 /// Plays [album], showing a snack bar if that fails. Returns whether it
 /// started. The snack bar is shown even if the widget behind [context] is
@@ -87,7 +88,7 @@ class _AlbumTileState extends State<AlbumTile> with _PlaysAlbum {
             Text(album.artist),
             if (album.songCount != null && album.duration != null)
               Text(
-                '${album.songCount} songs • ${_formatDuration(album.duration!)}',
+                '${album.songCount} songs • ${formatHoursMinutes(Duration(seconds: album.duration!))}',
                 style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
               ),
           ],
@@ -116,13 +117,6 @@ class _AlbumTileState extends State<AlbumTile> with _PlaysAlbum {
         onTap: () => _play(album),
       ),
     );
-  }
-
-  static String _formatDuration(int seconds) {
-    final duration = Duration(seconds: seconds);
-    final hours = duration.inHours;
-    final minutes = duration.inMinutes % 60;
-    return hours > 0 ? '${hours}h ${minutes}m' : '${minutes}m';
   }
 }
 

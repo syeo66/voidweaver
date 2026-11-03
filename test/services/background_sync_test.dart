@@ -55,7 +55,7 @@ void main() {
 
     // The load for the new order reports its failure, not the old sync
     expect(appState.syncStatus, SyncStatus.idle);
-    expect(appState.error, isNotNull);
+    expect(appState.albumError, isNotNull);
   });
 
   test('staying visible starts no extra sync', () {

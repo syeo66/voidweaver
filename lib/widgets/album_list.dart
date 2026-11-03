@@ -26,7 +26,7 @@ class AlbumList extends StatelessWidget {
         }
 
         // A failed refresh keeps the albums loaded before (see onRefresh)
-        if (appState.error != null && appState.albums.isEmpty) {
+        if (appState.albumError != null && appState.albums.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -34,7 +34,7 @@ class AlbumList extends StatelessWidget {
                 Icon(Icons.error_outline,
                     size: 64, color: Theme.of(context).colorScheme.error),
                 const SizedBox(height: 16),
-                Text(appState.error!),
+                Text(appState.albumError!),
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () => appState.loadAlbums(forceRefresh: true),
