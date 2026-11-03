@@ -3,6 +3,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/app_state.dart';
+
+import '../test_helpers/saved_credentials.dart';
 import 'package:voidweaver/services/network_config.dart';
 
 void main() {
@@ -52,6 +54,20 @@ void main() {
 
   test('starting with saved credentials does not write them again', () async {
     // Every write throws, as above: one would fail the start and log out
+    FlutterSecureStorage.setMockInitialValues(Map.unmodifiable(
+        savedCredentials('https://127.0.0.1:1', 'alice', 'secret')));
+
+    final appState = AppState();
+    addTearDown(appState.dispose);
+    await appState.initialize();
+
+    expect(appState.isConfigured, isTrue);
+    expect(appState.api!.serverUrl, 'https://127.0.0.1:1');
+  });
+
+  test('credentials under separate keys that cannot be moved still log in',
+      () async {
+    // Every write and delete throws
     FlutterSecureStorage.setMockInitialValues(const {
       'server_url': 'https://127.0.0.1:1',
       'username': 'alice',
@@ -67,19 +83,15 @@ void main() {
   });
 
   test('a saved URL that is normalized on start is saved again', () async {
-    FlutterSecureStorage.setMockInitialValues({
-      'server_url': 'https://127.0.0.1:1/',
-      'username': 'alice',
-      'password': 'secret',
-    });
+    FlutterSecureStorage.setMockInitialValues(
+        savedCredentials('https://127.0.0.1:1/', 'alice', 'secret'));
 
     final appState = AppState();
     addTearDown(appState.dispose);
     await appState.initialize();
 
     expect(appState.isConfigured, isTrue);
-    expect(await const FlutterSecureStorage().read(key: 'server_url'),
-        'https://127.0.0.1:1');
+    expect((await readSavedCredentials())!['serverUrl'], 'https://127.0.0.1:1');
   });
 
   test('hands the connection and streaming timeouts to the player', () async {

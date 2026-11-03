@@ -6,6 +6,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/app_state.dart';
+
+import '../test_helpers/saved_credentials.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 
 import '../test_helpers/fake_subsonic_server.dart';
@@ -113,11 +115,8 @@ void main() {
     /// Logged in with saved credentials ('secret'), like at startup, so
     /// they aren't checked
     Future<AppState> loggedIn() async {
-      FlutterSecureStorage.setMockInitialValues({
-        'server_url': server.url,
-        'username': 'alice',
-        'password': 'secret',
-      });
+      FlutterSecureStorage.setMockInitialValues(
+          savedCredentials(server.url, 'alice', 'secret'));
       final appState = AppState();
       addTearDown(appState.dispose);
       await appState.initialize();
@@ -149,10 +148,11 @@ void main() {
       expect(appState.isConfigured, isTrue);
       expect(appState.api, isNot(same(api)));
       expect(appState.credentialsRejected, isFalse);
-      expect(
-          await const FlutterSecureStorage().read(key: 'password'), 'changed');
-      expect(await const FlutterSecureStorage().read(key: 'server_url'),
-          server.url);
+      expect(await readSavedCredentials(), {
+        'serverUrl': server.url,
+        'username': 'alice',
+        'password': 'changed',
+      });
     });
 
     test('keeps pending plays, which are sent with the new password', () async {

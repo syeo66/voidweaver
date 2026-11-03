@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -41,7 +42,15 @@ class AppState extends ChangeNotifier {
     ),
   );
 
-  // Legacy credential keys in SharedPreferences, see _migrateFromSharedPreferences
+  /// The secure storage key of the credentials: server URL, username and
+  /// password in one JSON value, so they're always written together. A
+  /// write that fails leaves the previous credentials, never a mix.
+  @visibleForTesting
+  static const credentialsKey = 'credentials';
+
+  // Each credential under its own key: in secure storage as saved by older
+  // versions (see _readSavedCredentials), and in SharedPreferences as saved
+  // by even older ones (see _migrateFromSharedPreferences)
   static const _legacyCredentialKeys = ['server_url', 'username', 'password'];
 
   SubsonicApi? _api;
@@ -398,12 +407,16 @@ class AppState extends ChangeNotifier {
   Future<void> _saveServerConfig(
       String serverUrl, String username, String password) async {
     try {
-      await _secureStorage.write(key: 'server_url', value: serverUrl);
-      await _secureStorage.write(key: 'username', value: username);
-      await _secureStorage.write(key: 'password', value: password);
+      await _secureStorage.write(
+          key: credentialsKey,
+          value: jsonEncode({
+            'serverUrl': serverUrl,
+            'username': username,
+            'password': password,
+          }));
       _savedCredentials = (serverUrl, username, password);
     } catch (e) {
-      // Partly written, perhaps
+      // Unknown whether it was written
       _savedCredentials = null;
       _log.warning('Error saving secure credentials', e);
       rethrow;
@@ -412,13 +425,10 @@ class AppState extends ChangeNotifier {
 
   Future<void> _loadServerConfig() async {
     try {
-      final serverUrl = await _secureStorage.read(key: 'server_url');
-      final username = await _secureStorage.read(key: 'username');
-      final password = await _secureStorage.read(key: 'password');
-
-      if (serverUrl != null && username != null && password != null) {
-        _savedCredentials = (serverUrl, username, password);
-        await configure(serverUrl, username, password);
+      final saved = await _readSavedCredentials();
+      if (saved != null) {
+        _savedCredentials = saved;
+        await configure(saved.$1, saved.$2, saved.$3);
         return;
       }
     } catch (e) {
@@ -427,6 +437,41 @@ class AppState extends ChangeNotifier {
     // Not in secure storage: credentials saved by an old version may still be
     // in SharedPreferences
     await _migrateFromSharedPreferences();
+  }
+
+  /// The credentials in secure storage. Those an older version saved under
+  /// separate keys are moved to [credentialsKey]; if that fails, they're
+  /// still used, and moved on the next start.
+  Future<(String, String, String)?> _readSavedCredentials() async {
+    final json = await _secureStorage.read(key: credentialsKey);
+    if (json != null) {
+      final map = jsonDecode(json) as Map<String, dynamic>;
+      final serverUrl = map['serverUrl'] as String?;
+      final username = map['username'] as String?;
+      final password = map['password'] as String?;
+      if (serverUrl == null || username == null || password == null) {
+        return null;
+      }
+      return (serverUrl, username, password);
+    }
+
+    final serverUrl = await _secureStorage.read(key: 'server_url');
+    final username = await _secureStorage.read(key: 'username');
+    final password = await _secureStorage.read(key: 'password');
+    if (serverUrl == null || username == null || password == null) {
+      return null;
+    }
+    try {
+      // Written first: if a delete fails, the next start finds them there
+      await _saveServerConfig(serverUrl, username, password);
+      for (final key in _legacyCredentialKeys) {
+        await _secureStorage.delete(key: key);
+      }
+      _log.info('Moved the credentials to a single secure storage entry');
+    } catch (e) {
+      _log.warning('Could not move the credentials to a single entry', e);
+    }
+    return (serverUrl, username, password);
   }
 
   /// Logs out: releases the services and removes the credentials and the

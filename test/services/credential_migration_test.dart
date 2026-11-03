@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/app_state.dart';
 
+import '../test_helpers/saved_credentials.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -30,11 +32,28 @@ void main() {
     await appState.initialize();
 
     expect(appState.isConfigured, isTrue);
-    expect(await const FlutterSecureStorage().readAll(), legacy);
+    expect(await const FlutterSecureStorage().readAll(),
+        savedCredentials('https://127.0.0.1:1', 'alice', 'secret'));
     final prefs = await SharedPreferences.getInstance();
     for (final key in legacy.keys) {
       expect(prefs.containsKey(key), isFalse);
     }
+  });
+
+  test('moves credentials saved under separate keys to a single entry',
+      () async {
+    FlutterSecureStorage.setMockInitialValues(Map.of(legacy));
+    SharedPreferences.setMockInitialValues({});
+
+    final appState = AppState();
+    addTearDown(appState.dispose);
+    await appState.initialize();
+
+    expect(appState.isConfigured, isTrue);
+    expect(appState.api!.username, 'alice');
+    expect(appState.api!.password, 'secret');
+    expect(await const FlutterSecureStorage().readAll(),
+        savedCredentials('https://127.0.0.1:1', 'alice', 'secret'));
   });
 
   test('stays logged out without credentials', () async {

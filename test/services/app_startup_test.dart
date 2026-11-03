@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/app_state.dart';
 
+import '../test_helpers/saved_credentials.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -17,11 +19,8 @@ void main() {
         .setMockMethodCallHandler(
             const MethodChannel('voidweaver_player'), (_) async => null);
     // Nothing listens there, so loading the albums fails after its retries
-    FlutterSecureStorage.setMockInitialValues({
-      'server_url': 'https://127.0.0.1:1',
-      'username': 'alice',
-      'password': 'secret',
-    });
+    FlutterSecureStorage.setMockInitialValues(
+        savedCredentials('https://127.0.0.1:1', 'alice', 'secret'));
     SharedPreferences.setMockInitialValues({});
 
     appState = AppState();
