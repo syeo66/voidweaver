@@ -8,7 +8,7 @@ Three caches keep the app fast and usable offline. All of them can be cleared fr
 
 - **Scoped per login.** Each `SubsonicApi` has its own `ApiCache`, with the namespace `serverUrl|username`; the scope directory is the namespace's MD5. The memory cache and request deduplication belong to the instance, so a new login never gets the previous one's data or attaches to its requests. `SubsonicApi.dispose()` closes the cache: a fetch still running at logout returns to its caller but stores nothing, so it can't put the server's data back after logout removed it.
 
-Older versions kept persistent entries in SharedPreferences. On Android that's a single XML file, loaded whole at startup and rewritten whole on every change, including each playback position save, so a large library slowed both down. The version after that kept the files directly in `api_cache/`, without scopes. The first time the cache is used, both kinds of old entries are moved into the current login's scope (search results are dropped); they can only belong to it, since logout removes them. Files are written to a temporary name and then renamed, and a corrupted file is deleted and fetched again.
+Not in SharedPreferences: on Android that's a single XML file, loaded whole at startup and rewritten whole on every change, including each playback position save, so a large library would slow both down. Files are written to a temporary name and then renamed, and a corrupted file is deleted and fetched again.
 
 | Call | TTL | Persistent |
 |------|-----|------------|
@@ -40,8 +40,6 @@ Audio is cached by the player itself: a Media3 `SimpleCache` in `media_cache/` i
 - **Offline**: if a track can't be loaded, playback continues at the next track that's completely cached. If the saved song can't load at startup, the queue is kept and the song is retried on the next play.
 
 A track that wasn't cached (e.g. the first track of a new playlist) is streamed, so a network drop can still interrupt it.
-
-The Dart download cache used before (`audio_cache/`) is deleted when the Media3 cache is first opened.
 
 ## Cover art (`ImageCacheManager`)
 

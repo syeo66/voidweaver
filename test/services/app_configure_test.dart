@@ -65,33 +65,14 @@ void main() {
     expect(appState.api!.serverUrl, 'https://127.0.0.1:1');
   });
 
-  test('credentials under separate keys that cannot be moved still log in',
-      () async {
-    // Every write and delete throws
-    FlutterSecureStorage.setMockInitialValues(const {
-      'server_url': 'https://127.0.0.1:1',
-      'username': 'alice',
-      'password': 'secret',
-    });
+  test('stays logged out without credentials', () async {
+    FlutterSecureStorage.setMockInitialValues({});
 
     final appState = AppState();
     addTearDown(appState.dispose);
     await appState.initialize();
 
-    expect(appState.isConfigured, isTrue);
-    expect(appState.api!.serverUrl, 'https://127.0.0.1:1');
-  });
-
-  test('a saved URL that is normalized on start is saved again', () async {
-    FlutterSecureStorage.setMockInitialValues(
-        savedCredentials('https://127.0.0.1:1/', 'alice', 'secret'));
-
-    final appState = AppState();
-    addTearDown(appState.dispose);
-    await appState.initialize();
-
-    expect(appState.isConfigured, isTrue);
-    expect((await readSavedCredentials())!['serverUrl'], 'https://127.0.0.1:1');
+    expect(appState.isConfigured, isFalse);
   });
 
   test('hands the connection and streaming timeouts to the player', () async {

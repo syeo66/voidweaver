@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logging/logging.dart';
 import 'package:voidweaver_player/voidweaver_player.dart' show MediaCache;
@@ -47,11 +46,6 @@ class AppState extends ChangeNotifier {
   /// write that fails leaves the previous credentials, never a mix.
   @visibleForTesting
   static const credentialsKey = 'credentials';
-
-  // Each credential under its own key: in secure storage as saved by older
-  // versions (see _readSavedCredentials), and in SharedPreferences as saved
-  // by even older ones (see _migrateFromSharedPreferences)
-  static const _legacyCredentialKeys = ['server_url', 'username', 'password'];
 
   SubsonicApi? _api;
   AudioPlayerService? _audioPlayerService;
@@ -138,8 +132,6 @@ class AppState extends ChangeNotifier {
   /// still starts offline.
   Future<void> configure(String serverUrl, String username, String password,
       {bool verifyCredentials = false}) async {
-    // Also for saved credentials: a URL saved with a trailing slash by an
-    // older version is saved again without it
     serverUrl = Validators.normalizeServerUrl(serverUrl);
     _configurationLoadingState = LoadingState.loading;
     _configurationError = null;
@@ -180,8 +172,7 @@ class AppState extends ChangeNotifier {
       _configurationLoadingState = LoadingState.success;
 
       // Not on every start: the writes delay a resume for a media button, and
-      // one that failed would log out a user whose credentials are fine. A
-      // URL normalized above is saved again.
+      // one that failed would log out a user whose credentials are fine.
       if (_savedCredentials != (serverUrl, username, password)) {
         await _saveServerConfig(serverUrl, username, password);
       }
@@ -440,47 +431,22 @@ class AppState extends ChangeNotifier {
       if (saved != null) {
         _savedCredentials = saved;
         await configure(saved.$1, saved.$2, saved.$3);
-        return;
       }
     } catch (e) {
       _log.warning('Error loading secure credentials', e);
     }
-    // Not in secure storage: credentials saved by an old version may still be
-    // in SharedPreferences
-    await _migrateFromSharedPreferences();
   }
 
-  /// The credentials in secure storage. Those an older version saved under
-  /// separate keys are moved to [credentialsKey]; if that fails, they're
-  /// still used, and moved on the next start.
+  /// The credentials in secure storage, if any.
   Future<(String, String, String)?> _readSavedCredentials() async {
     final json = await _secureStorage.read(key: credentialsKey);
-    if (json != null) {
-      final map = jsonDecode(json) as Map<String, dynamic>;
-      final serverUrl = map['serverUrl'] as String?;
-      final username = map['username'] as String?;
-      final password = map['password'] as String?;
-      if (serverUrl == null || username == null || password == null) {
-        return null;
-      }
-      return (serverUrl, username, password);
-    }
-
-    final serverUrl = await _secureStorage.read(key: 'server_url');
-    final username = await _secureStorage.read(key: 'username');
-    final password = await _secureStorage.read(key: 'password');
+    if (json == null) return null;
+    final map = jsonDecode(json) as Map<String, dynamic>;
+    final serverUrl = map['serverUrl'] as String?;
+    final username = map['username'] as String?;
+    final password = map['password'] as String?;
     if (serverUrl == null || username == null || password == null) {
       return null;
-    }
-    try {
-      // Written first: if a delete fails, the next start finds them there
-      await _saveServerConfig(serverUrl, username, password);
-      for (final key in _legacyCredentialKeys) {
-        await _secureStorage.delete(key: key);
-      }
-      _log.info('Moved the credentials to a single secure storage entry');
-    } catch (e) {
-      _log.warning('Could not move the credentials to a single entry', e);
     }
     return (serverUrl, username, password);
   }
@@ -504,11 +470,6 @@ class AppState extends ChangeNotifier {
           _persistenceService!.clearPlaybackState(),
         ImageCacheManager.clearCache(),
       ]);
-
-      final prefs = await SharedPreferences.getInstance();
-      for (final key in _legacyCredentialKeys) {
-        await prefs.remove(key);
-      }
     } catch (e) {
       _log.warning('Error clearing configuration', e);
     }
@@ -524,36 +485,6 @@ class AppState extends ChangeNotifier {
     _configurationError = null;
 
     notifyListeners();
-  }
-
-  /// Migrates credentials from old SharedPreferences to secure storage
-  Future<void> _migrateFromSharedPreferences() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final serverUrl = prefs.getString('server_url');
-      final username = prefs.getString('username');
-      final password = prefs.getString('password');
-
-      if (serverUrl != null && username != null && password != null) {
-        _log.fine(
-            'Migrating credentials from SharedPreferences to secure storage');
-
-        // Save to secure storage
-        await _saveServerConfig(serverUrl, username, password);
-
-        // Remove from SharedPreferences
-        for (final key in _legacyCredentialKeys) {
-          await prefs.remove(key);
-        }
-
-        // Configure with migrated credentials
-        await configure(serverUrl, username, password);
-
-        _log.info('Credential migration completed successfully');
-      }
-    } catch (e) {
-      _log.warning('Error during credential migration', e);
-    }
   }
 
   @override

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -246,34 +245,6 @@ void main() {
       expect(filesIn(directory), isEmpty);
     });
 
-    test('moves entries from SharedPreferences to files, except searches',
-        () async {
-      String entry(String data) => jsonEncode({
-            'data': data,
-            'expiresAt': DateTime.now()
-                .add(const Duration(minutes: 5))
-                .toIso8601String(),
-            'key': 'unused',
-          });
-      SharedPreferences.setMockInitialValues({
-        'cache_getArtists?': entry('artists'),
-        'cache_search3?query=x': entry('search'),
-        'themeMode': 1,
-      });
-      final fresh = await Directory.systemTemp.createTemp('api_cache_test');
-      addTearDown(() => fresh.delete(recursive: true));
-
-      final migrated = ApiCache.forTesting(directory: fresh);
-      final result = await migrated.getOrFetch<String>(
-          'getArtists', null, () async => 'fetched',
-          usePersistentCache: true);
-
-      expect(result, 'artists');
-      expect(filesIn(fresh), hasLength(1));
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getKeys(), {'themeMode'});
-    });
-
     test('a corrupted file is dropped and fetched again', () async {
       await cache.getOrFetch<String>('endpoint', null, () async => 'saved',
           usePersistentCache: true);
@@ -507,23 +478,6 @@ void main() {
         // Still usable afterwards
         await get(cache, 'again');
         expect(filesIn(directory), hasLength(1));
-      });
-
-      test('moves entries of the version without scopes into the scope',
-          () async {
-        final fresh = await Directory.systemTemp.createTemp('api_cache_test');
-        addTearDown(() => fresh.delete(recursive: true));
-        final unscoped = ApiCache.forTesting(directory: fresh);
-        await get(unscoped, 'saved before the update');
-        // Where the version without scopes kept it
-        final file = filesIn(fresh).single;
-        file.renameSync('${fresh.path}/${file.uri.pathSegments.last}');
-        file.parent.deleteSync();
-
-        final updated =
-            ApiCache.forTesting(directory: fresh, namespace: 'https://a|user');
-        expect(await get(updated, 'fetched'), 'saved before the update');
-        expect(fresh.listSync().whereType<File>(), isEmpty);
       });
     });
 

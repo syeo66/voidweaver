@@ -104,23 +104,6 @@ void main() {
       expect(saved.sourceId, 'song2');
     });
 
-    test('loads the state saved by older versions and replaces it', () async {
-      SharedPreferences.setMockInitialValues(
-          {'playbackState': jsonEncode(stateAt(1, 42).toJson())});
-      final legacy = PlaybackPersistenceService();
-      await legacy.initialize();
-
-      final loaded = await legacy.loadPlaybackState();
-      expect(loaded!.playlist, songs);
-      expect(loaded.currentIndex, 1);
-      expect(loaded.currentPosition, const Duration(seconds: 42));
-
-      await legacy.savePlaybackState(loaded);
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.containsKey('playbackState'), isFalse);
-      expect((await legacy.loadPlaybackState())!.currentIndex, 1);
-    });
-
     test('clear discards a pending position save', () async {
       persistence.schedulePositionSave(stateAt(0, 42));
       await persistence.clearPlaybackState();

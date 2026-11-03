@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:logging/logging.dart';
 
 final _log = Logger('api_cache');
@@ -55,11 +54,6 @@ class CacheEntry<T> {
 /// `api_cache/<md5 of namespace>/` in the app cache directory, one per key.
 /// So one login never sees another's data, and after [close] (logout) a fetch
 /// that was still running stores nothing.
-///
-/// Persistent entries used to be kept in SharedPreferences, which Android
-/// loads whole at startup and rewrites whole on every change (also on each
-/// playback position save), and later directly in `api_cache/`; see
-/// [_migrateLegacyEntries].
 class ApiCache {
   ApiCache({required this.namespace}) : _rootProvider = _defaultRoot;
 
@@ -70,10 +64,6 @@ class ApiCache {
 
   /// Identifies the login the entries belong to
   final String namespace;
-
-  // Old SharedPreferences entries are prefixed with this, see
-  // _migrateLegacyEntries()
-  static const _legacyPrefix = 'cache_';
 
   final Map<String, CacheEntry<Object?>> _memoryCache = {};
   final Map<String, Completer<Object?>> _ongoingRequests = {};
@@ -96,7 +86,6 @@ class ApiCache {
           final scope =
               Directory('${root.path}/${md5.convert(utf8.encode(namespace))}');
           await scope.create(recursive: true);
-          await _migrateLegacyEntries(root, scope);
           return _Storage(root, scope);
         } catch (e) {
           _log.warning('API cache is not persisted', e);
@@ -106,36 +95,6 @@ class ApiCache {
 
   static File _fileFor(Directory directory, String key) =>
       File('${directory.path}/${md5.convert(utf8.encode(key))}.json');
-
-  /// Moves entries saved by older versions into [scope], so the library stays
-  /// browsable offline after the update. They belong to the current login,
-  /// because logging out removed them. Files directly in [root] are from the
-  /// version before scopes; SharedPreferences entries from the one before
-  /// that. Search results aren't persisted anymore and are dropped.
-  static Future<void> _migrateLegacyEntries(
-      Directory root, Directory scope) async {
-    var moved = 0;
-    await for (final entity in root.list()) {
-      if (entity is File && entity.path.endsWith('.json')) {
-        await entity.rename('${scope.path}/${entity.uri.pathSegments.last}');
-        moved++;
-      }
-    }
-
-    final prefs = await SharedPreferences.getInstance();
-    final keys =
-        prefs.getKeys().where((k) => k.startsWith(_legacyPrefix)).toList();
-    for (final prefKey in keys) {
-      final key = prefKey.substring(_legacyPrefix.length);
-      final json = prefs.getString(prefKey);
-      if (json != null && !key.startsWith('search3?')) {
-        await _fileFor(scope, key).writeAsString(json);
-      }
-      await prefs.remove(prefKey);
-      moved++;
-    }
-    if (moved > 0) _log.info('Moved $moved API cache entries to $scope');
-  }
 
   /// Stops storing results: fetches still running finish for their callers,
   /// but their data isn't cached, in memory or on disk. For a logout, so

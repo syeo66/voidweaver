@@ -2,7 +2,6 @@ package red.ochsenbein.voidweaver.player;
 
 import android.content.Context;
 import android.net.Uri;
-import android.util.Log;
 import androidx.annotation.Nullable;
 import androidx.media3.common.C;
 import androidx.media3.database.StandaloneDatabaseProvider;
@@ -31,7 +30,6 @@ import java.util.Map;
  * carry a new token on every request.
  */
 final class MediaCache {
-  private static final String TAG = "MediaCache";
   private static final long MAX_BYTES = 1024L * 1024 * 1024;
 
   @Nullable private static SimpleCache cache;
@@ -45,8 +43,6 @@ final class MediaCache {
   static synchronized SimpleCache get(Context context) {
     if (cache == null) {
       File base = context.getApplicationContext().getCacheDir();
-      // Files of the Dart download cache used before
-      deleteRecursively(new File(base, "audio_cache"));
       cache =
           new SimpleCache(
               new File(base, "media_cache"),
@@ -140,14 +136,6 @@ final class MediaCache {
     for (String key : new ArrayList<>(cache.getKeys())) {
       cache.removeResource(key);
     }
-  }
-
-  private static void deleteRecursively(File file) {
-    File[] children = file.listFiles();
-    if (children != null) {
-      for (File child : children) deleteRecursively(child);
-    }
-    if (file.exists() && !file.delete()) Log.w(TAG, "Could not delete " + file);
   }
 
   /**

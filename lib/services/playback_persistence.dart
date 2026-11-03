@@ -25,18 +25,6 @@ class PersistedPlaybackState {
     this.sourceId,
   });
 
-  Map<String, dynamic> toJson() {
-    return {
-      'playlist': playlist.map((s) => s.toJson()).toList(),
-      'currentIndex': currentIndex,
-      'currentPositionMs': currentPosition.inMilliseconds,
-      'isPlaying': isPlaying,
-      'lastUpdated': lastUpdated.millisecondsSinceEpoch,
-      'playlistSource': playlistSource,
-      'sourceId': sourceId,
-    };
-  }
-
   static PersistedPlaybackState? fromJson(Map<String, dynamic> json) {
     try {
       return PersistedPlaybackState(
@@ -95,8 +83,6 @@ class PersistedPlaybackState {
 class PlaybackPersistenceService {
   static const String _queueKey = 'playbackQueue';
   static const String _positionKey = 'playbackPosition';
-  // Queue and position together, as saved by older versions
-  static const String _legacyKey = 'playbackState';
   final Duration _positionSaveInterval;
 
   SharedPreferences? _prefs;
@@ -144,7 +130,6 @@ class PlaybackPersistenceService {
         _savedPlaylist = state.playlist;
         _savedPlaylistSource = state.playlistSource;
         _savedSourceId = state.sourceId;
-        if (_prefs!.containsKey(_legacyKey)) await _prefs!.remove(_legacyKey);
         _log.fine('Saved playback queue: ${state.playlist.length} songs');
       }
       await _prefs!.setString(
@@ -169,20 +154,15 @@ class PlaybackPersistenceService {
     try {
       final queue = _prefs!.getString(_queueKey);
       final position = _prefs!.getString(_positionKey);
-      final Map<String, dynamic> map;
-      if (queue != null && position != null) {
-        map = {
-          ...jsonDecode(queue) as Map<String, dynamic>,
-          ...jsonDecode(position) as Map<String, dynamic>,
-        };
-      } else if (_prefs!.getString(_legacyKey) case final legacy?) {
-        map = jsonDecode(legacy) as Map<String, dynamic>;
-      } else {
+      if (queue == null || position == null) {
         _log.fine('No saved playback state found');
         return null;
       }
 
-      final state = PersistedPlaybackState.fromJson(map);
+      final state = PersistedPlaybackState.fromJson({
+        ...jsonDecode(queue) as Map<String, dynamic>,
+        ...jsonDecode(position) as Map<String, dynamic>,
+      });
 
       if (state != null) {
         _log.fine(
@@ -222,7 +202,7 @@ class PlaybackPersistenceService {
 
     try {
       _savedPlaylist = null;
-      for (final key in [_queueKey, _positionKey, _legacyKey]) {
+      for (final key in [_queueKey, _positionKey]) {
         await _prefs!.remove(key);
       }
       _log.info('Cleared saved playback state');

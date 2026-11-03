@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
@@ -69,8 +68,11 @@ void main() {
         isPlaying: true,
         lastUpdated: DateTime.now(),
       );
-      SharedPreferences.setMockInitialValues(
-          {'playbackState': jsonEncode(saved.toJson())});
+      SharedPreferences.setMockInitialValues({});
+      final writer = PlaybackPersistenceService();
+      await writer.initialize();
+      await writer.savePlaybackState(saved);
+      // A new instance, as on the next start
       final persistence = PlaybackPersistenceService();
       await persistence.initialize();
       return persistence;
