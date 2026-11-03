@@ -13,8 +13,8 @@ import 'package:voidweaver/services/subsonic_api.dart';
 import '../test_helpers/fake_subsonic_server.dart';
 
 /// A password changed on the server: the API notices the rejected
-/// credentials, and AppState.updatePassword() logs in again without losing
-/// pending plays. Against the fake server over real HTTPS.
+/// credentials, and AppState.updatePassword() switches to the new one in
+/// place, without losing pending plays. Against the fake server over real HTTPS.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -144,9 +144,15 @@ void main() {
       expect(appState.api, same(api));
       expect(appState.credentialsRejected, isTrue);
 
+      // In place: the player (and what it plays) stays
+      final player = appState.audioPlayerService;
       await appState.updatePassword('changed');
       expect(appState.isConfigured, isTrue);
-      expect(appState.api, isNot(same(api)));
+      expect(appState.api, same(api));
+      expect(appState.audioPlayerService, same(player));
+      expect(appState.credentialsRejected, isFalse);
+      await appState.loadAlbums(forceRefresh: true);
+      expect(appState.albumError, isNull);
       expect(appState.credentialsRejected, isFalse);
       expect(await readSavedCredentials(), {
         'serverUrl': server.url,

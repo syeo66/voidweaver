@@ -209,10 +209,15 @@ class ScrobbleQueue {
       if (queueJson != null) {
         final queueData = json.decode(queueJson) as List<dynamic>;
         _queue.clear();
-        _queue.addAll(queueData
-            .map((item) =>
-                ScrobbleRequest.fromJson(item as Map<String, dynamic>))
-            .toList());
+        // Entry by entry: one that can't be read (e.g. written by a newer
+        // version) is dropped, not the plays around it
+        for (final item in queueData) {
+          try {
+            _queue.add(ScrobbleRequest.fromJson(item as Map<String, dynamic>));
+          } catch (e) {
+            _log.warning('Dropping unreadable scrobble request: $item', e);
+          }
+        }
         _log.fine('Loaded ${_queue.length} scrobble requests from storage');
       }
     } catch (e) {

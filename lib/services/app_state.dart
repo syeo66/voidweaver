@@ -206,13 +206,13 @@ class AppState extends ChangeNotifier {
     unawaited(_restorePlayback(_audioPlayerService!));
   }
 
-  /// Logs in again with a new [password] for the same server and user, for
-  /// when the server rejected the saved one ([credentialsRejected]). Unlike
-  /// a logout this keeps the pending scrobbles, the saved queue and the
-  /// caches; the player is set up again, with the queue restored, paused.
+  /// Switches to a new [password] for the same server and user, for when
+  /// the server rejected the saved one ([credentialsRejected]). Everything
+  /// stays as it is: playback goes on, and the pending scrobbles are sent
+  /// with the new password.
   ///
-  /// Throws if the server doesn't accept [password] (or can't be reached);
-  /// the current login stays as it is then.
+  /// Throws if the server doesn't accept [password] (or can't be reached),
+  /// or it can't be saved; the current login stays as it is then.
   Future<void> updatePassword(String password) async {
     final current = _api;
     if (current == null) throw StateError('Not logged in');
@@ -229,7 +229,14 @@ class AppState extends ChangeNotifier {
     }
     // Logged out or in again meanwhile
     if (!identical(current, _api)) return;
-    await configure(current.serverUrl, current.username, password);
+    // Saved first: if that fails, nothing has changed
+    await _saveServerConfig(current.serverUrl, current.username, password);
+    if (!identical(current, _api)) return;
+    current.usePassword(password);
+    _audioPlayerService?.credentialsChanged();
+    // Rather than at the queue's next timer tick
+    unawaited(_scrobbleQueue?.processQueue());
+    notifyListeners();
   }
 
   /// Restores the queue saved by the last session, then plays it if a media

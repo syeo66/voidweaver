@@ -234,6 +234,31 @@ void main() {
       expect(scrobbleQueue.queueSize, 0);
     });
 
+    test('drops only the entries it cannot read', () async {
+      final playedAt = DateTime(2026, 11, 1, 22);
+      SharedPreferences.setMockInitialValues({
+        'scrobble_queue': jsonEncode([
+          {'songId': 'unknown-type', 'type': 'love', 'queuedAt': 0},
+          'not an object',
+          {'type': 'submission'},
+          ScrobbleRequest(
+            songId: 'song1',
+            type: ScrobbleType.submission,
+            playedAt: playedAt,
+            queuedAt: DateTime.now(),
+          ).toJson(),
+        ]),
+      });
+      when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
+          .thenAnswer((_) async {});
+
+      await scrobbleQueue.initialize();
+      await scrobbleQueue.processQueue();
+
+      verify(mockApi.scrobbleSubmission('song1', playedAt: playedAt)).called(1);
+      expect(scrobbleQueue.queueSize, 0);
+    });
+
     test('should persist queue to storage', () async {
       // Make API calls slow so we can queue multiple items
       when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {

@@ -1,6 +1,7 @@
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:voidweaver/services/audio_player_service.dart';
+import 'package:voidweaver/services/sleep_timer.dart';
 import 'package:voidweaver_player/voidweaver_player.dart';
 
 import '../test_helpers/mocks.mocks.dart';
@@ -162,7 +163,7 @@ void main() {
     });
 
     group('fade out', () {
-      const fade = AudioPlayerService.sleepFadeDuration;
+      const fade = SleepTimer.fadeDuration;
 
       /// Runs [body] in fake time with a service whose clock follows it
       void inFakeTime(

@@ -11,7 +11,8 @@ import 'playback_persistence.dart';
 import 'scrobble_queue.dart';
 import 'audio_cache.dart';
 import 'network_errors.dart';
-import '../utils/format.dart';
+import 'listening_tracker.dart';
+import 'sleep_timer.dart';
 
 final _log = Logger('audio_player');
 final _rgLogger = Logger('replaygain');
@@ -52,10 +53,6 @@ class AudioPlayerService extends ChangeNotifier {
   /// How long the current track has to have played for Previous to restart
   /// it instead of going back a track
   static const _restartThreshold = Duration(seconds: 3);
-
-  /// How far the position may move beyond the time that passed between two
-  /// position updates and still count as listening, see _trackListening()
-  static const _seekTolerance = Duration(seconds: 1);
 
   /// Retries of a failed download, see _preloadUpcomingSongs(). The delay
   /// before each retry doubles: 5 s, 10 s, ... about 2.5 minutes in all.
@@ -123,35 +120,18 @@ class AudioPlayerService extends ChangeNotifier {
   bool _needsSourceReload = false;
   Duration _pendingResumePosition = Duration.zero;
 
-  // When the current play of the current song started; null for a song
-  // restored from a previous session that hasn't been resumed yet
-  DateTime? _currentSongStartTime;
-  // Whether the current play of the current song has been scrobbled
-  bool _currentSongScrobbled = false;
-  // How long the current play of the current song has actually been heard,
-  // without seeks; the scrobble threshold applies to this, see
-  // _trackListening()
-  Duration _listened = Duration.zero;
-  // The last position the player reported, and when
-  Duration _lastPosition = Duration.zero;
-  DateTime? _lastPositionTime;
+  // Set when the password changed after the player's sequence was created:
+  // the stream URLs of its items carry the old one, so an item that isn't
+  // cached fails to load, see credentialsChanged()
+  bool _sourcesStale = false;
 
-  /// How long the sleep timer fades the volume out before it pauses
-  static const sleepFadeDuration = Duration(seconds: 30);
+  // The current play of the current song: how long it has been heard, and
+  // whether it has been scrobbled
+  late final ListeningTracker _listening =
+      ListeningTracker(_settingsService, clock: _clock);
 
-  /// How often the volume changes during the fade
-  static const _sleepFadeStep = Duration(milliseconds: 250);
-
-  // Sleep timer state
-  Timer? _sleepTimer;
-  // Until the fade starts, then for each of its steps
-  Timer? _sleepFadeTimer;
-  // How long the current timer's fade lasts: sleepFadeDuration, or the whole
-  // timer if it's shorter
-  Duration _sleepFadeLength = sleepFadeDuration;
-  Duration? _sleepTimerDuration;
-  DateTime? _sleepTimerStartTime;
-  bool _isSleepTimerActive = false;
+  late final SleepTimer _sleepTimer = SleepTimer(
+      setVolume: _setVolume, onExpired: _onSleepTimerExpired, clock: _clock);
 
   StreamSubscription<Duration>? _positionSubscription;
   StreamSubscription<Duration?>? _durationSubscription;
@@ -212,24 +192,15 @@ class AudioPlayerService extends ChangeNotifier {
   bool get playWhenReady =>
       _startsInProgress > 0 ? _playPending : _audioPlayer.playing;
 
-  // Sleep timer getters
-  bool get isSleepTimerActive => _isSleepTimerActive;
-  Duration? get sleepTimerDuration => _sleepTimerDuration;
-  Duration? get sleepTimerRemaining {
-    if (!_isSleepTimerActive ||
-        _sleepTimerStartTime == null ||
-        _sleepTimerDuration == null) {
-      return null;
-    }
-    final elapsed = _clock().difference(_sleepTimerStartTime!);
-    final remaining = _sleepTimerDuration! - elapsed;
-    return remaining.isNegative ? Duration.zero : remaining;
-  }
+  bool get isSleepTimerActive => _sleepTimer.isActive;
+  Duration? get sleepTimerDuration => _sleepTimer.duration;
+  Duration? get sleepTimerRemaining => _sleepTimer.remaining;
 
   void _initializePlayer() {
     _positionSubscription = _audioPlayer.positionStream.listen((position) {
       _currentPosition = position;
-      _trackListening(position);
+      _listening.onPosition(position,
+          playing: _playbackState == PlaybackState.playing);
       if (_playbackState == PlaybackState.playing) {
         _scrobbleCurrentSongIfEligible();
         _schedulePositionSave();
@@ -534,6 +505,7 @@ class AudioPlayerService extends ChangeNotifier {
       final sources = [
         for (var i = 0; i < _playlist.length; i++) _sourceFor(generation, i)
       ];
+      _sourcesStale = false;
 
       try {
         await _playerOp(() async {
@@ -572,7 +544,7 @@ class AudioPlayerService extends ChangeNotifier {
   /// starts it as a new play (like a restored song).
   void _startUnlessPaused() {
     if (!_playPending) {
-      _currentSongStartTime = null;
+      _listening.clearStart();
       notifyListeners();
       return;
     }
@@ -654,7 +626,7 @@ class AudioPlayerService extends ChangeNotifier {
     if (entry == null || entry.index != _currentIndex + 1) return;
 
     _log.fine('Player advanced to index ${entry.index}');
-    _listenedToEnd();
+    _listening.listenedToEnd(_currentSongDuration);
     _scrobbleCurrentSongIfEligible();
     _setCurrentTrack(entry.index, playing: true);
     unawaited(_loadReplayGain(entry.index));
@@ -676,16 +648,10 @@ class AudioPlayerService extends ChangeNotifier {
     _currentIndex = index;
     _currentSong = _playlist[index];
     _currentPosition = position;
-    // A restored song gets its start time once it's resumed, see play()
-    _currentSongStartTime = playing ? _clock() : null;
-    // A song resumed past the threshold was scrobbled in its earlier session
-    _currentSongScrobbled = position > Duration.zero &&
-        _hasReachedScrobbleThreshold(
-            position, Duration(seconds: _currentSong!.duration ?? 0));
-    // A song resumed from an earlier session counts as heard up to there
-    _listened = position;
-    _lastPosition = position;
-    _lastPositionTime = _clock();
+    // A restored song starts once it's resumed, see play()
+    _listening.startPlay(
+        position, Duration(seconds: _currentSong!.duration ?? 0),
+        playing: playing);
     notifyListeners();
   }
 
@@ -703,7 +669,7 @@ class AudioPlayerService extends ChangeNotifier {
   /// replays it, as a new play (like a restored song, see play()).
   void _onQueueCompleted() {
     _log.info('End of playlist reached');
-    _listenedToEnd();
+    _listening.listenedToEnd(_currentSongDuration);
     _scrobbleCurrentSongIfEligible();
     _setCurrentTrack(_currentIndex, playing: false);
     _playbackState = PlaybackState.paused;
@@ -730,7 +696,30 @@ class AudioPlayerService extends ChangeNotifier {
     // again. Set right away, so _jumpTo() doesn't take its target for started.
     _needsSourceReload = true;
     _pendingResumePosition = Duration.zero;
+    if (_sourcesStale && playWhenReady) {
+      // Most likely the old password in the item's URL: load the queue
+      // again, with new URLs, where it failed. If that fails too, it's
+      // handled like any load error.
+      final position =
+          failedIndex == _currentIndex ? _currentPosition : Duration.zero;
+      _log.info('Loading the queue again at index $failedIndex '
+          'with the new credentials');
+      unawaited(_loadQueue(failedIndex, position: position)
+          .catchError((Object e) => _onLoadFailed('Failed to play song: $e')));
+      return;
+    }
     unawaited(_continueAfterError(failedIndex, error, resume: playWhenReady));
+  }
+
+  /// The API's password changed (see [SubsonicApi.usePassword]). Playback
+  /// goes on: the player plays cached tracks from the cache whatever their
+  /// URL. Downloads of the upcoming tracks start again with the new
+  /// password, and an item that fails to stream with the old one loads the
+  /// queue again, see _onPlayerError().
+  void credentialsChanged() {
+    if (_disposed || _playlist.isEmpty) return;
+    _sourcesStale = true;
+    unawaited(_preloadUpcomingSongs());
   }
 
   /// Continues at the next cached track after [failedIndex] if [resume] is
@@ -800,9 +789,9 @@ class AudioPlayerService extends ChangeNotifier {
       return;
     }
 
-    if (_currentSongStartTime == null) {
+    if (!_listening.hasStarted) {
       // First play of a song restored from a previous session
-      _currentSongStartTime = _clock();
+      _listening.markStarted();
       _onTrackStarted();
     }
     _startPlayback();
@@ -892,44 +881,15 @@ class AudioPlayerService extends ChangeNotifier {
     await _audioPlayer.seek(position);
   }
 
-  void _scrobbleCurrentSong() {
-    if (_currentSong != null &&
-        _currentSongStartTime != null &&
-        !_currentSongScrobbled) {
-      // Send scrobble submission with the timestamp when the song started playing (queued for reliability)
-      unawaited(_scrobbleQueue.queueSubmission(_currentSong!.id,
-          playedAt: _currentSongStartTime!));
-
-      // Mark this play as scrobbled to prevent duplicate scrobbles
-      _currentSongScrobbled = true;
-    }
-  }
-
-  /// Adds the playback since the last position update to [_listened]. Only
-  /// counts while playing, and only if the position moved by about the time
-  /// that passed: a bigger jump is a seek, which isn't listening. Otherwise
-  /// seeking to the end of a track and skipping would scrobble it, and
-  /// subsoxy would take a skip for a play.
-  void _trackListening(Duration position) {
-    final now = _clock();
-    final last = _lastPositionTime;
-    final advanced = position - _lastPosition;
-    if (_playbackState == PlaybackState.playing &&
-        last != null &&
-        advanced > Duration.zero &&
-        advanced <= now.difference(last) + _seekTolerance) {
-      _listened += advanced;
-    }
-    _lastPosition = position;
-    _lastPositionTime = now;
-  }
-
-  /// The current song played to its end: counts the rest after the last
-  /// position update as heard.
-  void _listenedToEnd() {
-    final duration = _currentSongDuration;
-    if (duration > _lastPosition) _listened += duration - _lastPosition;
-    _lastPosition = duration;
+  /// Scrobbles the current play of the current song once it has been heard
+  /// long enough, see [ListeningTracker.takeScrobble]. Queued with the time
+  /// it started.
+  void _scrobbleCurrentSongIfEligible() {
+    final song = _currentSong;
+    if (song == null) return;
+    final playedAt = _listening.takeScrobble(_currentSongDuration);
+    if (playedAt == null) return;
+    unawaited(_scrobbleQueue.queueSubmission(song.id, playedAt: playedAt));
   }
 
   /// The length of the current song: as the player reports it, or from the
@@ -937,47 +897,6 @@ class AudioPlayerService extends ChangeNotifier {
   Duration get _currentSongDuration => _totalDuration > Duration.zero
       ? _totalDuration
       : Duration(seconds: _currentSong?.duration ?? 0);
-
-  /// Whether the current song should be scrobbled: once it has been heard
-  /// for the configured minimum play time or percentage, whichever comes
-  /// first (see [SettingsService.scrobbleMinPlayTimeMinutes] and
-  /// [SettingsService.scrobbleThresholdPercent]). Seeked-over parts don't
-  /// count, see _trackListening().
-  bool _shouldScrobbleCurrentSong() {
-    if (_currentSong == null || _currentSongStartTime == null) return false;
-
-    // Don't scrobble if already scrobbled
-    if (_currentSongScrobbled) return false;
-
-    return _hasReachedScrobbleThreshold(_listened, _currentSongDuration);
-  }
-
-  bool _hasReachedScrobbleThreshold(
-      Duration playedDuration, Duration songDuration) {
-    final minPlayTime = Duration(
-        milliseconds:
-            (_settingsService.scrobbleMinPlayTimeMinutes * 60000).round());
-
-    // Check if we've played for at least the configured minimum play time
-    if (playedDuration >= minPlayTime) {
-      return true;
-    }
-
-    // Check if we've played for at least the configured percentage of the song
-    final thresholdFraction = _settingsService.scrobbleThresholdPercent / 100;
-    if (songDuration > Duration.zero &&
-        playedDuration >= songDuration * thresholdFraction) {
-      return true;
-    }
-
-    return false;
-  }
-
-  void _scrobbleCurrentSongIfEligible() {
-    if (_shouldScrobbleCurrentSong()) {
-      _scrobbleCurrentSong();
-    }
-  }
 
   /// Logs to both the console (debug builds, see setUpLogging()) and the
   /// persistent ReplayGain debug log (only when the user has enabled it in
@@ -1068,60 +987,12 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   void _logReplayGain() {
-    if (_currentSong == null) return;
-
-    final trackGain = _currentSong!.replayGainTrackGain;
-    final albumGain = _currentSong!.replayGainAlbumGain;
-    final trackPeak = _currentSong!.replayGainTrackPeak;
-    final albumPeak = _currentSong!.replayGainAlbumPeak;
-    final volumeMultiplier = _gainFor(_currentSong!);
-
-    final hasTrackGain = trackGain != null;
-    final hasAlbumGain = albumGain != null;
-    final rgMode = _settingsService.replayGainMode.name;
-
-    _rgLog('');
-    _rgLog('='.padRight(80, '='));
-    _rgLog('[ReplayGain] GAIN OF CURRENT TRACK');
-    _rgLog('='.padRight(80, '='));
-    _rgLog(
-        '[ReplayGain] Song: "${_currentSong!.title}" by "${_currentSong!.artist}" (id=${_currentSong!.id})');
-    _rgLog(
-        '[ReplayGain] Mode: $rgMode (queue: ${_playlistSource?.name ?? 'none'})');
-    _rgLog(
-        '[ReplayGain] TrackGain: ${trackGain?.toStringAsFixed(2) ?? 'null'} dB');
-    _rgLog(
-        '[ReplayGain] AlbumGain: ${albumGain?.toStringAsFixed(2) ?? 'null'} dB');
-    _rgLog(
-        '[ReplayGain] TrackPeak: ${trackPeak?.toStringAsFixed(4) ?? 'null'}');
-    _rgLog(
-        '[ReplayGain] AlbumPeak: ${albumPeak?.toStringAsFixed(4) ?? 'null'}');
-    _rgLog(
-        '[ReplayGain] Preamp: ${_settingsService.replayGainPreamp.toStringAsFixed(1)} dB');
-    _rgLog(
-        '[ReplayGain] Fallback: ${_settingsService.replayGainFallbackGain.toStringAsFixed(1)} dB');
-    _rgLog(
-        '[ReplayGain] Prevent Clipping: ${_settingsService.replayGainPreventClipping}');
-    final ignored = [
-      if (hasTrackGain && SettingsService.plausibleGain(trackGain) == null)
-        'trackGain',
-      if (hasAlbumGain && SettingsService.plausibleGain(albumGain) == null)
-        'albumGain',
-      if (trackPeak != null && SettingsService.plausiblePeak(trackPeak) == null)
-        'trackPeak',
-      if (albumPeak != null && SettingsService.plausiblePeak(albumPeak) == null)
-        'albumPeak',
-    ];
-    if (ignored.isNotEmpty) {
-      _rgLog('[ReplayGain] Ignored, out of range: ${ignored.join(', ')}');
+    final song = _currentSong;
+    if (song == null) return;
+    for (final line in trackGainReport(song, _settingsService,
+        gain: _gainFor(song), queue: _playlistSource?.name ?? 'none')) {
+      _rgLog(line);
     }
-    final usable = SettingsService.plausibleGain(trackGain) != null ||
-        SettingsService.plausibleGain(albumGain) != null;
-    _rgLog('[ReplayGain] Source: ${usable ? 'METADATA' : 'FALLBACK'}');
-    _rgLog(
-        '[ReplayGain] Final Gain Multiplier: ${volumeMultiplier.toStringAsFixed(6)} (${(volumeMultiplier * 100).toStringAsFixed(2)}%)');
-    _rgLog('='.padRight(80, '='));
-    _rgLog('');
   }
 
   /// Applies changed ReplayGain settings to every track in the queue.
@@ -1189,76 +1060,20 @@ class AudioPlayerService extends ChangeNotifier {
   /// Size of cached audio, in bytes.
   Future<int> audioCacheSize() => _audioCache.sizeInBytes();
 
-  /// Starts the sleep timer with the specified duration
+  /// Starts the sleep timer, replacing one that's running.
   void startSleepTimer(Duration duration) {
-    _sleepTimerDuration = duration;
-    _sleepTimerStartTime = _clock();
-    _isSleepTimerActive = true;
-
-    _log.info('Sleep timer started for ${formatClock(duration)}');
-    _scheduleSleepTimer(duration);
+    _sleepTimer.start(duration);
     notifyListeners();
   }
 
-  /// Cancels the active sleep timer
   void cancelSleepTimer() {
-    _resetSleepTimer();
-    _log.info('Sleep timer canceled');
+    _sleepTimer.cancel();
     notifyListeners();
   }
 
-  /// Extends the sleep timer by the specified duration
+  /// Adds [extension] to a running sleep timer.
   void extendSleepTimer(Duration extension) {
-    if (!_isSleepTimerActive) return;
-
-    final currentRemaining = sleepTimerRemaining;
-    if (currentRemaining != null) {
-      final newDuration = currentRemaining + extension;
-      _sleepTimerDuration = _sleepTimerDuration! + extension;
-
-      _log.info(
-          'Sleep timer extended by ${formatClock(extension)}, new remaining: ${formatClock(newDuration)}');
-      _scheduleSleepTimer(newDuration);
-      notifyListeners();
-    }
-  }
-
-  /// (Re)schedules the end of the sleep timer in [remaining], and the fade
-  /// out before it. A fade in progress is undone: the volume is back to full.
-  void _scheduleSleepTimer(Duration remaining) {
-    _sleepTimer?.cancel();
-    _stopSleepFade();
-    _sleepTimer = Timer(remaining, _onSleepTimerComplete);
-    // A timer shorter than the fade fades over all of it
-    _sleepFadeLength =
-        remaining < sleepFadeDuration ? remaining : sleepFadeDuration;
-    _sleepFadeTimer = Timer(remaining - _sleepFadeLength, _startSleepFade);
-  }
-
-  void _startSleepFade() {
-    _log.info('Sleep timer fading out');
-    _sleepFadeTimer = Timer.periodic(_sleepFadeStep, (_) => _applySleepFade());
-    _applySleepFade();
-  }
-
-  /// Sets the volume for the time left. Taken from the clock, not counted in
-  /// steps, so the fade ends with the timer even if steps run late. Cubic,
-  /// for a fade that sounds even: loudness follows the level in dB, which a
-  /// linear ramp would keep high until the last few seconds.
-  void _applySleepFade() {
-    final remaining = sleepTimerRemaining;
-    if (remaining == null || _sleepFadeLength <= Duration.zero) return;
-    final fraction =
-        (remaining.inMicroseconds / _sleepFadeLength.inMicroseconds)
-            .clamp(0.0, 1.0);
-    _setVolume(pow(fraction, 3).toDouble());
-  }
-
-  /// Stops the fade, back at full volume if it had started.
-  void _stopSleepFade() {
-    _sleepFadeTimer?.cancel();
-    _sleepFadeTimer = null;
-    _setVolume(1.0);
+    if (_sleepTimer.extend(extension)) notifyListeners();
   }
 
   void _setVolume(double volume) {
@@ -1268,30 +1083,11 @@ class AudioPlayerService extends ChangeNotifier {
     }));
   }
 
-  /// Called when the sleep timer expires
-  void _onSleepTimerComplete() {
-    _log.info('Sleep timer expired - pausing playback');
-
-    // Silent until paused, then back to full volume for the next play. The
-    // player handles its calls in order, so the volume comes after the pause.
-    _sleepFadeTimer?.cancel();
-    _sleepFadeTimer = null;
-    _setVolume(0.0);
+  void _onSleepTimerExpired() {
     unawaited(pause().catchError((Object e) {
       _log.warning('Sleep timer could not pause playback', e);
     }));
-    _resetSleepTimer();
     notifyListeners();
-  }
-
-  /// Ends the sleep timer and any fade, at full volume.
-  void _resetSleepTimer() {
-    _sleepTimer?.cancel();
-    _sleepTimer = null;
-    _stopSleepFade();
-    _sleepTimerDuration = null;
-    _sleepTimerStartTime = null;
-    _isSleepTimerActive = false;
   }
 
   @override
@@ -1308,8 +1104,7 @@ class AudioPlayerService extends ChangeNotifier {
     unawaited(_currentIndexSubscription?.cancel());
     unawaited(_errorSubscription?.cancel());
     unawaited(_commandSubscription?.cancel());
-    _sleepTimer?.cancel();
-    _sleepFadeTimer?.cancel();
+    _sleepTimer.dispose();
     // Not disposed here: AppState owns it and keeps it across logins
     _persistence?.flushPendingPositionSave();
     _scrobbleQueue.dispose();

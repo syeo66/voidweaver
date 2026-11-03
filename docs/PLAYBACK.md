@@ -41,6 +41,8 @@ The player's `seek()` completes once the target is ready or has failed (the erro
 
 After `stop()` or an error the player is idle, so `play()` and skips load the queue again (`_loadQueue()`) instead of seeking.
 
+A password changed on the server and updated in the app (`AppState.updatePassword()`) doesn't reload the queue: playback goes on, as cached tracks play from the cache whatever their URL. The items' stream URLs still carry the old password, though, so `credentialsChanged()` marks them stale (`_sourcesStale`) and starts the downloads of the upcoming tracks again. An item that fails while they're stale (one that wasn't downloaded in time) loads the queue again at that track, with new URLs, instead of skipping it; a failure after that is handled as above.
+
 Starting an album or random songs (`_startQueue()`) fetches the songs before it touches the queue. If that fails (offline, an album that isn't cached, no random songs), the current queue plays on, or stays paused, and the state shown while fetching goes back to what it was, unless the player reported a newer one meanwhile. Only a failure after the new queue was handed to the player stops playback (`_onLoadFailed()`). When several starts overlap, the last one wins: songs that arrive for an earlier one are dropped (`_queueRequests`).
 
 ## Pausing while a track loads
@@ -79,7 +81,7 @@ Don't request focus anywhere else, including native code. Android treats each fo
 
 ## Sleep timer
 
-The sleep timer (`startSleepTimer()`) pauses playback when it runs out. Over its last 30 s (`AudioPlayerService.sleepFadeDuration`, or the whole timer if it's shorter) it fades the volume out, so the music doesn't stop mid-phrase.
+The sleep timer (`startSleepTimer()`, implemented in `SleepTimer`) pauses playback when it runs out. Over its last 30 s (`SleepTimer.fadeDuration`, or the whole timer if it's shorter) it fades the volume out, so the music doesn't stop mid-phrase.
 
 - The fade uses the player's volume (`VoidweaverPlayer.setVolume()`, ExoPlayer's `setVolume()`), not the item gains: it has to carry on across a track change, and it applies on top of the ReplayGain gains. The device volume is left alone.
 - Every 250 ms the volume is set from the time left on the timer's clock, so the fade ends with the timer even if steps run late. The curve is cubic: loudness follows the level in dB, so a linear ramp would sound almost unchanged until the last few seconds.
@@ -92,17 +94,17 @@ The sleep timer (`startSleepTimer()`) pauses playback when it runs out. Over its
 
 - The queue is loaded with `initialIndex` and `initialPosition` instead of a `seek()` afterwards. With a separate seek, load events reporting position 0 could arrive after the seek, so the playhead showed 0:00 while audio resumed at the saved position. `_currentPosition` is also set directly so the UI is right before the player reports anything.
 - If loading fails (e.g. offline at startup), `_needsSourceReload` is set and `play()` loads the queue again at `_pendingResumePosition`. Restoring never skips ahead to a downloaded track.
-- A restored song has no `_currentSongStartTime` until it's played. The first `play()` sets it, sends "now playing" and starts the downloads. Without a start time it would never be scrobbled.
+- A restored song has no start time (`ListeningTracker.hasStarted`) until it's played. The first `play()` sets it, sends "now playing" and starts the downloads. Without a start time it would never be scrobbled.
 
 ## Scrobbling
 
-A song is scrobbled once it has been heard for the minimum play time (default 2 min) or the percentage threshold (default 50%), whichever comes first. Both are configurable in Settings. What counts is the time actually listened (`_listened`), not the position: `_trackListening()` adds up the position updates while playing, and skips any update where the position moved more than the time that passed (plus a second), i.e. a seek. Otherwise seeking to the end and skipping, or letting the track finish, would scrobble it, and subsoxy would take a skip for a play. When a track completes, the rest after the last position update is counted (`_listenedToEnd()`), so a track played through reaches even a 100% threshold. A restored song counts as heard up to its restored position.
+A song is scrobbled once it has been heard for the minimum play time (default 2 min) or the percentage threshold (default 50%), whichever comes first. Both are configurable in Settings. `ListeningTracker` keeps the count for the current play. What counts is the time actually listened (`listened`), not the position: `onPosition()` adds up the position updates while playing, and skips any update where the position moved more than the time that passed (plus a second), i.e. a seek. Otherwise seeking to the end and skipping, or letting the track finish, would scrobble it, and subsoxy would take a skip for a play. When a track completes, the rest after the last position update is counted (`listenedToEnd()`), so a track played through reaches even a 100% threshold. A restored song counts as heard up to its restored position.
 
-Each play is scrobbled at most once, tracked by `_currentSongScrobbled`. The flag is reset whenever a song starts (`_setCurrentTrack()`), so replaying a song (e.g. with Previous) scrobbles it again. Completion checks the flag too, so a song that passed the threshold isn't submitted a second time when it ends. A song restored at a position already past the threshold counts as scrobbled, since that happened in the previous session and the queue persisted it.
+Each play is scrobbled at most once: `takeScrobble()` hands out the start time once. A new play starts whenever a song starts (`_setCurrentTrack()` calls `startPlay()`), so replaying a song (e.g. with Previous) scrobbles it again. Completion checks the flag too, so a song that passed the threshold isn't submitted a second time when it ends. A song restored at a position already past the threshold counts as scrobbled, since that happened in the previous session and the queue persisted it.
 
 Requests go through `ScrobbleQueue`, never directly to the API. The queue:
 
-- is stored in SharedPreferences (`scrobble_queue`) and restored on start
+- is stored in SharedPreferences (`scrobble_queue`) and restored on start; an entry that can't be read is dropped on its own, not with the rest
 - sends oldest first, 100 ms apart, as soon as a request is queued and every 30 s
 - keeps a submission that can't be sent (network error, HTTP error, or the server refusing the credentials) at the front and stops there, so later requests never overtake it. It's retried on the next timer tick or the next queued request, and dropped only after 7 days.
 - drops a submission the server rejects for itself (a `status="failed"` response that isn't an auth error, e.g. unknown song)

@@ -506,6 +506,56 @@ void main() {
     });
   });
 
+  group('password changed', () {
+    // The stream URLs carry the password, like the token and salt do
+    var password = 'old';
+    String urlWithPassword(String id) => '${urlFor(id)}&p=$password';
+
+    setUp(() {
+      password = 'old';
+      when(mockApi.getStreamUrl(any)).thenAnswer((invocation) =>
+          urlWithPassword(invocation.positionalArguments.first as String));
+    });
+
+    test('keeps playing, and loads an item with the old URL again', () async {
+      cache.reachable = false;
+      await service.playAlbum(albumOf(3));
+      await until(() => service.playbackState == PlaybackState.playing,
+          'playback starts');
+      final loads = player.loadedSources.length;
+
+      // The server takes only the new password from now on
+      player.failingUrls.addAll([urlWithPassword('s2'), urlWithPassword('s3')]);
+      password = 'new';
+      service.credentialsChanged();
+      expect(service.playbackState, PlaybackState.playing);
+      expect(player.loadedSources, hasLength(loads));
+
+      player.simulateTrackTransition();
+      await until(() => player.loadedSources.last == urlWithPassword('s2'),
+          'the queue is loaded again with the new URL');
+      await until(() => service.playbackState == PlaybackState.playing,
+          'playback goes on');
+      expect(service.currentIndex, 1);
+      expect(player.sequenceSources.last, urlWithPassword('s3'));
+    });
+
+    test('downloads the upcoming tracks again with the new password', () async {
+      // Refused with the old password until the downloads give up
+      cache.failing.addAll(['s2', 's3']);
+      await service.playAlbum(albumOf(3));
+      await until(() => (cache.attempts['s3'] ?? 0) == 6, 'the retries');
+      cache.failing.clear();
+
+      password = 'new';
+      service.credentialsChanged();
+      await until(() => cache.downloaded.length == 2, 'the downloads');
+      expect(cache.downloaded, ['s2', 's3']);
+      expect(cache.urls.reversed.take(2),
+          [urlWithPassword('s3'), urlWithPassword('s2')]);
+    });
+  });
+
   // The play button stays a pause button while a track loads or buffers
   group('pausing while loading', () {
     test('pause while buffering pauses, play continues', () async {

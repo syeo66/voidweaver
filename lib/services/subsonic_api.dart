@@ -42,7 +42,7 @@ class SubsonicException implements Exception {
 class SubsonicApi {
   final String serverUrl;
   final String username;
-  final String password;
+  String _password;
   final String clientName = 'voidweaver';
   final String version = '1.16.1';
   // Scoped to the server and user, so another login never sees this one's
@@ -63,9 +63,10 @@ class SubsonicApi {
   SubsonicApi({
     required this.serverUrl,
     required this.username,
-    required this.password,
+    required String password,
     NetworkConfig? networkConfig,
-  }) : _networkConfig = networkConfig ?? NetworkConfig.defaultConfig {
+  })  : _password = password,
+        _networkConfig = networkConfig ?? NetworkConfig.defaultConfig {
     // Enforce HTTPS for security
     final uri = Uri.tryParse(serverUrl);
     if (uri == null || uri.scheme.toLowerCase() != 'https') {
@@ -85,6 +86,17 @@ class SubsonicApi {
       config: _networkConfig,
       httpClient: _httpClient,
     );
+  }
+
+  String get password => _password;
+
+  /// Uses [password] for every request from now on, for a password changed
+  /// on the server. The caller has checked it (see [ping]), so
+  /// [credentialsRejected] is cleared. URLs made before (see [getStreamUrl])
+  /// still carry the old one.
+  void usePassword(String password) {
+    _password = password;
+    _setCredentialsRejected(false);
   }
 
   String _generateSalt() {

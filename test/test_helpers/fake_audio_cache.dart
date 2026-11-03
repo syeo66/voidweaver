@@ -28,6 +28,9 @@ class FakeAudioCache implements AudioCache {
   /// Every song downloaded, in order.
   final List<String> downloaded = [];
 
+  /// The URL of every download attempt, in order.
+  final List<String> urls = [];
+
   /// ReplayGain tags of cached songs, by song id.
   final Map<String, ReplayGainData> tags = {};
 
@@ -49,6 +52,7 @@ class FakeAudioCache implements AudioCache {
     final songId = song.id;
     await gate?.future;
     if (cached.contains(songId)) return true;
+    urls.add(url);
     attempts[songId] = (attempts[songId] ?? 0) + 1;
     if (!reachable || failing.contains(songId)) return false;
     downloaded.add(songId);
