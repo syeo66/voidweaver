@@ -120,6 +120,13 @@ else
   else
     fail "PlaybackService is a MediaSessionService"
   fi
+  # System UI's resumption controls browse the service for the recent track
+  if grep -q '"androidx.media3.session.MediaLibraryService"' <<<"$service" &&
+    grep -q '"android.media.browse.MediaBrowserService"' <<<"$service"; then
+    pass "PlaybackService is a MediaLibraryService (system resumption controls)"
+  else
+    fail "PlaybackService is a MediaLibraryService (system resumption controls)"
+  fi
 fi
 
 if element androidx.media3.session.MediaButtonReceiver | grep -q '"android.intent.action.MEDIA_BUTTON"'; then

@@ -348,9 +348,18 @@ if [ -z "$(app_pid)" ]; then
   else
     fail "resumed '$(session_title)', expected '$title'"
   fi
-  sleep 2   # until the `resume` stand-in is released
+  sleep 2   # until the app's player took over the `resume` stand-in's session
   count="$(session_count)"
   if [ "$count" = 1 ]; then pass "one session"; else fail "$count sessions, expected 1"; fi
+  # Android sends media buttons to that session; released, they'd only
+  # reach MediaButtonReceiver, which ignores all but Play while the app runs
+  button_session="$("$ADB" shell dumpsys media_session | grep -m1 'Media button session is' | tr -d '\r')"
+  if echo "$button_session" | grep -q "$PKG/"; then
+    pass "media buttons go to the app's session"
+  else
+    fail "media buttons don't go to the app's session (${button_session# *})"
+  fi
+  key KEYCODE_MEDIA_PAUSE; expect_state PAUSED "MEDIA_PAUSE after resuming"
 else
   fail "process still running after am kill"
 fi

@@ -1,6 +1,5 @@
 package red.ochsenbein.voidweaver.player;
 
-import android.app.PendingIntent;
 import android.content.Context;
 import android.net.Uri;
 import android.os.Handler;
@@ -15,7 +14,6 @@ import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.Timeline;
 import androidx.media3.common.audio.AudioProcessor;
-import androidx.media3.datasource.DataSourceBitmapLoader;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlaybackException;
 import androidx.media3.exoplayer.ExoPlayer;
@@ -24,10 +22,7 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy;
 import androidx.media3.extractor.DefaultExtractorsFactory;
-import androidx.media3.session.CacheBitmapLoader;
-import androidx.media3.session.MediaSession;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession;
 import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.EventChannel;
 import io.flutter.plugin.common.MethodCall;
@@ -71,7 +66,7 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
   private final ArtworkLoader artwork;
   private final ExoPlayer player;
   private final SessionPlayer sessionPlayer;
-  private final MediaSession session;
+  private final MediaLibrarySession session;
   private final Context context;
   private final Handler handler = new Handler(Looper.getMainLooper());
   private final Runnable positionUpdate = this::onPositionUpdate;
@@ -82,7 +77,6 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
 
   PlaylistPlayer(Context context, BinaryMessenger messenger, String id) {
     this.context = context;
-    artwork = new ArtworkLoader(new DataSourceBitmapLoader.Builder(context).build());
     DefaultRenderersFactory renderersFactory =
         new DefaultRenderersFactory(context) {
           @Override
@@ -117,16 +111,15 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
             .build();
     player.addListener(this);
     sessionPlayer = new SessionPlayer(player, this::onSessionCommand);
-    MediaSession.Builder sessionBuilder =
-        new MediaSession.Builder(context, sessionPlayer)
-            .setId(id)
-            .setCallback(new FullControlCallback())
-            // As the session's default, but resolving the URIs that hide the credentials
-            .setBitmapLoader(new CacheBitmapLoader(artwork));
-    PendingIntent sessionActivity = PlaybackService.sessionActivity(context);
-    if (sessionActivity != null) sessionBuilder.setSessionActivity(sessionActivity);
-    session = sessionBuilder.build();
-    PlaybackService.register(context, session);
+    // After the app was started to resume playback, the stand-in's session (which gets the media
+    // buttons) becomes this player's, see PlaybackService
+    PlayerSession playerSession = PlaybackService.claimResumeSession(sessionPlayer);
+    if (playerSession == null) {
+      playerSession = PlayerSession.create(context, id, sessionPlayer);
+      PlaybackService.register(context, playerSession.session);
+    }
+    session = playerSession.session;
+    artwork = playerSession.artwork;
 
     methodChannel = new MethodChannel(messenger, "voidweaver_player/" + id);
     methodChannel.setMethodCallHandler(this);
@@ -261,25 +254,6 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
     }
   }
 
-  /**
-   * Gives every controller full control. Media3 only does that for controllers it trusts, and to
-   * check, it looks the controller's package up, which fails for apps this one can't see (package
-   * visibility). Launchers with media widgets (e.g. Niagara) then only get read access: they show
-   * the track, but their buttons do nothing. SessionPlayer only offers transport controls, which
-   * are passed to Dart, so no controller can do more than a Bluetooth button.
-   */
-  private static final class FullControlCallback implements MediaSession.Callback {
-    @Override
-    public ListenableFuture<MediaSession.ConnectionResult> onConnectAsync(
-        MediaSession session, MediaSession.ControllerInfo controller) {
-      return Futures.immediateFuture(
-          new MediaSession.ConnectionResult.AcceptedResultBuilder(session)
-              .setAvailablePlayerCommands(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS)
-              .setAvailableSessionCommands(MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS)
-              .build());
-    }
-  }
-
   private void onSessionCommand(String command, @Nullable Long positionMs) {
     Map<String, Object> event = new HashMap<>();
     event.put("type", "command");
@@ -320,6 +294,11 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
 
   @Override
   public void onEvents(@NonNull Player player, @NonNull Player.Events events) {
+    if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION)) {
+      MediaItem item = player.getCurrentMediaItem();
+      // For the system's resumption controls, see RecentItem
+      if (item != null) RecentItem.save(context, item);
+    }
     int state = player.getPlaybackState();
     if (pendingLoad != null && (state == Player.STATE_READY || state == Player.STATE_ENDED)) {
       pendingLoad.success(snapshot());

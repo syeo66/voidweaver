@@ -8,8 +8,9 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import androidx.annotation.Nullable;
+import androidx.media3.common.Player;
+import androidx.media3.session.MediaLibraryService;
 import androidx.media3.session.MediaSession;
-import androidx.media3.session.MediaSessionService;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -21,25 +22,42 @@ import java.util.Set;
  * to the service once it runs. Everything runs on the main thread.
  *
  * <p>After the app was closed (the process ended), a Play media button (also Bluetooth) reaches
- * Media3's {@code MediaButtonReceiver}, which starts this service. There is no player yet, so a
- * {@link ResumePlayer} answers it, and starts the app's engine. Once Dart has restored its queue,
- * it asks {@link #takeResumeRequest()} and plays; the stand-in goes once the app's player plays.
+ * Media3's {@code MediaButtonReceiver}, which starts this service, and System UI's resumption
+ * controls bind to it. There is no player yet, so a {@link ResumePlayer} answers them, and starts
+ * the app's engine. Once Dart has restored its queue, it asks {@link #takeResumeRequest()} and
+ * plays.
+ *
+ * <p>The app's player then takes over the stand-in's session ({@link #claimResumeSession}) rather
+ * than replacing it with its own. Android sends media buttons to the session of the app that played
+ * last, and when that session is released it doesn't pass them on to another session of the app:
+ * media buttons (and Bluetooth) then only reached {@code MediaButtonReceiver}, which ignores all
+ * but Play while the app runs.
+ *
+ * <p>It's a library service so System UI can ask it for the recent track ({@link PlayerSession}).
+ * Without that, System UI dropped the media controls once the app had been paused for about 10
+ * minutes, instead of showing resumption controls.
  */
-public final class PlaybackService extends MediaSessionService {
+public final class PlaybackService extends MediaLibraryService {
   private static final String TAG = "PlaybackService";
 
   /** How long the stand-in waits for the app's player to play before giving up. */
   private static final long RESUME_TIMEOUT_MS = 60_000;
 
-  private static final Set<MediaSession> sessions = new LinkedHashSet<>();
+  private static final Set<MediaLibrarySession> sessions = new LinkedHashSet<>();
   @Nullable private static PlaybackService instance;
 
-  @Nullable private MediaSession resumeSession;
-  @Nullable private ResumePlayer resumePlayer;
-  private final Handler handler = new Handler(Looper.getMainLooper());
-  private final Runnable resumeTimeout = this::releaseResumeSession;
+  /** The stand-in's session, until the app's player took it over or it was released. */
+  @Nullable private PlayerSession resumeSession;
 
-  static void register(Context context, MediaSession session) {
+  @Nullable private ResumePlayer resumePlayer;
+
+  /** The app's player that claimed resumeSession, and takes it over in {@link #handOver()}. */
+  @Nullable private Player successor;
+
+  private final Handler handler = new Handler(Looper.getMainLooper());
+  private final Runnable resumeTimeout = this::handOver;
+
+  static void register(Context context, MediaLibrarySession session) {
     sessions.add(session);
     if (instance != null) {
       instance.addSession(session);
@@ -48,12 +66,36 @@ public final class PlaybackService extends MediaSessionService {
     }
   }
 
-  static void unregister(MediaSession session) {
+  static void unregister(MediaLibrarySession session) {
     sessions.remove(session);
     if (instance != null) {
+      if (instance.resumeSession != null && instance.resumeSession.session == session) {
+        // Released by the player that claimed it, before it took it over
+        instance.handler.removeCallbacks(instance.resumeTimeout);
+        instance.resumeSession = null;
+        instance.resumePlayer = null;
+        instance.successor = null;
+      }
       instance.removeSession(session);
       if (sessions.isEmpty() && instance.resumeSession == null) instance.stopSelf();
     }
+  }
+
+  /**
+   * The stand-in's session, if the app was started to resume playback (or System UI bound to the
+   * service before the app ran), for the app's [player]. The stand-in stays its player, keeping
+   * the notification and the foreground service, until the app's player plays, the app answers
+   * that no resume is pending, or the timeout; then [player] takes over. Null if there's no
+   * stand-in, or another player claimed it.
+   */
+  @Nullable
+  static PlayerSession claimResumeSession(Player player) {
+    if (instance == null || instance.resumeSession == null || instance.successor != null) {
+      return null;
+    }
+    instance.successor = player;
+    sessions.add(instance.resumeSession.session);
+    return instance.resumeSession;
   }
 
   /**
@@ -71,13 +113,13 @@ public final class PlaybackService extends MediaSessionService {
   static boolean takeResumeRequest() {
     if (instance == null || instance.resumePlayer == null) return false;
     boolean requested = instance.resumePlayer.isResumeRequested();
-    if (!requested) instance.releaseResumeSession();
+    if (!requested) instance.handOver();
     return requested;
   }
 
   /** The app's player plays: it takes over from the stand-in, see {@link ResumePlayer}. */
   static void onPlaying() {
-    if (instance != null) instance.releaseResumeSession();
+    if (instance != null) instance.handOver();
   }
 
   /** Opens the app, for tapping the notification. */
@@ -106,28 +148,25 @@ public final class PlaybackService extends MediaSessionService {
     // The session is only idle once playback was stopped (SessionPlayer shows a failed load as
     // paused), and a stop ends the notification and the foreground service
     setShowNotificationForIdlePlayer(SHOW_NOTIFICATION_FOR_IDLE_PLAYER_NEVER);
-    for (MediaSession session : sessions) {
+    for (MediaLibrarySession session : sessions) {
       addSession(session);
     }
   }
 
   @Nullable
   @Override
-  public MediaSession onGetSession(MediaSession.ControllerInfo controllerInfo) {
-    MediaSession current = null;
-    for (MediaSession session : sessions) {
+  public MediaLibrarySession onGetSession(MediaSession.ControllerInfo controllerInfo) {
+    MediaLibrarySession current = null;
+    for (MediaLibrarySession session : sessions) {
       current = session;
     }
     if (current != null) return current;
     // Started for a media button (or by the system UI) while the app isn't running
     if (resumeSession == null) {
       resumePlayer = new ResumePlayer(Looper.getMainLooper(), appName(), this::onResumeRequested);
-      MediaSession.Builder builder = new MediaSession.Builder(this, resumePlayer).setId("resume");
-      PendingIntent activity = sessionActivity(this);
-      if (activity != null) builder.setSessionActivity(activity);
-      resumeSession = builder.build();
+      resumeSession = PlayerSession.create(this, "resume", resumePlayer);
     }
-    return resumeSession;
+    return resumeSession.session;
   }
 
   private void onResumeRequested() {
@@ -137,13 +176,26 @@ public final class PlaybackService extends MediaSessionService {
     AppEngine.getOrStart(this);
   }
 
-  private void releaseResumeSession() {
+  /**
+   * Ends the stand-in: the player that claimed its session takes over, keeping the session that
+   * gets the media buttons. If none did, the session is released.
+   */
+  private void handOver() {
     handler.removeCallbacks(resumeTimeout);
     if (resumeSession == null) return;
-    removeSession(resumeSession);
-    resumeSession.release();
+    PlayerSession stoodIn = resumeSession;
+    ResumePlayer stoodInPlayer = resumePlayer;
+    Player next = successor;
     resumeSession = null;
     resumePlayer = null;
+    successor = null;
+    if (next != null) {
+      stoodIn.session.setPlayer(next);
+    } else {
+      removeSession(stoodIn.session);
+      stoodIn.session.release();
+    }
+    if (stoodInPlayer != null) stoodInPlayer.release();
     if (sessions.isEmpty()) stopSelf();
   }
 
@@ -154,7 +206,8 @@ public final class PlaybackService extends MediaSessionService {
 
   @Override
   public void onDestroy() {
-    releaseResumeSession();
+    // A claimed session belongs to the app's player and outlives the service
+    handOver();
     instance = null;
     super.onDestroy();
   }

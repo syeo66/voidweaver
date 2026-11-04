@@ -55,6 +55,8 @@ public class VoidweaverPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
         {
           PlaylistPlayer player = players.remove((String) call.argument("id"));
           if (player != null) player.release();
+          // Disposed on logout: no track for the system's resumption controls
+          RecentItem.clear(context);
           result.success(null);
           break;
         }
