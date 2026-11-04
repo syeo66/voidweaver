@@ -1,13 +1,11 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:logging/logging.dart';
 import 'replaygain_debug_logger.dart';
-
-final _logger = Logger('replaygain');
 
 class ReplayGainData {
   final double? trackGain;
@@ -41,13 +39,23 @@ class ReplayGainReader {
   // art placed before the ReplayGain frames)
   static const int _maxMetadataSize = 16 * 1024 * 1024;
 
-  /// Logs to both the console (debug builds, see setUpLogging()) and the
-  /// persistent ReplayGain debug log (only when the user has enabled it in
-  /// Settings).
-  static void _log(String message) {
-    _logger.fine(message);
-    ReplayGainDebugLogger.instance.log(message);
+  /// Logs to the console and the ReplayGain debug log, see [logReplayGain].
+  /// [message] is only built if one of them takes it. During a parse in the
+  /// background ([_parseInBackground]) the lines are collected instead.
+  static void _log(String Function() message) {
+    if (_backgroundParse) {
+      _backgroundLines?.add(message());
+    } else {
+      logReplayGain(message);
+    }
   }
+
+  // Set in the background isolate of [_parseInBackground], which has neither
+  // the main isolate's log levels nor its debug log: there the lines are
+  // collected (if logging is on), and logged on the main isolate afterwards.
+  // The parse is synchronous, so nothing else runs in that isolate meanwhile.
+  static bool _backgroundParse = false;
+  static List<String>? _backgroundLines;
 
   /// Gives up on reading the tags over the network after this long, see
   /// [readFromUrl].
@@ -68,7 +76,7 @@ class ReplayGainReader {
     Future<ReplayGainData> read() async {
       for (final candidate in [url, if (fallbackUrl != null) fallbackUrl]) {
         if (timedOut) break;
-        _log('Reading ReplayGain metadata from: $candidate');
+        _log(() => 'Reading ReplayGain metadata from: $candidate');
         final current = head = _UrlHead(client, candidate);
         try {
           final data = await readFromHead(current.read);
@@ -76,7 +84,7 @@ class ReplayGainReader {
         } finally {
           await current.close();
         }
-        _log('The server refused the request');
+        _log(() => 'The server refused the request');
       }
       return const ReplayGainData();
     }
@@ -84,20 +92,20 @@ class ReplayGainReader {
     try {
       return await read().timeout(timeout);
     } on TimeoutException {
-      _log('Reading ReplayGain metadata timed out after $timeout');
+      _log(() => 'Reading ReplayGain metadata timed out after $timeout');
       timedOut = true;
       await head?.close();
       return const ReplayGainData();
     } catch (e, stackTrace) {
-      _log('Error reading ReplayGain metadata: $e');
-      _log('Stack trace: $stackTrace');
+      _log(() => 'Error reading ReplayGain metadata: $e');
+      _log(() => 'Stack trace: $stackTrace');
       return const ReplayGainData();
     }
   }
 
   /// Reads ReplayGain metadata from the start of a local file.
   static Future<ReplayGainData> readFromFile(File file) async {
-    _log('Reading ReplayGain metadata from file: ${file.path}');
+    _log(() => 'Reading ReplayGain metadata from file: ${file.path}');
     try {
       final raf = await file.open();
       try {
@@ -109,7 +117,7 @@ class ReplayGainReader {
         await raf.close();
       }
     } catch (e) {
-      _log('Error reading ReplayGain metadata from file: $e');
+      _log(() => 'Error reading ReplayGain metadata from file: $e');
       return const ReplayGainData();
     }
   }
@@ -123,21 +131,21 @@ class ReplayGainReader {
       final head = await readHead(_maxHeaderSize);
       if (head == null || head.isEmpty) return const ReplayGainData();
       var bytes = head;
-      _log('Received ${bytes.length} bytes, first 16 bytes: '
+      _log(() => 'Received ${bytes.length} bytes, first 16 bytes: '
           '${bytes.take(16).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
       // FLAC blocks and MP4 atoms reveal the next one's position only once
       // they are read, so this can take several steps
       for (var required = requiredHeaderSize(bytes);
           required > bytes.length;
           required = requiredHeaderSize(bytes)) {
-        _log('Metadata extends to $required bytes, reading the rest');
+        _log(() => 'Metadata extends to $required bytes, reading the rest');
         final more = await readHead(required);
         if (more == null || more.length <= bytes.length) break;
         bytes = more;
       }
-      return _parseReplayGainFromBytes(bytes);
+      return await _parseInBackground(bytes);
     } catch (e) {
-      _log('Error reading ReplayGain metadata: $e');
+      _log(() => 'Error reading ReplayGain metadata: $e');
       return const ReplayGainData();
     }
   }
@@ -231,9 +239,28 @@ class ReplayGainReader {
   static ReplayGainData parseBytes(Uint8List bytes) =>
       _parseReplayGainFromBytes(bytes);
 
+  /// Parses [bytes] on a background isolate: they can be up to
+  /// [_maxMetadataSize], and a file without ReplayGain tags is searched by
+  /// every parser in turn (byte scans, the whole buffer as a string), which
+  /// would stall the UI at every track start and prefetch. The lines logged
+  /// meanwhile are logged here afterwards. Static, so the closure sent to
+  /// the isolate can't capture the caller's (an HTTP client, an open file).
+  static Future<ReplayGainData> _parseInBackground(Uint8List bytes) async {
+    final logging = replayGainLogging;
+    final (data, lines) = await Isolate.run(() {
+      _backgroundParse = true;
+      _backgroundLines = logging ? <String>[] : null;
+      return (_parseReplayGainFromBytes(bytes), _backgroundLines);
+    });
+    for (final line in lines ?? const <String>[]) {
+      logReplayGain(() => line);
+    }
+    return data;
+  }
+
   static ReplayGainData _parseReplayGainFromBytes(Uint8List bytes) {
-    _log('=== ReplayGain Parsing Started ===');
-    _log('File size: ${bytes.length} bytes');
+    _log(() => '=== ReplayGain Parsing Started ===');
+    _log(() => 'File size: ${bytes.length} bytes');
 
     // Check file format first
     if (bytes.length >= 12) {
@@ -242,49 +269,50 @@ class ReplayGainReader {
           bytes[5] == 0x74 &&
           bytes[6] == 0x79 &&
           bytes[7] == 0x70) {
-        _log('Detected MP4/M4A file format');
+        _log(() => 'Detected MP4/M4A file format');
         final mp4Data = _parseMP4Tags(bytes);
         if (mp4Data.hasAnyData) {
-          _log('✓ Found ReplayGain data in MP4 tags: $mp4Data');
+          _log(() => '✓ Found ReplayGain data in MP4 tags: $mp4Data');
           return mp4Data;
         } else {
-          _log('✗ No ReplayGain data in MP4 tags');
+          _log(() => '✗ No ReplayGain data in MP4 tags');
         }
       }
     }
 
     // Try to parse ID3v2 tags (MP3)
-    _log('Attempting ID3v2 tag parsing...');
+    _log(() => 'Attempting ID3v2 tag parsing...');
     final id3Data = _parseID3v2Tags(bytes);
     if (id3Data.hasAnyData) {
-      _log('✓ Found ReplayGain data in ID3v2 tags: $id3Data');
+      _log(() => '✓ Found ReplayGain data in ID3v2 tags: $id3Data');
       return id3Data;
     } else {
-      _log('✗ No ReplayGain data in ID3v2 tags');
+      _log(() => '✗ No ReplayGain data in ID3v2 tags');
     }
 
     // Try to parse APE tags
-    _log('Attempting APE tag parsing...');
+    _log(() => 'Attempting APE tag parsing...');
     final apeData = _parseAPETags(bytes);
     if (apeData.hasAnyData) {
-      _log('✓ Found ReplayGain data in APE tags: $apeData');
+      _log(() => '✓ Found ReplayGain data in APE tags: $apeData');
       return apeData;
     } else {
-      _log('✗ No ReplayGain data in APE tags');
+      _log(() => '✗ No ReplayGain data in APE tags');
     }
 
     // Try to parse Vorbis comments (for FLAC/OGG)
-    _log('Attempting Vorbis comment parsing...');
+    _log(() => 'Attempting Vorbis comment parsing...');
     final vorbisData = _parseVorbisComments(bytes);
     if (vorbisData.hasAnyData) {
-      _log('✓ Found ReplayGain data in Vorbis comments: $vorbisData');
+      _log(() => '✓ Found ReplayGain data in Vorbis comments: $vorbisData');
       return vorbisData;
     } else {
-      _log('✗ No ReplayGain data in Vorbis comments');
+      _log(() => '✗ No ReplayGain data in Vorbis comments');
     }
 
-    _log('⚠ WARNING: No ReplayGain metadata found after all parsing attempts!');
-    _log('=== ReplayGain Parsing Ended (NO DATA FOUND) ===');
+    _log(() =>
+        '⚠ WARNING: No ReplayGain metadata found after all parsing attempts!');
+    _log(() => '=== ReplayGain Parsing Ended (NO DATA FOUND) ===');
     return const ReplayGainData();
   }
 
@@ -311,7 +339,7 @@ class ReplayGainReader {
       tagSize = bytes.length; // Use available data
     }
 
-    _log(
+    _log(() =>
         'Found ID3v2.$version.$revision tag, size: $tagSize, available: ${bytes.length}');
 
     double? trackGain;
@@ -366,7 +394,7 @@ class ReplayGainReader {
         break;
       }
 
-      _log('Found frame: $frameId, size: $frameSize');
+      _log(() => 'Found frame: $frameId, size: $frameSize');
 
       // Check for ReplayGain frames
       if (frameId == 'TXXX') {
@@ -488,7 +516,7 @@ class ReplayGainReader {
     final cleanDescription =
         description.replaceAll(RegExp(r'[^\x20-\x7E]'), '?');
     final cleanValue = value.replaceAll(RegExp(r'[^\x20-\x7E]'), '?');
-    _log('Found TXXX frame: $cleanDescription = $cleanValue');
+    _log(() => 'Found TXXX frame: $cleanDescription = $cleanValue');
 
     double? parseGain(String gainStr) {
       // Remove " dB" suffix and parse
@@ -529,7 +557,7 @@ class ReplayGainReader {
       }
 
       if (matches) {
-        _log('Found APE tag at offset $i');
+        _log(() => 'Found APE tag at offset $i');
         return _parseAPETagItems(bytes, i);
       }
     }
@@ -659,7 +687,7 @@ class ReplayGainReader {
   }
 
   static ReplayGainData _parseMP4Tags(Uint8List bytes) {
-    _log('Parsing MP4/M4A metadata for ReplayGain tags');
+    _log(() => 'Parsing MP4/M4A metadata for ReplayGain tags');
 
     double? trackGain;
     double? albumGain;
@@ -684,7 +712,7 @@ class ReplayGainReader {
 
       final atomType =
           String.fromCharCodes(bytes.sublist(offset + 4, offset + 8));
-      _log('Found MP4 atom: $atomType, size: $atomSize');
+      _log(() => 'Found MP4 atom: $atomType, size: $atomSize');
 
       // Look for metadata atoms
       if (atomType == 'moov' || atomType == 'udta' || atomType == 'meta') {
@@ -698,7 +726,7 @@ class ReplayGainReader {
 
       // Look for iTunes metadata atom 'ilst'
       if (atomType == 'ilst') {
-        _log('Found iTunes metadata atom');
+        _log(() => 'Found iTunes metadata atom');
         final metadataData = bytes.sublist(offset + 8, offset + atomSize);
         return _parseItunesMetadata(metadataData);
       }
@@ -716,7 +744,7 @@ class ReplayGainReader {
         .firstMatch(textData);
     if (trackGainMatch != null) {
       trackGain = double.tryParse(trackGainMatch.group(1)!);
-      _log('Found iTunes ReplayGain track gain: $trackGain');
+      _log(() => 'Found iTunes ReplayGain track gain: $trackGain');
     }
 
     final albumGainMatch = RegExp(
@@ -725,7 +753,7 @@ class ReplayGainReader {
         .firstMatch(textData);
     if (albumGainMatch != null) {
       albumGain = double.tryParse(albumGainMatch.group(1)!);
-      _log('Found iTunes ReplayGain album gain: $albumGain');
+      _log(() => 'Found iTunes ReplayGain album gain: $albumGain');
     }
 
     final trackPeakMatch = RegExp(
@@ -734,7 +762,7 @@ class ReplayGainReader {
         .firstMatch(textData);
     if (trackPeakMatch != null) {
       trackPeak = double.tryParse(trackPeakMatch.group(1)!);
-      _log('Found iTunes ReplayGain track peak: $trackPeak');
+      _log(() => 'Found iTunes ReplayGain track peak: $trackPeak');
     }
 
     final albumPeakMatch = RegExp(
@@ -743,7 +771,7 @@ class ReplayGainReader {
         .firstMatch(textData);
     if (albumPeakMatch != null) {
       albumPeak = double.tryParse(albumPeakMatch.group(1)!);
-      _log('Found iTunes ReplayGain album peak: $albumPeak');
+      _log(() => 'Found iTunes ReplayGain album peak: $albumPeak');
     }
 
     // Also look for standard ReplayGain fields without iTunes prefix
@@ -754,7 +782,7 @@ class ReplayGainReader {
           .firstMatch(textData);
       if (stdTrackGainMatch != null) {
         trackGain = double.tryParse(stdTrackGainMatch.group(1)!);
-        _log('Found standard ReplayGain track gain: $trackGain');
+        _log(() => 'Found standard ReplayGain track gain: $trackGain');
       }
     }
 
@@ -765,7 +793,7 @@ class ReplayGainReader {
           .firstMatch(textData);
       if (stdAlbumGainMatch != null) {
         albumGain = double.tryParse(stdAlbumGainMatch.group(1)!);
-        _log('Found standard ReplayGain album gain: $albumGain');
+        _log(() => 'Found standard ReplayGain album gain: $albumGain');
       }
     }
 
@@ -776,7 +804,7 @@ class ReplayGainReader {
           .firstMatch(textData);
       if (stdTrackPeakMatch != null) {
         trackPeak = double.tryParse(stdTrackPeakMatch.group(1)!);
-        _log('Found standard ReplayGain track peak: $trackPeak');
+        _log(() => 'Found standard ReplayGain track peak: $trackPeak');
       }
     }
 
@@ -787,7 +815,7 @@ class ReplayGainReader {
           .firstMatch(textData);
       if (stdAlbumPeakMatch != null) {
         albumPeak = double.tryParse(stdAlbumPeakMatch.group(1)!);
-        _log('Found standard ReplayGain album peak: $albumPeak');
+        _log(() => 'Found standard ReplayGain album peak: $albumPeak');
       }
     }
 
@@ -819,7 +847,7 @@ class ReplayGainReader {
           String.fromCharCodes(bytes.sublist(offset + 4, offset + 8));
 
       if (atomType == 'ilst') {
-        _log('Found nested iTunes metadata atom');
+        _log(() => 'Found nested iTunes metadata atom');
         final metadataData = bytes.sublist(offset + 8, offset + atomSize);
         return _parseItunesMetadata(metadataData);
       }
@@ -831,11 +859,11 @@ class ReplayGainReader {
   }
 
   static ReplayGainData _parseItunesMetadata(Uint8List bytes) {
-    _log('Parsing iTunes metadata block');
+    _log(() => 'Parsing iTunes metadata block');
 
     // Convert to string and search for ReplayGain fields
     final textData = String.fromCharCodes(bytes);
-    _log(
+    _log(() =>
         'iTunes metadata text sample: ${textData.substring(0, math.min(200, textData.length))}');
 
     double? trackGain;
@@ -865,16 +893,16 @@ class ReplayGainReader {
 
         if (lowerPattern.contains('track_gain')) {
           trackGain = value;
-          _log('Found iTunes track gain: $trackGain');
+          _log(() => 'Found iTunes track gain: $trackGain');
         } else if (lowerPattern.contains('album_gain')) {
           albumGain = value;
-          _log('Found iTunes album gain: $albumGain');
+          _log(() => 'Found iTunes album gain: $albumGain');
         } else if (lowerPattern.contains('track_peak')) {
           trackPeak = value;
-          _log('Found iTunes track peak: $trackPeak');
+          _log(() => 'Found iTunes track peak: $trackPeak');
         } else if (lowerPattern.contains('album_peak')) {
           albumPeak = value;
-          _log('Found iTunes album peak: $albumPeak');
+          _log(() => 'Found iTunes album peak: $albumPeak');
         }
       }
     }
@@ -954,8 +982,9 @@ class _UrlHead {
           break;
         }
         if (start == 0 && _isSubsonicResponse(response)) {
-          ReplayGainReader._log('Got a Subsonic response instead of audio: '
-              '${response.headers['content-type']}');
+          ReplayGainReader._log(
+              () => 'Got a Subsonic response instead of audio: '
+                  '${response.headers['content-type']}');
           await response.stream.listen(null).cancel();
           refused = true;
           _ended = true;
@@ -972,14 +1001,14 @@ class _UrlHead {
         }
         if (response.statusCode != 200 || start > 0) {
           ReplayGainReader._log(
-              'Failed to fetch audio data: ${response.statusCode}');
+              () => 'Failed to fetch audio data: ${response.statusCode}');
           // Without reading the body
           await response.stream.listen(null).cancel();
           if (start == 0) refused = true;
           _ended = true;
           break;
         }
-        ReplayGainReader._log(
+        ReplayGainReader._log(() =>
             'Server ignored the Range header, reading the start of the file');
         body = _body = StreamIterator(response.stream);
       }

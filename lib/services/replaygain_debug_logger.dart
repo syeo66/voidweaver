@@ -170,6 +170,23 @@ class ReplayGainDebugLogger extends ChangeNotifier {
   }
 }
 
+/// Whether ReplayGain diagnostics are written anywhere: to the console when
+/// the `replaygain` logger prints `FINE` (debug builds, see setUpLogging()),
+/// or to the debug log when the user has enabled it in Settings. Neither is
+/// on in a release build by default, so the lines aren't even built then.
+bool get replayGainLogging =>
+    _log.isLoggable(Level.FINE) || ReplayGainDebugLogger.instance.enabled;
+
+/// Logs a ReplayGain diagnostic line to the console (`FINE`) and the debug
+/// log. [message] is only called if [replayGainLogging] is on: ReplayGain
+/// is read for every song played or prefetched.
+void logReplayGain(String Function() message) {
+  if (!replayGainLogging) return;
+  final line = message();
+  _log.fine(line);
+  ReplayGainDebugLogger.instance.log(line);
+}
+
 /// The lines the ReplayGain debug log shows for the track that starts
 /// playing: its ReplayGain data, the settings, and the linear [gain] it plays
 /// at. [queue] is what the queue was started from (album gains are used in

@@ -924,38 +924,32 @@ class AudioPlayerService extends ChangeNotifier {
       ? _totalDuration
       : Duration(seconds: _currentSong?.duration ?? 0);
 
-  /// Logs to both the console (debug builds, see setUpLogging()) and the
-  /// persistent ReplayGain debug log (only when the user has enabled it in
-  /// Settings).
-  void _rgLog(String message) {
-    _rgLogger.fine(message);
-    ReplayGainDebugLogger.instance.log(message);
-  }
-
   /// Makes sure the song at [index] has ReplayGain data, reading it from the
   /// file when the server didn't provide it. A gain read here is applied to
   /// the song's items in the player's sequence.
   Future<void> _loadReplayGain(int index) async {
     final playlist = _playlist;
     final song = playlist[index];
-    _rgLog('[ReplayGain] Processing song: "${song.title}" by "${song.artist}" '
+    logReplayGain(() =>
+        '[ReplayGain] Processing song: "${song.title}" by "${song.artist}" '
         '(id=${song.id}, album="${song.album}", format=${song.suffix}/${song.contentType})');
 
     if (song.replayGainTrackGain == null && song.replayGainAlbumGain == null) {
-      _rgLog(
+      logReplayGain(() =>
           '[ReplayGain] No ReplayGain in API response, reading from file...');
       try {
         final data = await _audioCache.readReplayGain(song) ??
             await _api.readReplayGain(song.id);
-        _rgLog('[ReplayGain] File reading complete: '
+        logReplayGain(() => '[ReplayGain] File reading complete: '
             'TrackGain=${data.trackGain?.toStringAsFixed(2) ?? "null"}, '
             'AlbumGain=${data.albumGain?.toStringAsFixed(2) ?? "null"}, '
             'TrackPeak=${data.trackPeak?.toStringAsFixed(4) ?? "null"}, '
             'AlbumPeak=${data.albumPeak?.toStringAsFixed(4) ?? "null"}');
         _storeReplayGain(playlist, index, data);
       } catch (e, stackTrace) {
-        _rgLog('[ReplayGain] ERROR reading ReplayGain metadata: $e');
-        _rgLog('[ReplayGain] Stack trace: $stackTrace');
+        logReplayGain(
+            () => '[ReplayGain] ERROR reading ReplayGain metadata: $e');
+        logReplayGain(() => '[ReplayGain] Stack trace: $stackTrace');
       }
     }
 
@@ -1014,10 +1008,10 @@ class AudioPlayerService extends ChangeNotifier {
 
   void _logReplayGain() {
     final song = _currentSong;
-    if (song == null) return;
+    if (song == null || !replayGainLogging) return;
     for (final line in trackGainReport(song, _settingsService,
         gain: _gainFor(song), queue: _playlistSource?.name ?? 'none')) {
-      _rgLog(line);
+      logReplayGain(() => line);
     }
   }
 
@@ -1074,7 +1068,7 @@ class AudioPlayerService extends ChangeNotifier {
     }
     final data = await _audioCache.readReplayGain(song);
     if (data == null) return true;
-    _rgLog(
+    logReplayGain(() =>
         '[ReplayGain] Preload read "${song.title}": Track=${data.trackGain}, Album=${data.albumGain}');
     _storeReplayGain(playlist, index, data);
     return true;

@@ -4,7 +4,6 @@ import 'package:xml/xml.dart';
 import '../services/replaygain_debug_logger.dart';
 
 final _log = Logger('subsonic_api');
-final _rgLogger = Logger('replaygain');
 
 class Album {
   final String id;
@@ -120,20 +119,6 @@ class Album {
           [],
     );
   }
-}
-
-/// Whether ReplayGain parsing is logged: when the `replaygain` logger prints
-/// `FINE` (debug builds, see setUpLogging()), or when the user has enabled
-/// the ReplayGain debug log in Settings. Parsing runs for every
-/// song, so the messages aren't even built otherwise.
-bool get _rgLogging =>
-    _rgLogger.isLoggable(Level.FINE) || ReplayGainDebugLogger.instance.enabled;
-
-/// Logs to the console (debug builds, see setUpLogging()) and the persistent
-/// ReplayGain debug log (only when the user has enabled it in Settings).
-void _rgLog(String message) {
-  _rgLogger.fine(message);
-  ReplayGainDebugLogger.instance.log(message);
 }
 
 class Song {
@@ -257,12 +242,10 @@ class Song {
       replayGainAlbumPeak: replayGain('albumPeak'),
     );
 
-    if (_rgLogging) {
-      _rgLog('[ReplayGain XML] "${song.title}" (id=${song.id}), '
-          '${nested != null ? 'nested <replayGain>' : 'song attributes'}: '
-          'trackGain=${song.replayGainTrackGain}, albumGain=${song.replayGainAlbumGain}, '
-          'trackPeak=${song.replayGainTrackPeak}, albumPeak=${song.replayGainAlbumPeak}');
-    }
+    logReplayGain(() => '[ReplayGain XML] "${song.title}" (id=${song.id}), '
+        '${nested != null ? 'nested <replayGain>' : 'song attributes'}: '
+        'trackGain=${song.replayGainTrackGain}, albumGain=${song.replayGainAlbumGain}, '
+        'trackPeak=${song.replayGainTrackPeak}, albumPeak=${song.replayGainAlbumPeak}');
 
     return song;
   }
@@ -344,22 +327,18 @@ class Song {
       albumGain = (replayGain['albumGain'] as num?)?.toDouble();
       trackPeak = (replayGain['trackPeak'] as num?)?.toDouble();
       albumPeak = (replayGain['albumPeak'] as num?)?.toDouble();
-      if (_rgLogging) {
-        _rgLog(
-            '[ReplayGain JSON] "${json['title']}" (id=${json['id']}): nested replayGain='
-            '{trackGain: $trackGain, albumGain: $albumGain, trackPeak: $trackPeak, albumPeak: $albumPeak}');
-      }
+      logReplayGain(() =>
+          '[ReplayGain JSON] "${json['title']}" (id=${json['id']}): nested replayGain='
+          '{trackGain: $trackGain, albumGain: $albumGain, trackPeak: $trackPeak, albumPeak: $albumPeak}');
     } else {
       // Fallback to flat format for backwards compatibility
       trackGain = (json['replayGainTrackGain'] as num?)?.toDouble();
       albumGain = (json['replayGainAlbumGain'] as num?)?.toDouble();
       trackPeak = (json['replayGainTrackPeak'] as num?)?.toDouble();
       albumPeak = (json['replayGainAlbumPeak'] as num?)?.toDouble();
-      if (_rgLogging) {
-        _rgLog(
-            '[ReplayGain JSON] "${json['title']}" (id=${json['id']}): flat fields='
-            '{trackGain: $trackGain, albumGain: $albumGain, trackPeak: $trackPeak, albumPeak: $albumPeak}');
-      }
+      logReplayGain(() =>
+          '[ReplayGain JSON] "${json['title']}" (id=${json['id']}): flat fields='
+          '{trackGain: $trackGain, albumGain: $albumGain, trackPeak: $trackPeak, albumPeak: $albumPeak}');
     }
 
     return Song(
