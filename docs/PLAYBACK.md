@@ -91,7 +91,7 @@ The sleep timer (`startSleepTimer()`, implemented in `SleepTimer`) pauses playba
 
 ## Restoring playback
 
-`PlaybackPersistenceService` saves the queue, index and position (throttled to every 5 s while playing, and after every track change). On start, `restorePlaybackState()` loads the saved song paused. It runs while the home screen is already shown; if the user starts playback first, the restore gives up and leaves the new queue alone.
+`PlaybackPersistenceService` saves the queue, index and position (throttled to every 5 s while playing, and after every track change). The queue is only written again when it changed: a new playlist list, or ReplayGain read from a file into one of its songs (`queueChanged()`), so a restored queue keeps the gains that were read. On start, `restorePlaybackState()` loads the saved song paused. It runs while the home screen is already shown; if the user starts playback first, the restore gives up and leaves the new queue alone.
 
 - The queue is loaded with `initialIndex` and `initialPosition` instead of a `seek()` afterwards. With a separate seek, load events reporting position 0 could arrive after the seek, so the playhead showed 0:00 while audio resumed at the saved position. `_currentPosition` is also set directly so the UI is right before the player reports anything.
 - If loading fails (e.g. offline at startup), `_needsSourceReload` is set and `play()` loads the queue again at `_pendingResumePosition`. Restoring never skips ahead to a downloaded track.

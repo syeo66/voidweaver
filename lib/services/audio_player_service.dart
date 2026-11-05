@@ -973,6 +973,9 @@ class AudioPlayerService extends ChangeNotifier {
       replayGainAlbumPeak: data.albumPeak,
     );
     playlist[index] = updated;
+    // Saved with the queue's next save, so a restored queue has the gain
+    // without reading the file again
+    _persistence?.queueChanged();
     // Not notified: only the gain depends on it
     if (index == _currentIndex) _currentSong = updated;
     _updateGains(onlyIndex: index);

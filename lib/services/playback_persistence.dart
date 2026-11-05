@@ -90,7 +90,9 @@ class PlaybackPersistenceService {
   PersistedPlaybackState? _pendingPositionState;
 
   // The queue last saved; the player service replaces its playlist list
-  // whenever the queue changes, so identity tells whether it needs saving
+  // whenever the queue changes, so identity tells whether it needs saving.
+  // Changes to a song in the list (ReplayGain read from the file) go through
+  // queueChanged().
   List<Song>? _savedPlaylist;
   String? _savedPlaylistSource;
   String? _savedSourceId;
@@ -174,6 +176,13 @@ class PlaybackPersistenceService {
       _log.warning('Failed to load playback state', e);
       return null;
     }
+  }
+
+  /// A song in the saved queue's list was replaced in place (ReplayGain
+  /// read from its file), so the next save writes the queue again rather
+  /// than only the position.
+  void queueChanged() {
+    _savedPlaylist = null;
   }
 
   /// Saves [state] at most once per interval. Called on every position

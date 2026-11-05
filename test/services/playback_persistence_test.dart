@@ -104,6 +104,28 @@ void main() {
       expect(saved.sourceId, 'song2');
     });
 
+    test('saves the queue again once a song in it changed', () async {
+      final playlist = List.of(songs);
+      PersistedPlaybackState state(int seconds) => PersistedPlaybackState(
+            playlist: playlist,
+            currentIndex: 0,
+            currentPosition: Duration(seconds: seconds),
+            isPlaying: true,
+            lastUpdated: DateTime.now(),
+          );
+      await persistence.savePlaybackState(state(0));
+
+      // As AudioPlayerService stores ReplayGain read from the file
+      playlist[1] = playlist[1].copyWith(replayGainTrackGain: -6.5);
+      persistence.queueChanged();
+      persistence.schedulePositionSave(state(10));
+      await Future.delayed(interval * 2);
+
+      final saved = await persistence.loadPlaybackState();
+      expect(saved!.playlist[1].replayGainTrackGain, -6.5);
+      expect(saved.currentPosition, const Duration(seconds: 10));
+    });
+
     test('clear discards a pending position save', () async {
       persistence.schedulePositionSave(stateAt(0, 42));
       await persistence.clearPlaybackState();
