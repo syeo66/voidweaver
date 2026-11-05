@@ -45,8 +45,15 @@ class _SettingsContent extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<SettingsService>(
       builder: (context, settingsService, child) {
+        // An explicit padding replaces ListView's automatic safe-area inset,
+        // so add the system navigation bar's height back at the bottom.
         return ListView(
-          padding: const EdgeInsets.all(16.0),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            16 + MediaQuery.paddingOf(context).bottom,
+          ),
           children: [
             AppearanceSection(settingsService: settingsService),
             const SizedBox(height: 16),
