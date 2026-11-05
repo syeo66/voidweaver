@@ -107,21 +107,7 @@ class _AlbumTileState extends State<AlbumTile> with _PlaysAlbum {
                 height: 20,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : PopupMenuButton<String>(
-                onSelected: (_) => _play(album),
-                itemBuilder: (context) => const [
-                  PopupMenuItem(
-                    value: 'play',
-                    child: Row(
-                      children: [
-                        Icon(Icons.play_arrow),
-                        SizedBox(width: 8),
-                        Text('Play Album'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+            : null,
         onTap: () => _play(album),
       ),
     );

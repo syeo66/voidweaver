@@ -77,17 +77,6 @@ void main() {
       expect(find.text('9 songs • 1h 2m'), findsOneWidget);
     });
 
-    testWidgets('plays the album from the menu', (tester) async {
-      await pump(tester, AlbumTile(album: album), size: const Size(400, 100));
-
-      await tester.tap(find.byType(PopupMenuButton<String>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Play Album'));
-      await tester.pump();
-
-      expect(player.played, [album]);
-    });
-
     testWidgets('shows a spinner while starting and ignores another tap', (
       tester,
     ) async {
