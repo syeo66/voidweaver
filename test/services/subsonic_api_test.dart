@@ -156,6 +156,12 @@ void main() {
         1,
       );
     });
+
+    // ScrobbleQueue drops it on failure; retries would hold up the
+    // submissions behind it
+    test('send a now playing notification only once', () async {
+      expect(await attemptsOf((api) => api.scrobbleNowPlaying('song1')), 1);
+    });
   });
 
   group('SubsonicApi network config', () {

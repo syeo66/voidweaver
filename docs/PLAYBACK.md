@@ -109,7 +109,7 @@ Requests go through `ScrobbleQueue`, never directly to the API. The queue:
 - sends oldest first, 100 ms apart, as soon as a request is queued and every 30 s
 - keeps a submission that can't be sent (network error, HTTP error, or the server refusing the credentials) at the front and stops there, so later requests never overtake it. It's retried on the next timer tick or the next queued request, and dropped only after 7 days.
 - drops a submission the server rejects for itself (a `status="failed"` response that isn't an auth error, e.g. unknown song)
-- drops a "now playing" that fails, since it would be stale by the time it's retried
+- drops a "now playing" that fails, since it would be stale by the time it's retried. For the same reason `scrobbleNowPlaying()` sends once, without retries (which would also hold up the submissions behind it), and only submissions are saved: a "now playing" restored from the last session would mark a song as playing that isn't.
 - is the only retry for submissions: `scrobbleSubmission()` sends once, without the retries of other requests. A submission whose answer timed out may have been counted already. subsoxy drops a repeat of the same song from the same client within half the song's length, but passes every submission on to Navidrome, which counts each one. So a lost answer costs one extra play count in Navidrome at most, rather than one per retry.
 
 subsoxy uses these scrobbles to tell plays from skips, so the queue's ordering and `playedAt` timestamps matter. That's also why `scrobbleNowPlaying()` and `scrobbleSubmission()` throw on failure: the queue has to know.

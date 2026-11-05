@@ -53,6 +53,8 @@ class ScrobbleRequest {
 /// [_processingInterval] and whenever a new request is queued. A submission
 /// the server rejects for itself (e.g. unknown song) is dropped, and so is a
 /// "now playing" that fails: it would be stale by the time it's retried.
+/// For the same reason only submissions are saved: a "now playing" from the
+/// last session would mark a song as playing that isn't.
 class ScrobbleQueue {
   static const String _storageKey = 'scrobble_queue';
   static const Duration _processingInterval = Duration(seconds: 30);
@@ -224,11 +226,15 @@ class ScrobbleQueue {
         // Entry by entry: one that can't be read (e.g. written by a newer
         // version) is dropped, not the plays around it
         for (final item in queueData) {
+          final ScrobbleRequest request;
           try {
-            _queue.add(ScrobbleRequest.fromJson(item as Map<String, dynamic>));
+            request = ScrobbleRequest.fromJson(item as Map<String, dynamic>);
           } catch (e) {
             _log.warning('Dropping unreadable scrobble request: $item', e);
+            continue;
           }
+          // Saved by older versions; stale now
+          if (request.type == ScrobbleType.submission) _queue.add(request);
         }
         _log.fine('Loaded ${_queue.length} scrobble requests from storage');
       }
@@ -238,14 +244,20 @@ class ScrobbleQueue {
     }
   }
 
-  /// Save queue to persistent storage
+  /// Saves the submissions in the queue; "now playing" requests aren't kept
+  /// across sessions
   Future<void> _saveQueue() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final queueJson = json.encode(
-        _queue.map((request) => request.toJson()).toList(),
-      );
-      await prefs.setString(_storageKey, queueJson);
+      final submissions = [
+        for (final request in _queue)
+          if (request.type == ScrobbleType.submission) request.toJson(),
+      ];
+      if (submissions.isEmpty) {
+        await prefs.remove(_storageKey);
+        return;
+      }
+      await prefs.setString(_storageKey, json.encode(submissions));
     } catch (e) {
       _log.warning('Error saving scrobble queue', e);
     }

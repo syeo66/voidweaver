@@ -441,10 +441,14 @@ class SubsonicApi {
   /// Notifies the server that a song is now playing.
   /// This updates the "now playing" status but doesn't affect play counts.
   /// Throws on failure; use [ScrobbleQueue] rather than calling this directly.
+  ///
+  /// Sent once, without retries: the queue drops a "now playing" that fails
+  /// anyway, and while retries ran, the submissions queued behind it would
+  /// wait.
   Future<void> scrobbleNowPlaying(String songId) async {
     final params = {'id': songId, 'submission': 'false'};
 
-    await _makeRequest('scrobble', params);
+    await _makeRequest('scrobble', params, NetworkRequestType.metadata, false);
     _log.fine('Now playing notification sent for song: $songId');
   }
 

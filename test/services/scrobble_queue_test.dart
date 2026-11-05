@@ -267,6 +267,53 @@ void main() {
       expect(scrobbleQueue.queueSize, 0);
     });
 
+    test('saves only submissions', () async {
+      final online = Completer<void>();
+      when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
+          .thenAnswer((_) => online.future);
+      when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {});
+
+      await scrobbleQueue.initialize();
+      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
+      // Behind the submission that's still being sent
+      await scrobbleQueue.queueNowPlaying('song2');
+      await Future<void>.delayed(Duration.zero);
+      expect(scrobbleQueue.queueSize, 2);
+
+      final prefs = await SharedPreferences.getInstance();
+      final saved = jsonDecode(prefs.getString('scrobble_queue')!) as List;
+      expect(saved, [containsPair('songId', 'song1')]);
+      online.complete();
+    });
+
+    test('drops now playing requests saved by older versions', () async {
+      SharedPreferences.setMockInitialValues({
+        'scrobble_queue': jsonEncode([
+          ScrobbleRequest(
+            songId: 'stale',
+            type: ScrobbleType.nowPlaying,
+            queuedAt: DateTime.now(),
+          ).toJson(),
+          ScrobbleRequest(
+            songId: 'song1',
+            type: ScrobbleType.submission,
+            playedAt: DateTime.now(),
+            queuedAt: DateTime.now(),
+          ).toJson(),
+        ]),
+      });
+      when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
+          .thenAnswer((_) async {});
+
+      await scrobbleQueue.initialize();
+      await scrobbleQueue.processQueue();
+
+      verifyNever(mockApi.scrobbleNowPlaying(any));
+      verify(
+        mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
+      ).called(1);
+    });
+
     test('should persist queue to storage', () async {
       // Make API calls slow so we can queue multiple items
       when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {
