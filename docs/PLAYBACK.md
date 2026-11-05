@@ -19,7 +19,7 @@ Earlier versions loaded one track at a time and advanced on `completed`. That ev
 
 ## ReplayGain per track
 
-Every item in the sequence carries its own gain (`AudioSource.gain`, from `_gainFor()`). On the native side, `GainAudioProcessor` sits in ExoPlayer's audio sink and multiplies the decoded samples by the gain of the item they belong to. The sink drains its processors and flushes them with the next item's `StreamMetadata` exactly where one item's samples end, so the gain changes at the sample where the track changes, also during a gapless transition. Nothing is applied when the player reports the new index; that event arrives a few hundred ms later, after the new track is already audible.
+Every item in the sequence carries its own gain (`AudioSource.gain`, from `_gainFor()`, which asks `ReplayGainResolver`). On the native side, `GainAudioProcessor` sits in ExoPlayer's audio sink and multiplies the decoded samples by the gain of the item they belong to. The sink drains its processors and flushes them with the next item's `StreamMetadata` exactly where one item's samples end, so the gain changes at the sample where the track changes, also during a gapless transition. Nothing is applied when the player reports the new index; that event arrives a few hundred ms later, after the new track is already audible.
 
 - Gains can be above 1 (quiet tracks, positive preamp); samples are clipped at full scale. With clipping prevention on, the peak keeps them below that.
 - A gain read later (from a downloaded file, or by a range request) is set on the song's items with `_updateGains()`. The start track's gain is read before the queue is loaded, and a skip's target before seeking.

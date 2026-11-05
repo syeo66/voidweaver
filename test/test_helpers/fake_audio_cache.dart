@@ -31,6 +31,12 @@ class FakeAudioCache implements AudioCache {
   /// The URL of every download attempt, in order.
   final List<String> urls = [];
 
+  /// Every song whose download was cancelled, in order.
+  final List<String> cancelled = [];
+
+  // Downloads waiting at [gate], by song id; cancelDownload() ends them
+  final Map<String, List<Completer<void>>> _waiting = {};
+
   /// ReplayGain tags of cached songs, by song id.
   final Map<String, ReplayGainData> tags = {};
 
@@ -52,7 +58,14 @@ class FakeAudioCache implements AudioCache {
   @override
   Future<bool> prefetch(Song song, String url) async {
     final songId = song.id;
-    await gate?.future;
+    final gate = this.gate;
+    if (gate != null) {
+      final cancel = Completer<void>();
+      _waiting.putIfAbsent(songId, () => []).add(cancel);
+      await Future.any([gate.future, cancel.future]);
+      _waiting[songId]!.remove(cancel);
+      if (cancel.isCompleted) return false;
+    }
     if (cached.contains(songId)) return true;
     urls.add(url);
     attempts[songId] = (attempts[songId] ?? 0) + 1;
@@ -60,6 +73,18 @@ class FakeAudioCache implements AudioCache {
     downloaded.add(songId);
     cached.add(songId);
     return true;
+  }
+
+  /// Whether a download of [id] waits at [gate].
+  bool isWaiting(String id) => _waiting[id]?.isNotEmpty ?? false;
+
+  /// Ends the downloads of [song] waiting at [gate], which then return false.
+  @override
+  Future<void> cancelDownload(Song song) async {
+    cancelled.add(song.id);
+    for (final cancel in _waiting[song.id] ?? const <Completer<void>>[]) {
+      if (!cancel.isCompleted) cancel.complete();
+    }
   }
 
   @override

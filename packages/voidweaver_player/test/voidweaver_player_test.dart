@@ -323,6 +323,39 @@ void main() {
       });
     });
 
+    test('cancelPrefetch passes the key', () async {
+      await cache.cancelPrefetch('server|a');
+
+      expect(platform.lastCall('cache.cancelPrefetch').arguments, {
+        'key': 'server|a',
+      });
+    });
+
+    test('a cancelled prefetch throws PrefetchCancelledException', () async {
+      platform.onPluginCall = (call) =>
+          throw PlatformException(code: 'cancelled');
+
+      await expectLater(
+        cache.prefetch('server|a', Uri.parse('https://music.example.com/a')),
+        throwsA(
+          isA<PrefetchCancelledException>().having(
+            (e) => e.key,
+            'key',
+            'server|a',
+          ),
+        ),
+      );
+    });
+
+    test('other prefetch failures keep their PlatformException', () async {
+      platform.onPluginCall = (call) => throw PlatformException(code: 'error');
+
+      await expectLater(
+        cache.prefetch('server|a', Uri.parse('https://music.example.com/a')),
+        throwsA(isA<PlatformException>()),
+      );
+    });
+
     test(
       'reports the cached keys, none if the platform returns null',
       () async {

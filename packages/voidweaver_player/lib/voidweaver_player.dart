@@ -59,6 +59,16 @@ class PlayerInterruptedException implements Exception {
   String toString() => 'PlayerInterruptedException($message)';
 }
 
+/// [MediaCache.prefetch] of [key] was stopped by [MediaCache.cancelPrefetch].
+class PrefetchCancelledException implements Exception {
+  final String key;
+
+  PrefetchCancelledException(this.key);
+
+  @override
+  String toString() => 'PrefetchCancelledException($key)';
+}
+
 enum SystemCommandType { play, pause, stop, next, previous, seek }
 
 /// A command from the notification, lock screen, Bluetooth or media buttons.
@@ -360,10 +370,26 @@ class MediaCache {
   });
 
   /// Downloads [uri] completely into the cache under [key]. Downloads run one
-  /// at a time. Throws if the download fails; what was downloaded stays
-  /// cached and the next attempt continues from there.
-  Future<void> prefetch(String key, Uri uri) =>
-      _channel.invokeMethod('cache.prefetch', {'key': key, 'uri': '$uri'});
+  /// at a time. Throws if the download fails, [PrefetchCancelledException]
+  /// if [cancelPrefetch] stopped it; what was downloaded stays cached and the
+  /// next attempt continues from there.
+  Future<void> prefetch(String key, Uri uri) async {
+    try {
+      await _channel.invokeMethod('cache.prefetch', {
+        'key': key,
+        'uri': '$uri',
+      });
+    } on PlatformException catch (e) {
+      if (e.code == 'cancelled') throw PrefetchCancelledException(key);
+      rethrow;
+    }
+  }
+
+  /// Cancels the downloads of [key] that are running or waiting for their
+  /// turn, so later downloads don't wait for them. A running one stops at its
+  /// next read, on a stalled connection once the read timeout expires.
+  Future<void> cancelPrefetch(String key) =>
+      _channel.invokeMethod('cache.cancelPrefetch', {'key': key});
 
   /// Those of [keys] whose content is completely cached, in order.
   Future<List<String>> cachedKeys(List<String> keys) async =>

@@ -10,13 +10,20 @@ class FakeMediaCache implements MediaCache {
   final Map<String, Uint8List> content = {};
   bool reachable = true;
   final List<String> prefetched = [];
+  final List<String> cancelledKeys = [];
+  // Keys whose next prefetch reports a cancel
+  final Set<String> cancelling = {};
 
   @override
   Future<void> prefetch(String key, Uri uri) async {
+    if (cancelling.remove(key)) throw PrefetchCancelledException(key);
     if (!reachable) throw Exception('offline');
     prefetched.add(key);
     content[key] = Uint8List(4);
   }
+
+  @override
+  Future<void> cancelPrefetch(String key) async => cancelledKeys.add(key);
 
   @override
   Future<List<String>> cachedKeys(List<String> keys) async =>
@@ -88,6 +95,19 @@ void main() {
       await cache.prefetch(s1, 'https://a.test/rest/stream?id=s1'),
       isFalse,
     );
+  });
+
+  test('a cancelled download reports false', () async {
+    mediaCache.cancelling.add('https://a.test|s1');
+
+    expect(await cache.prefetch(s1, 'url'), isFalse);
+    expect(await cache.firstCached([s1]), isNull);
+  });
+
+  test('cancelDownload cancels by the song\'s key', () async {
+    await cache.cancelDownload(song('s1', size: 1000));
+
+    expect(mediaCache.cancelledKeys, ['https://a.test|s1|1000']);
   });
 
   test('firstCached keeps the order of the songs asked for', () async {

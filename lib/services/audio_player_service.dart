@@ -8,13 +8,14 @@ import 'package:logging/logging.dart';
 import 'subsonic_api.dart';
 import 'settings_service.dart';
 import 'replaygain_reader.dart';
-import 'replaygain_debug_logger.dart';
+import 'replaygain_resolver.dart';
 import 'playback_persistence.dart';
 import 'scrobble_queue.dart';
 import 'audio_cache.dart';
 import 'network_errors.dart';
 import 'listening_tracker.dart';
 import 'sleep_timer.dart';
+import 'upcoming_downloads.dart';
 
 final _log = Logger('audio_player');
 final _rgLogger = Logger('replaygain');
@@ -40,9 +41,6 @@ class _QueueEntry {
 /// itself (gaplessly); the service follows its current index. Each item
 /// carries its own ReplayGain gain. See docs/PLAYBACK.md.
 class AudioPlayerService extends ChangeNotifier {
-  /// Upcoming tracks downloaded to the cache while playing
-  static const int _maxPreloadTracks = 3;
-
   /// Skips within this time of the previous one are ignored, as a doubled
   /// event rather than another press
   static const _skipDebounceMs = 100;
@@ -51,17 +49,12 @@ class AudioPlayerService extends ChangeNotifier {
   /// it instead of going back a track
   static const _restartThreshold = Duration(seconds: 3);
 
-  /// Retries of a failed download, see _preloadUpcomingSongs(). The delay
-  /// before each retry doubles: 5 s, 10 s, ... about 2.5 minutes in all.
-  static const _maxDownloadRetries = 5;
-
   final VoidweaverPlayer _audioPlayer;
   final SubsonicApi _api;
   final SettingsService _settingsService;
   final PlaybackPersistenceService? _persistence;
   final ScrobbleQueue _scrobbleQueue;
   final AudioCache _audioCache;
-  final Duration _downloadRetryDelay;
   final DateTime Function() _clock;
 
   PlaybackState _playbackState = PlaybackState.stopped;
@@ -139,16 +132,22 @@ class AudioPlayerService extends ChangeNotifier {
     clock: _clock,
   );
 
+  // Downloads the next tracks to the cache while playing
+  late final UpcomingDownloads _downloads;
+
+  // Reads missing ReplayGain data and calculates the gains
+  late final ReplayGainResolver _replayGain = ReplayGainResolver(
+    _settingsService,
+    _audioCache,
+    _api,
+  );
+
   StreamSubscription<Duration>? _positionSubscription;
   StreamSubscription<Duration?>? _durationSubscription;
   StreamSubscription<PlayerState>? _playerStateSubscription;
   StreamSubscription<int?>? _currentIndexSubscription;
   StreamSubscription<PlayerException>? _errorSubscription;
   StreamSubscription<SystemCommand>? _commandSubscription;
-
-  // Incremented whenever downloads of upcoming tracks start; an older run
-  // stops, see _preloadUpcomingSongs()
-  int _preloadRun = 0;
 
   // Async work (preloads, ReplayGain reads) can finish after dispose()
   bool _disposed = false;
@@ -160,11 +159,17 @@ class AudioPlayerService extends ChangeNotifier {
     this._persistence,
     ScrobbleQueue? scrobbleQueue,
     AudioCache? audioCache,
-    @visibleForTesting this._downloadRetryDelay = const Duration(seconds: 5),
+    @visibleForTesting Duration downloadRetryDelay = const Duration(seconds: 5),
     @visibleForTesting this._clock = DateTime.now,
   }) : _audioPlayer = audioPlayer ?? VoidweaverPlayer(),
        _scrobbleQueue = scrobbleQueue ?? ScrobbleQueue(_api),
        _audioCache = audioCache ?? AudioCache() {
+    _downloads = UpcomingDownloads(
+      audioCache: _audioCache,
+      api: _api,
+      retryDelay: downloadRetryDelay,
+      onReplayGain: _storeReplayGain,
+    );
     _initializePlayer();
     unawaited(_scrobbleQueue.initialize());
   }
@@ -981,38 +986,8 @@ class AudioPlayerService extends ChangeNotifier {
   /// the song's items in the player's sequence.
   Future<void> _loadReplayGain(int index) async {
     final playlist = _playlist;
-    final song = playlist[index];
-    logReplayGain(
-      () =>
-          '[ReplayGain] Processing song: "${song.title}" by "${song.artist}" '
-          '(id=${song.id}, album="${song.album}", format=${song.suffix}/${song.contentType})',
-    );
-
-    if (song.replayGainTrackGain == null && song.replayGainAlbumGain == null) {
-      logReplayGain(
-        () =>
-            '[ReplayGain] No ReplayGain in API response, reading from file...',
-      );
-      try {
-        final data =
-            await _audioCache.readReplayGain(song) ??
-            await _api.readReplayGain(song.id);
-        logReplayGain(
-          () =>
-              '[ReplayGain] File reading complete: '
-              'TrackGain=${data.trackGain?.toStringAsFixed(2) ?? "null"}, '
-              'AlbumGain=${data.albumGain?.toStringAsFixed(2) ?? "null"}, '
-              'TrackPeak=${data.trackPeak?.toStringAsFixed(4) ?? "null"}, '
-              'AlbumPeak=${data.albumPeak?.toStringAsFixed(4) ?? "null"}',
-        );
-        _storeReplayGain(playlist, index, data);
-      } catch (e, stackTrace) {
-        logReplayGain(
-          () => '[ReplayGain] ERROR reading ReplayGain metadata: $e',
-        );
-        logReplayGain(() => '[ReplayGain] Stack trace: $stackTrace');
-      }
-    }
+    final data = await _replayGain.readMissing(playlist[index]);
+    if (data != null) _storeReplayGain(playlist, index, data);
 
     if (identical(playlist, _playlist) && index == _currentIndex) {
       _logReplayGain();
@@ -1042,13 +1017,9 @@ class AudioPlayerService extends ChangeNotifier {
     _updateGains(onlyIndex: index);
   }
 
-  /// The linear gain [song] plays at, from its ReplayGain data and the
-  /// settings. Smart mode uses the album gain when the queue is an album.
-  double _gainFor(Song song) => _settingsService.calculateVolumeAdjustment(
-    trackGain: song.replayGainTrackGain,
-    albumGain: song.replayGainAlbumGain,
-    trackPeak: song.replayGainTrackPeak,
-    albumPeak: song.replayGainAlbumPeak,
+  /// The linear gain [song] plays at, see [ReplayGainResolver.gainFor].
+  double _gainFor(Song song) => _replayGain.gainFor(
+    song,
     fromAlbum: _playlistSource == QueueSource.album,
   );
 
@@ -1074,15 +1045,12 @@ class AudioPlayerService extends ChangeNotifier {
 
   void _logReplayGain() {
     final song = _currentSong;
-    if (song == null || !replayGainLogging) return;
-    for (final line in trackGainReport(
+    if (song == null) return;
+    _replayGain.logTrack(
       song,
-      _settingsService,
-      gain: _gainFor(song),
+      fromAlbum: _playlistSource == QueueSource.album,
       queue: _playlistSource?.name ?? 'none',
-    )) {
-      logReplayGain(() => line);
-    }
+    );
   }
 
   /// Applies changed ReplayGain settings to every track in the queue.
@@ -1091,64 +1059,14 @@ class AudioPlayerService extends ChangeNotifier {
     _logReplayGain();
   }
 
-  /// Downloads upcoming songs in the playlist to the cache so playback can
-  /// continue if the network drops; the player plays them from there.
-  /// Downloads run one at a time, nearest track first, so the next song is
-  /// ready as early as possible.
-  ///
-  /// A failed download (e.g. the network dropped for a moment) is tried
-  /// again a few times. Otherwise the player would have to stream the track
-  /// when it gets there, and a network drop at that moment stops playback.
-  Future<void> _preloadUpcomingSongs() async {
-    final run = ++_preloadRun;
+  /// Downloads the upcoming songs to the cache, see [UpcomingDownloads].
+  Future<void> _preloadUpcomingSongs() {
     final playlist = _playlist;
-    final start = _currentIndex + 1;
-    final end = (start + _maxPreloadTracks).clamp(0, playlist.length);
-    if (start >= end) return;
-
-    // Stop once the playlist is replaced or another track started (which
-    // starts its own downloads), or the server refused the credentials
-    // (see SubsonicApi.hasRejectedCredentials): credentialsChanged() starts
-    // the downloads again with the new password
-    bool current() =>
-        !_disposed &&
-        run == _preloadRun &&
-        identical(playlist, _playlist) &&
-        !_api.hasRejectedCredentials;
-
-    for (var index = start; index < end; index++) {
-      var delay = _downloadRetryDelay;
-      for (var attempt = 0; current(); attempt++) {
-        if (await _preloadSingleTrack(playlist, index) ||
-            attempt == _maxDownloadRetries) {
-          break;
-        }
-        await Future.delayed(delay);
-        delay *= 2;
-      }
-      if (!current()) break;
-    }
-  }
-
-  /// Downloads the track at [index] and reads its ReplayGain metadata from
-  /// the cache if the server didn't provide it. Returns whether the track is
-  /// completely cached.
-  Future<bool> _preloadSingleTrack(List<Song> playlist, int index) async {
-    final song = playlist[index];
-    if (!await _audioCache.prefetch(song, _api.getStreamUrl(song.id))) {
-      return false;
-    }
-    if (song.replayGainTrackGain != null || song.replayGainAlbumGain != null) {
-      return true;
-    }
-    final data = await _audioCache.readReplayGain(song);
-    if (data == null) return true;
-    logReplayGain(
-      () =>
-          '[ReplayGain] Preload read "${song.title}": Track=${data.trackGain}, Album=${data.albumGain}',
+    return _downloads.start(
+      playlist,
+      _currentIndex + 1,
+      isCurrent: () => !_disposed && identical(playlist, _playlist),
     );
-    _storeReplayGain(playlist, index, data);
-    return true;
   }
 
   /// Removes all cached audio.
@@ -1199,6 +1117,7 @@ class AudioPlayerService extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _downloads.cancel();
     unawaited(_positionSubscription?.cancel());
     unawaited(_durationSubscription?.cancel());
     unawaited(_playerStateSubscription?.cancel());

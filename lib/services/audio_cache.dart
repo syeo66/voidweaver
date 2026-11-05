@@ -32,15 +32,29 @@ class AudioCache {
       : '$namespace|${song.id}|${song.size}';
 
   /// Downloads [song] from [url] completely into the cache, unless it's
-  /// there already. Returns whether it's completely cached.
+  /// there already. Returns whether it's completely cached; false also if
+  /// [cancelDownload] stopped it.
   Future<bool> prefetch(Song song, String url) async {
     try {
       await _cache.prefetch(keyFor(song), Uri.parse(url));
       _log.fine('Cached ${song.id}');
       return true;
+    } on PrefetchCancelledException {
+      _log.fine('Download cancelled for ${song.id}');
+      return false;
     } catch (e) {
       _log.warning('Download failed for ${song.id}', e);
       return false;
+    }
+  }
+
+  /// Stops a download of [song] that is running or waiting for its turn,
+  /// see [MediaCache.cancelPrefetch]. What it got so far stays cached.
+  Future<void> cancelDownload(Song song) async {
+    try {
+      await _cache.cancelPrefetch(keyFor(song));
+    } catch (e) {
+      _log.warning('Could not cancel the download of ${song.id}', e);
     }
   }
 

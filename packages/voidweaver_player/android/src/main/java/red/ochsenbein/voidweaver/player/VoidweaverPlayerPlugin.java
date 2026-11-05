@@ -70,13 +70,22 @@ public class VoidweaverPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
         result.success(null);
         break;
       case "cache.prefetch":
-        run(
-            downloads,
-            result,
-            () -> {
-              MediaCache.prefetch(context, call.argument("key"), call.argument("uri"));
-              return null;
-            });
+        {
+          // Registered here, so a cancel reaches it while it waits for the download before it
+          MediaCache.Prefetch prefetch =
+              MediaCache.prefetch(call.argument("key"), call.argument("uri"));
+          run(
+              downloads,
+              result,
+              () -> {
+                prefetch.run(context);
+                return null;
+              });
+          break;
+        }
+      case "cache.cancelPrefetch":
+        MediaCache.cancelPrefetch(call.argument("key"));
+        result.success(null);
         break;
       case "cache.cachedKeys":
         {
@@ -116,6 +125,8 @@ public class VoidweaverPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
           try {
             Object value = task.call();
             mainHandler.post(() -> result.success(value));
+          } catch (MediaCache.PrefetchCancelledException e) {
+            mainHandler.post(() -> result.error("cancelled", e.getMessage(), null));
           } catch (Exception e) {
             mainHandler.post(() -> result.error("error", e.toString(), null));
           }

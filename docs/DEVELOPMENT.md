@@ -33,7 +33,8 @@ Endpoints used: `ping` (checks the credentials on login), `getAlbumList2` (`type
 |------|---------|
 | `lib/services/app_state.dart` | App-wide state: login, creates the API and player services, background sync every 5 minutes while the app is visible (`setVisible()`, driven by `AppRouter`'s lifecycle listener) |
 | `lib/services/subsonic_api.dart` | Subsonic client: token auth, response parsing, API cache. Re-exports the models (`Album`, `Song`, `Artist`, `SearchResult`) from `lib/models/subsonic_models.dart` |
-| `lib/services/audio_player_service.dart` | Hands the playlist to the player and follows it; skips, load errors, ReplayGain gains, scrobbling, prefetching |
+| `lib/services/audio_player_service.dart` | Hands the playlist to the player and follows it; skips, load errors, applying ReplayGain gains, scrobbling |
+| `lib/services/upcoming_downloads.dart`, `replaygain_resolver.dart` | The player service's downloads of the next tracks with their retries (see [CACHING.md](CACHING.md)), and where a song's ReplayGain data comes from and the gain it plays at (see [REPLAYGAIN.md](REPLAYGAIN.md)) |
 | `lib/services/listening_tracker.dart`, `sleep_timer.dart` | The player service's listening time and scrobble decision per play, and the sleep timer with its fade, see [PLAYBACK.md](PLAYBACK.md) |
 | `packages/voidweaver_player/` | Local plugin: playlist player on Media3 ExoPlayer with a gain stage per item, and the Media3 media session for notification, lock screen and Bluetooth controls (Java on the Android side) |
 | `lib/services/api_cache.dart`, `audio_cache.dart`, `image_cache_manager.dart` | Caching, see [CACHING.md](CACHING.md) |

@@ -21,6 +21,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The audio cache: one Media3 {@link SimpleCache} per process, shared by all players.
@@ -70,11 +72,87 @@ final class MediaCache {
         .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR);
   }
 
-  /** Downloads [uri] completely into the cache under [key]. Blocks; call off the main thread. */
-  static void prefetch(Context context, String key, String uri) throws IOException {
-    CacheDataSource dataSource = dataSourceFactory(context).createDataSourceForDownloading();
-    DataSpec dataSpec = new DataSpec.Builder().setUri(Uri.parse(uri)).setKey(key).build();
-    new CacheWriter(dataSource, dataSpec, /* temporaryBuffer= */ null, null).cache();
+  // Downloads submitted and not finished yet, see prefetch() and cancelPrefetch()
+  private static final Set<Prefetch> pendingPrefetches = ConcurrentHashMap.newKeySet();
+
+  /**
+   * A download of [uri] into the cache under [key]. Create it when submitting it to the executor
+   * and {@link Prefetch#run} it there: from creation on, {@link #cancelPrefetch} reaches it, also
+   * while it waits for an earlier download.
+   */
+  static Prefetch prefetch(String key, String uri) {
+    Prefetch prefetch = new Prefetch(key, uri);
+    pendingPrefetches.add(prefetch);
+    return prefetch;
+  }
+
+  /**
+   * Cancels the downloads of [key] that are waiting or running. What a running one got so far stays
+   * cached, and the next download continues from there. A running one stops at its next read: on a
+   * stalled connection, that's once the read timeout expires.
+   */
+  static void cancelPrefetch(String key) {
+    for (Prefetch prefetch : pendingPrefetches) {
+      if (prefetch.key.equals(key)) prefetch.cancel();
+    }
+  }
+
+  /** Thrown by {@link Prefetch#run} for a download that was cancelled. */
+  static final class PrefetchCancelledException extends IOException {
+    PrefetchCancelledException(String key) {
+      super("Download of " + key + " cancelled");
+    }
+  }
+
+  /** A download into the cache, see {@link #prefetch}. */
+  static final class Prefetch {
+    final String key;
+    private final String uri;
+    private boolean cancelled;
+    @Nullable private CacheWriter writer;
+
+    private Prefetch(String key, String uri) {
+      this.key = key;
+      this.uri = uri;
+    }
+
+    /**
+     * Downloads the content completely, unless it's cached already. Blocks; call off the main
+     * thread. Throws {@link PrefetchCancelledException} if it was cancelled.
+     */
+    void run(Context context) throws IOException {
+      try {
+        // Outside the lock: the first use of the cache opens it, which can take a while, and
+        // cancel() is called on the main thread
+        CacheDataSource dataSource = dataSourceFactory(context).createDataSourceForDownloading();
+        DataSpec dataSpec = new DataSpec.Builder().setUri(Uri.parse(uri)).setKey(key).build();
+        CacheWriter cacheWriter =
+            new CacheWriter(dataSource, dataSpec, /* temporaryBuffer= */ null, null);
+        synchronized (this) {
+          if (cancelled) throw new PrefetchCancelledException(key);
+          writer = cacheWriter;
+        }
+        try {
+          cacheWriter.cache();
+        } catch (IOException e) {
+          // CacheWriter reports a cancel as an InterruptedIOException, which a socket timeout
+          // is as well
+          if (isCancelled()) throw new PrefetchCancelledException(key);
+          throw e;
+        }
+      } finally {
+        pendingPrefetches.remove(this);
+      }
+    }
+
+    synchronized void cancel() {
+      cancelled = true;
+      if (writer != null) writer.cancel();
+    }
+
+    synchronized boolean isCancelled() {
+      return cancelled;
+    }
   }
 
   /** Whether the content for [key] is completely cached. */
