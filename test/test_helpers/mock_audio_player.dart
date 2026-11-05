@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:mockito/mockito.dart';
 import 'package:voidweaver_player/voidweaver_player.dart';
 
@@ -34,7 +35,7 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
   final bool Function(String? cacheKey) isCached;
 
   MockAudioPlayer({bool Function(String? cacheKey)? isCached})
-      : isCached = isCached ?? ((_) => false);
+    : isCached = isCached ?? ((_) => false);
 
   /// The player's current sequence, in the same notation as [loadedSources].
   List<String> get sequenceSources => [for (final s in _sequence) _describe(s)];
@@ -136,8 +137,11 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
   }
 
   @override
-  Future<Duration?> setAudioSources(List<AudioSource> audioSources,
-      {int initialIndex = 0, Duration initialPosition = Duration.zero}) async {
+  Future<Duration?> setAudioSources(
+    List<AudioSource> audioSources, {
+    int initialIndex = 0,
+    Duration initialPosition = Duration.zero,
+  }) async {
     _sequence
       ..clear()
       ..addAll(audioSources);
@@ -254,10 +258,13 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
 
   /// The player reaching the end of the current item and moving on to the
   /// next one in its sequence.
-  void simulateTrackTransition(
-      {Duration duration = const Duration(minutes: 4)}) {
+  void simulateTrackTransition({
+    Duration duration = const Duration(minutes: 4),
+  }) {
     assert(
-        _currentIndex! + 1 < _sequence.length, 'no next item in the sequence');
+      _currentIndex! + 1 < _sequence.length,
+      'no next item in the sequence',
+    );
     _moveTo(_currentIndex! + 1, Duration.zero);
     _duration = duration;
     _durationController.add(_duration);

@@ -30,15 +30,18 @@ class _FakeAppState extends AppState {
 void main() {
   Future<_FakeAppState> pump(WidgetTester tester) async {
     final appState = _FakeAppState('new password');
-    await tester.pumpWidget(ChangeNotifierProvider<AppState>.value(
-      value: appState,
-      child: const MaterialApp(home: Scaffold(body: CredentialsBanner())),
-    ));
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppState>.value(
+        value: appState,
+        child: const MaterialApp(home: Scaffold(body: CredentialsBanner())),
+      ),
+    );
     return appState;
   }
 
-  testWidgets('shows nothing while the credentials are accepted',
-      (tester) async {
+  testWidgets('shows nothing while the credentials are accepted', (
+    tester,
+  ) async {
     final appState = await pump(tester);
     appState.rejected = false;
     appState.notifyListeners();
@@ -46,8 +49,9 @@ void main() {
     expect(find.byType(MaterialBanner), findsNothing);
   });
 
-  testWidgets('updates the password, showing a rejected one as an error',
-      (tester) async {
+  testWidgets('updates the password, showing a rejected one as an error', (
+    tester,
+  ) async {
     final appState = await pump(tester);
     expect(find.byType(MaterialBanner), findsOneWidget);
 

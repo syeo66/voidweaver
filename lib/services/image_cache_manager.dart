@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+
 import 'subsonic_api.dart';
 
 /// Loads cover art with consistent caching: every image goes through here, so
@@ -21,17 +22,22 @@ class ImageCacheManager {
   static int coverArtSizeFor(double? extent, double pixelRatio) {
     if (extent == null || !extent.isFinite) return _defaultCoverArtSize;
     final pixels = extent * pixelRatio;
-    return coverArtSizes.firstWhere((size) => size >= pixels,
-        orElse: () => coverArtSizes.last);
+    return coverArtSizes.firstWhere(
+      (size) => size >= pixels,
+      orElse: () => coverArtSizes.last,
+    );
   }
 
   /// The longer finite side of a box [width] x [height] within
   /// [constraints], or null if both are unbounded
   static double? _extentOf(
-      BoxConstraints constraints, double? width, double? height) {
+    BoxConstraints constraints,
+    double? width,
+    double? height,
+  ) {
     final sides = [
       width ?? constraints.maxWidth,
-      height ?? constraints.maxHeight
+      height ?? constraints.maxHeight,
     ].where((side) => side.isFinite);
     return sides.isEmpty ? null : sides.reduce(math.max);
   }
@@ -60,7 +66,8 @@ class ImageCacheManager {
         cacheKey: api.coverArtCacheKey(coverArtId, size: size),
         placeholder:
             placeholder ?? (context, url) => _buildPlaceholder(context),
-        errorWidget: errorWidget ??
+        errorWidget:
+            errorWidget ??
             (context, url, error) => _buildErrorWidget(context, url, error),
         memCacheWidth: width == null ? null : (width * pixelRatio).round(),
         memCacheHeight: height == null ? null : (height * pixelRatio).round(),
@@ -71,20 +78,25 @@ class ImageCacheManager {
 
     if (width != null && height != null) {
       return Builder(
-          key: key,
-          builder: (context) => image(context, math.max(width, height)));
+        key: key,
+        builder: (context) => image(context, math.max(width, height)),
+      );
     }
     // The box's size comes from the parent
     return LayoutBuilder(
-        key: key,
-        builder: (context, constraints) =>
-            image(context, _extentOf(constraints, width, height)));
+      key: key,
+      builder: (context, constraints) =>
+          image(context, _extentOf(constraints, width, height)),
+    );
   }
 
   /// Cover art as an [ImageProvider], e.g. for a [CircleAvatar], fetched at
   /// [size] pixels (one of [coverArtSizes])
-  static ImageProvider coverArtProvider(SubsonicApi api, String coverArtId,
-      {int size = 150}) {
+  static ImageProvider coverArtProvider(
+    SubsonicApi api,
+    String coverArtId, {
+    int size = 150,
+  }) {
     return CachedNetworkImageProvider(
       api.getCoverArtUrl(coverArtId, size: size),
       cacheKey: api.coverArtCacheKey(coverArtId, size: size),
@@ -127,7 +139,8 @@ class ImageCacheManager {
         child: CircularProgressIndicator(
           strokeWidth: 2,
           valueColor: AlwaysStoppedAnimation<Color>(
-              Theme.of(context).colorScheme.onSurfaceVariant),
+            Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
       ),
     );
@@ -135,7 +148,10 @@ class ImageCacheManager {
 
   /// Default error widget
   static Widget _buildErrorWidget(
-      BuildContext context, String url, dynamic error) {
+    BuildContext context,
+    String url,
+    dynamic error,
+  ) {
     return Container(
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
       child: Icon(

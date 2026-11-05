@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
@@ -29,14 +30,16 @@ class CacheEntry<T> {
   bool get isValid => !isExpired;
 
   Map<String, dynamic> toJson() => {
-        'data': data,
-        'expiresAt': expiresAt.toIso8601String(),
-        'key': key,
-        if (version != null) 'version': version,
-      };
+    'data': data,
+    'expiresAt': expiresAt.toIso8601String(),
+    'key': key,
+    if (version != null) 'version': version,
+  };
 
   factory CacheEntry.fromJson(
-      Map<String, dynamic> json, T Function(dynamic) fromJsonData) {
+    Map<String, dynamic> json,
+    T Function(dynamic) fromJsonData,
+  ) {
     return CacheEntry<T>(
       data: fromJsonData(json['data']),
       expiresAt: DateTime.parse(json['expiresAt'] as String),
@@ -60,7 +63,7 @@ class ApiCache {
   /// Keeps persistent entries under [directory]; without one, only in memory.
   @visibleForTesting
   ApiCache.forTesting({Directory? directory, this.namespace = 'test'})
-      : _rootProvider = (() async => directory);
+    : _rootProvider = (() async => directory);
 
   /// Identifies the login the entries belong to
   final String namespace;
@@ -80,18 +83,19 @@ class ApiCache {
   Future<void> initialize() => _storage();
 
   Future<_Storage?> _storage() => _storageFuture ??= () async {
-        try {
-          final root = await _rootProvider();
-          if (root == null) return null;
-          final scope =
-              Directory('${root.path}/${md5.convert(utf8.encode(namespace))}');
-          await scope.create(recursive: true);
-          return _Storage(root, scope);
-        } catch (e) {
-          _log.warning('API cache is not persisted', e);
-          return null;
-        }
-      }();
+    try {
+      final root = await _rootProvider();
+      if (root == null) return null;
+      final scope = Directory(
+        '${root.path}/${md5.convert(utf8.encode(namespace))}',
+      );
+      await scope.create(recursive: true);
+      return _Storage(root, scope);
+    } catch (e) {
+      _log.warning('API cache is not persisted', e);
+      return null;
+    }
+  }();
 
   static File _fileFor(Directory directory, String key) =>
       File('${directory.path}/${md5.convert(utf8.encode(key))}.json');
@@ -192,13 +196,14 @@ class ApiCache {
         // Only in memory: rewriting the persistent entry just for its expiry
         // isn't worth it. After a restart the version is checked again.
         _remember(
-            key,
-            CacheEntry<T>(
-              data: result,
-              expiresAt: DateTime.now().add(cacheDuration),
-              key: key,
-              version: currentVersion,
-            ));
+          key,
+          CacheEntry<T>(
+            data: result,
+            expiresAt: DateTime.now().add(cacheDuration),
+            key: key,
+            version: currentVersion,
+          ),
+        );
       } else {
         _log.fine('Cache MISS: $key');
         result = await fetcher();
@@ -252,7 +257,9 @@ class ApiCache {
 
   /// Get data from persistent cache, including expired entries
   Future<CacheEntry<T>?> _getPersistentCache<T>(
-      String key, T Function(dynamic json)? fromJson) async {
+    String key,
+    T Function(dynamic json)? fromJson,
+  ) async {
     final storage = await _storage();
     if (storage == null) return null;
     final file = _fileFor(storage.scope, key);
@@ -260,9 +267,11 @@ class ApiCache {
     try {
       if (!await file.exists()) return null;
       final contents = await file.readAsString();
-      final json = (contents.length < _backgroundJsonThreshold
-          ? jsonDecode(contents)
-          : await compute(jsonDecode, contents)) as Map<String, dynamic>;
+      final json =
+          (contents.length < _backgroundJsonThreshold
+                  ? jsonDecode(contents)
+                  : await compute(jsonDecode, contents))
+              as Map<String, dynamic>;
       return CacheEntry<T>.fromJson(json, fromJson ?? (data) => data as T);
     } catch (e) {
       _log.warning('Error reading persistent cache for $key', e);
@@ -274,7 +283,10 @@ class ApiCache {
 
   /// Set data in persistent cache
   Future<void> _setPersistentCache<T>(
-      String key, CacheEntry<T> entry, Object? Function(T data)? toJson) async {
+    String key,
+    CacheEntry<T> entry,
+    Object? Function(T data)? toJson,
+  ) async {
     final storage = await _storage();
     if (storage == null) return;
     final file = _fileFor(storage.scope, key);
@@ -311,9 +323,11 @@ class ApiCache {
   void clearEntry(String endpoint, [Map<String, String>? params]) {
     final key = _generateKey(endpoint, params);
     _memoryCache.remove(key);
-    unawaited(_storage().then((storage) async {
-      if (storage != null) await _delete(_fileFor(storage.scope, key));
-    }));
+    unawaited(
+      _storage().then((storage) async {
+        if (storage != null) await _delete(_fileFor(storage.scope, key));
+      }),
+    );
     _log.fine('Cache CLEARED: $key');
   }
 

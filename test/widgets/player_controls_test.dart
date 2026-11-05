@@ -21,13 +21,13 @@ void main() {
   late AudioPlayerService service;
 
   Song song(String id) => Song(
-        id: id,
-        title: 'Title $id',
-        artist: 'Artist $id',
-        album: 'Album',
-        duration: 180,
-        replayGainTrackGain: -6.0,
-      );
+    id: id,
+    title: 'Title $id',
+    artist: 'Artist $id',
+    album: 'Album',
+    duration: 180,
+    replayGainTrackGain: -6.0,
+  );
 
   final album = Album(
     id: 'album1',
@@ -48,22 +48,30 @@ void main() {
     when(mockSettings.replayGainPreventClipping).thenReturn(true);
     when(mockSettings.scrobbleMinPlayTimeMinutes).thenReturn(4.0);
     when(mockSettings.scrobbleThresholdPercent).thenReturn(50.0);
-    when(mockSettings.calculateVolumeAdjustment(
-      trackGain: anyNamed('trackGain'),
-      albumGain: anyNamed('albumGain'),
-      trackPeak: anyNamed('trackPeak'),
-      albumPeak: anyNamed('albumPeak'),
-      fromAlbum: anyNamed('fromAlbum'),
-    )).thenReturn(1.0);
-    when(mockApi.getStreamUrl(any)).thenAnswer((invocation) =>
-        'https://music.test/rest/stream?id=${invocation.positionalArguments.first}');
+    when(
+      mockSettings.calculateVolumeAdjustment(
+        trackGain: anyNamed('trackGain'),
+        albumGain: anyNamed('albumGain'),
+        trackPeak: anyNamed('trackPeak'),
+        albumPeak: anyNamed('albumPeak'),
+        fromAlbum: anyNamed('fromAlbum'),
+      ),
+    ).thenReturn(1.0);
+    when(mockApi.getStreamUrl(any)).thenAnswer(
+      (invocation) =>
+          'https://music.test/rest/stream?id=${invocation.positionalArguments.first}',
+    );
     when(mockApi.readReplayGain(any))
         .thenAnswer((_) async => const ReplayGainData());
 
     // Offline: preloading downloads nothing
     cache = FakeAudioCache()..reachable = false;
-    service = AudioPlayerService(mockApi, mockSettings,
-        audioPlayer: player, audioCache: cache);
+    service = AudioPlayerService(
+      mockApi,
+      mockSettings,
+      audioPlayer: player,
+      audioCache: cache,
+    );
   });
 
   tearDown(() {
@@ -160,8 +168,9 @@ void main() {
     expect(player.playing, isTrue);
   });
 
-  testWidgets('enables skip buttons according to the playlist position',
-      (tester) async {
+  testWidgets('enables skip buttons according to the playlist position', (
+    tester,
+  ) async {
     await pumpControls(tester);
     await playAlbum(tester);
 
@@ -186,8 +195,9 @@ void main() {
     expect(buttonWithIcon(tester, Icons.skip_next).onPressed, isNull);
   });
 
-  testWidgets('follows the position without notifying the service',
-      (tester) async {
+  testWidgets('follows the position without notifying the service', (
+    tester,
+  ) async {
     await pumpControls(tester);
     await playAlbum(tester);
     var notifications = 0;
@@ -201,8 +211,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('0:30'), findsOneWidget);
-    expect(tester.widget<Slider>(find.byType(Slider)).value,
-        closeTo(30 / 180, 0.001));
+    expect(
+      tester.widget<Slider>(find.byType(Slider)).value,
+      closeTo(30 / 180, 0.001),
+    );
     // Only the position listenable changed, so nothing else rebuilt
     expect(notifications, 0);
   });
@@ -237,9 +249,12 @@ void main() {
     expect(dragged, greaterThan(0.4));
     final draggedTime = Duration(milliseconds: (dragged * 180000).round());
     expect(
-        find.text('${draggedTime.inMinutes}:'
-            '${(draggedTime.inSeconds % 60).toString().padLeft(2, '0')}'),
-        findsOneWidget);
+      find.text(
+        '${draggedTime.inMinutes}:'
+        '${(draggedTime.inSeconds % 60).toString().padLeft(2, '0')}',
+      ),
+      findsOneWidget,
+    );
 
     // A position update from the player doesn't pull the thumb back
     await tester.runAsync(() async {
@@ -267,8 +282,10 @@ void main() {
 
     expect(find.byIcon(Icons.bedtime), findsOneWidget);
     // Remaining time comes from the wall clock, so it may already be 29:59
-    expect(find.textContaining(RegExp(r'Sleep timer: (30:00|29:59)')),
-        findsOneWidget);
+    expect(
+      find.textContaining(RegExp(r'Sleep timer: (30:00|29:59)')),
+      findsOneWidget,
+    );
 
     service.cancelSleepTimer();
     await tester.pump();

@@ -22,8 +22,11 @@ void main() {
       mockApi = MockSubsonicApi();
       mockSettingsService = MockSettingsService();
       mockAudioPlayer = MockAudioPlayer();
-      audioPlayerService = AudioPlayerService(mockApi, mockSettingsService,
-          audioPlayer: mockAudioPlayer);
+      audioPlayerService = AudioPlayerService(
+        mockApi,
+        mockSettingsService,
+        audioPlayer: mockAudioPlayer,
+      );
     });
 
     tearDown(() async {
@@ -45,8 +48,10 @@ void main() {
       expect(audioPlayerService.isSleepTimerActive, true);
       expect(audioPlayerService.sleepTimerDuration, duration);
       expect(audioPlayerService.sleepTimerRemaining, isNotNull);
-      expect(audioPlayerService.sleepTimerRemaining!.inMinutes,
-          lessThanOrEqualTo(30));
+      expect(
+        audioPlayerService.sleepTimerRemaining!.inMinutes,
+        lessThanOrEqualTo(30),
+      );
     });
 
     test('should cancel sleep timer correctly', () {
@@ -78,17 +83,25 @@ void main() {
       // Verify timer is extended
       expect(audioPlayerService.isSleepTimerActive, true);
       expect(
-          audioPlayerService.sleepTimerDuration, initialDuration + extension);
+        audioPlayerService.sleepTimerDuration,
+        initialDuration + extension,
+      );
       expect(audioPlayerService.sleepTimerRemaining, isNotNull);
-      expect(audioPlayerService.sleepTimerRemaining!.inMinutes,
-          greaterThan(initialRemaining!.inMinutes));
+      expect(
+        audioPlayerService.sleepTimerRemaining!.inMinutes,
+        greaterThan(initialRemaining!.inMinutes),
+      );
     });
 
     test('remaining time follows the clock', () {
       var now = DateTime(2026, 1, 1, 22);
       final player = MockAudioPlayer();
-      final service = AudioPlayerService(mockApi, mockSettingsService,
-          audioPlayer: player, clock: () => now);
+      final service = AudioPlayerService(
+        mockApi,
+        mockSettingsService,
+        audioPlayer: player,
+        clock: () => now,
+      );
       addTearDown(() async {
         service.dispose();
         await player.dispose();
@@ -148,8 +161,11 @@ void main() {
 
     test('ends the timer even if the player fails to pause', () async {
       final player = _FailingPausePlayer();
-      final service =
-          AudioPlayerService(mockApi, mockSettingsService, audioPlayer: player);
+      final service = AudioPlayerService(
+        mockApi,
+        mockSettingsService,
+        audioPlayer: player,
+      );
       addTearDown(() async {
         service.dispose();
         await player.dispose();
@@ -167,14 +183,22 @@ void main() {
 
       /// Runs [body] in fake time with a service whose clock follows it
       void inFakeTime(
-          void Function(void Function(Duration) elapse,
-                  AudioPlayerService service, _RecordingPlayer player)
-              body) {
+        void Function(
+          void Function(Duration) elapse,
+          AudioPlayerService service,
+          _RecordingPlayer player,
+        )
+        body,
+      ) {
         fakeAsync((async) {
           final start = DateTime(2026, 1, 1, 23);
           final player = _RecordingPlayer();
-          final service = AudioPlayerService(mockApi, mockSettingsService,
-              audioPlayer: player, clock: () => start.add(async.elapsed));
+          final service = AudioPlayerService(
+            mockApi,
+            mockSettingsService,
+            audioPlayer: player,
+            clock: () => start.add(async.elapsed),
+          );
           body(async.elapse, service, player);
           service.dispose();
           async.flushMicrotasks();
@@ -199,8 +223,11 @@ void main() {
           elapse(fade ~/ 2);
           expect(service.isSleepTimerActive, false);
           // Silent until the pause, full volume for the next play
-          expect(player.events.sublist(player.events.length - 3),
-              ['volume 0.0', 'pause', 'volume 1.0']);
+          expect(player.events.sublist(player.events.length - 3), [
+            'volume 0.0',
+            'pause',
+            'volume 1.0',
+          ]);
 
           elapse(const Duration(minutes: 1));
           expect(player.volume, 1.0);
@@ -222,25 +249,27 @@ void main() {
         });
       });
 
-      test('extending during the fade restores full volume until the new end',
-          () {
-        inFakeTime((elapse, service, player) {
-          service.startSleepTimer(const Duration(minutes: 5));
-          elapse(const Duration(minutes: 5) - fade ~/ 2);
-          expect(player.volume, lessThan(1.0));
+      test(
+        'extending during the fade restores full volume until the new end',
+        () {
+          inFakeTime((elapse, service, player) {
+            service.startSleepTimer(const Duration(minutes: 5));
+            elapse(const Duration(minutes: 5) - fade ~/ 2);
+            expect(player.volume, lessThan(1.0));
 
-          service.extendSleepTimer(const Duration(minutes: 15));
-          expect(player.volume, 1.0);
+            service.extendSleepTimer(const Duration(minutes: 15));
+            expect(player.volume, 1.0);
 
-          elapse(const Duration(minutes: 15) - fade ~/ 2);
-          expect(player.volume, 1.0);
-          elapse(fade ~/ 2);
-          expect(player.volume, closeTo(0.125, 0.01));
-          elapse(fade);
-          expect(player.events, contains('pause'));
-          expect(player.volume, 1.0);
-        });
-      });
+            elapse(const Duration(minutes: 15) - fade ~/ 2);
+            expect(player.volume, 1.0);
+            elapse(fade ~/ 2);
+            expect(player.volume, closeTo(0.125, 0.01));
+            elapse(fade);
+            expect(player.events, contains('pause'));
+            expect(player.volume, 1.0);
+          });
+        },
+      );
 
       test('a timer shorter than the fade fades over all of it', () {
         inFakeTime((elapse, service, player) {

@@ -1,5 +1,7 @@
 import 'dart:io';
+
 import 'package:xml/xml.dart';
+
 import 'network_config.dart';
 import 'subsonic_api.dart';
 
@@ -72,7 +74,9 @@ class NetworkErrorHelper {
   }
 
   static String _getTimeoutMessage(
-      NetworkTimeoutException error, String baseContext) {
+    NetworkTimeoutException error,
+    String baseContext,
+  ) {
     final timeoutSeconds = error.totalDuration.inSeconds;
     final attempts = error.attemptsMade;
 
@@ -88,10 +92,13 @@ class NetworkErrorHelper {
   }
 
   static String _getConnectionMessage(
-      NetworkConnectionException error, String baseContext) {
+    NetworkConnectionException error,
+    String baseContext,
+  ) {
     final original = error.originalError;
-    final specific =
-        original is SocketException ? _socketErrorMessage(original) : null;
+    final specific = original is SocketException
+        ? _socketErrorMessage(original)
+        : null;
     if (specific != null) return '$baseContext$specific';
 
     final attempts = error.attemptsMade;
@@ -123,7 +130,9 @@ class NetworkErrorHelper {
   }
 
   static String _getHttpStatusMessage(
-      HttpStatusException error, String baseContext) {
+    HttpStatusException error,
+    String baseContext,
+  ) {
     switch (error.statusCode) {
       case 500:
         return '${baseContext}Server error (500). Please try again later.';

@@ -16,10 +16,13 @@ void main() {
     // The player AppState creates once it's configured
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-            const MethodChannel('voidweaver_player'), (_) async => null);
+          const MethodChannel('voidweaver_player'),
+          (_) async => null,
+        );
     // Nothing listens there, so every request fails and no sync succeeds
     FlutterSecureStorage.setMockInitialValues(
-        savedCredentials('https://127.0.0.1:1', 'alice', 'secret'));
+      savedCredentials('https://127.0.0.1:1', 'alice', 'secret'),
+    );
     SharedPreferences.setMockInitialValues({});
 
     appState = AppState();
@@ -45,18 +48,20 @@ void main() {
     expect(appState.syncStatus, SyncStatus.error);
   });
 
-  test('a sync of the order switched away from leaves the new one alone',
-      () async {
-    appState.setVisible(false);
-    appState.setVisible(true);
-    expect(appState.syncStatus, SyncStatus.syncing);
-    await appState.setAlbumListType(AlbumListType.newest);
-    await syncFinished();
+  test(
+    'a sync of the order switched away from leaves the new one alone',
+    () async {
+      appState.setVisible(false);
+      appState.setVisible(true);
+      expect(appState.syncStatus, SyncStatus.syncing);
+      await appState.setAlbumListType(AlbumListType.newest);
+      await syncFinished();
 
-    // The load for the new order reports its failure, not the old sync
-    expect(appState.syncStatus, SyncStatus.idle);
-    expect(appState.albumError, isNotNull);
-  });
+      // The load for the new order reports its failure, not the old sync
+      expect(appState.syncStatus, SyncStatus.idle);
+      expect(appState.albumError, isNotNull);
+    },
+  );
 
   test('staying visible starts no extra sync', () {
     appState.setVisible(true);

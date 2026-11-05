@@ -43,13 +43,15 @@ void main() {
       when(mockSettingsService.replayGainPreventClipping).thenReturn(true);
       when(mockSettingsService.scrobbleMinPlayTimeMinutes).thenReturn(2.0);
       when(mockSettingsService.scrobbleThresholdPercent).thenReturn(50.0);
-      when(mockSettingsService.calculateVolumeAdjustment(
-        trackGain: anyNamed('trackGain'),
-        albumGain: anyNamed('albumGain'),
-        trackPeak: anyNamed('trackPeak'),
-        albumPeak: anyNamed('albumPeak'),
-        fromAlbum: anyNamed('fromAlbum'),
-      )).thenReturn(1.0);
+      when(
+        mockSettingsService.calculateVolumeAdjustment(
+          trackGain: anyNamed('trackGain'),
+          albumGain: anyNamed('albumGain'),
+          trackPeak: anyNamed('trackPeak'),
+          albumPeak: anyNamed('albumPeak'),
+          fromAlbum: anyNamed('fromAlbum'),
+        ),
+      ).thenReturn(1.0);
       when(mockApi.getStreamUrl(any)).thenReturn('https://example.com/stream');
       when(mockApi.readReplayGain(any))
           .thenAnswer((_) async => const ReplayGainData());
@@ -79,10 +81,13 @@ void main() {
     }
 
     Future<void> restoreAt(Duration position) async {
-      service = AudioPlayerService(mockApi, mockSettingsService,
-          audioPlayer: mockAudioPlayer,
-          persistence: await savedAt(position),
-          clock: mockAudioPlayer.clock);
+      service = AudioPlayerService(
+        mockApi,
+        mockSettingsService,
+        audioPlayer: mockAudioPlayer,
+        persistence: await savedAt(position),
+        clock: mockAudioPlayer.clock,
+      );
       expect(await service.restorePlaybackState(), isTrue);
       await Future.delayed(const Duration(milliseconds: 250));
     }
@@ -107,30 +112,34 @@ void main() {
 
       mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 150));
       await Future.delayed(const Duration(milliseconds: 250));
-      verify(mockApi.scrobbleSubmission('song1',
-              playedAt: anyNamed('playedAt')))
-          .called(1);
+      verify(
+        mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
+      ).called(1);
 
       mockAudioPlayer.simulateCompletion();
       await Future.delayed(const Duration(milliseconds: 250));
       verifyNever(
-          mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')));
+        mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
+      );
     });
 
-    test('restored song already past the threshold is not scrobbled again',
-        () async {
-      await restoreAt(const Duration(seconds: 200));
-      clearInteractions(mockApi);
+    test(
+      'restored song already past the threshold is not scrobbled again',
+      () async {
+        await restoreAt(const Duration(seconds: 200));
+        clearInteractions(mockApi);
 
-      await service.play();
-      mockAudioPlayer.simulatePositionChange(const Duration(seconds: 250));
-      await Future.delayed(const Duration(milliseconds: 250));
-      mockAudioPlayer.simulateCompletion();
-      await Future.delayed(const Duration(milliseconds: 250));
+        await service.play();
+        mockAudioPlayer.simulatePositionChange(const Duration(seconds: 250));
+        await Future.delayed(const Duration(milliseconds: 250));
+        mockAudioPlayer.simulateCompletion();
+        await Future.delayed(const Duration(milliseconds: 250));
 
-      verifyNever(
-          mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')));
-    });
+        verifyNever(
+          mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
+        );
+      },
+    );
 
     test('plays the restored song when started for a media button', () async {
       mockAudioPlayer.resumeRequested = true;
@@ -158,15 +167,19 @@ void main() {
       // Restoring waits for the saved song's ReplayGain tags
       final tags = Completer<ReplayGainData>();
       when(mockApi.readReplayGain('song1')).thenAnswer((_) => tags.future);
-      service = AudioPlayerService(mockApi, mockSettingsService,
-          audioPlayer: mockAudioPlayer,
-          persistence: await savedAt(const Duration(seconds: 90)),
-          audioCache: FakeAudioCache());
+      service = AudioPlayerService(
+        mockApi,
+        mockSettingsService,
+        audioPlayer: mockAudioPlayer,
+        persistence: await savedAt(const Duration(seconds: 90)),
+        audioCache: FakeAudioCache(),
+      );
       final restoring = service.restorePlaybackState();
       await Future.delayed(const Duration(milliseconds: 50));
 
       await service.playSong(
-          Song(id: 'song2', title: 'Other', artist: 'Other', album: 'Other'));
+        Song(id: 'song2', title: 'Other', artist: 'Other', album: 'Other'),
+      );
       tags.complete(const ReplayGainData());
 
       expect(await restoring, isFalse);
@@ -177,27 +190,37 @@ void main() {
       expect(service.playbackState, PlaybackState.playing);
     });
 
-    test('a single song replaces the saved source of the album before it',
-        () async {
-      SharedPreferences.setMockInitialValues({});
-      final persistence = PlaybackPersistenceService();
-      await persistence.initialize();
-      service = AudioPlayerService(mockApi, mockSettingsService,
-          audioPlayer: mockAudioPlayer, persistence: persistence);
+    test(
+      'a single song replaces the saved source of the album before it',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final persistence = PlaybackPersistenceService();
+        await persistence.initialize();
+        service = AudioPlayerService(
+          mockApi,
+          mockSettingsService,
+          audioPlayer: mockAudioPlayer,
+          persistence: persistence,
+        );
 
-      await service.playAlbum(Album(
-          id: 'album1',
-          name: 'Test Album',
-          artist: 'Test Artist',
-          songCount: 1,
-          songs: [song]));
-      await service.playSong(
-          Song(id: 'song2', title: 'Other', artist: 'Other', album: 'Other'));
-      await Future.delayed(const Duration(milliseconds: 250));
+        await service.playAlbum(
+          Album(
+            id: 'album1',
+            name: 'Test Album',
+            artist: 'Test Artist',
+            songCount: 1,
+            songs: [song],
+          ),
+        );
+        await service.playSong(
+          Song(id: 'song2', title: 'Other', artist: 'Other', album: 'Other'),
+        );
+        await Future.delayed(const Duration(milliseconds: 250));
 
-      final saved = await persistence.loadPlaybackState();
-      expect(saved!.playlistSource, 'song');
-      expect(saved.sourceId, 'song2');
-    });
+        final saved = await persistence.loadPlaybackState();
+        expect(saved!.playlistSource, 'song');
+        expect(saved.sourceId, 'song2');
+      },
+    );
   });
 }

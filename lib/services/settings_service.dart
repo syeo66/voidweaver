@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'network_config.dart';
 import '../models/album_list_type.dart';
 
@@ -89,7 +91,8 @@ class SettingsService extends ChangeNotifier {
         _prefs!.getDouble(_scrobbleThresholdPercentKey) ?? 50.0;
 
     final albumListType = _prefs!.getString(_albumListTypeKey);
-    _albumListType = AlbumListType.values
+    _albumListType =
+        AlbumListType.values
             .where((t) => t.name == albumListType)
             .firstOrNull ??
         AlbumListType.recent;
@@ -118,7 +121,9 @@ class SettingsService extends ChangeNotifier {
   Future<void> setReplayGainFallbackGain(double gain) async {
     _replayGainFallbackGain = gain.clamp(-15.0, 15.0);
     await _prefs?.setDouble(
-        _replayGainFallbackGainKey, _replayGainFallbackGain);
+      _replayGainFallbackGainKey,
+      _replayGainFallbackGain,
+    );
     notifyListeners();
   }
 
@@ -132,15 +137,15 @@ class SettingsService extends ChangeNotifier {
   /// `double.tryParse('NaN')` produces)
   static double? plausibleGain(double? gain) =>
       gain != null && gain.isFinite && gain.abs() <= maxReplayGainDb
-          ? gain
-          : null;
+      ? gain
+      : null;
 
   /// [peak] as a linear sample value, or null if missing or out of range.
   /// 0 is out of range too: dividing by it would be infinite.
   static double? plausiblePeak(double? peak) =>
       peak != null && peak.isFinite && peak > 0 && peak <= maxReplayGainPeak
-          ? peak
-          : null;
+      ? peak
+      : null;
 
   /// The linear gain for a track with these ReplayGain values. Values out of
   /// range ([plausibleGain], [plausiblePeak]) count as missing, so album mode
@@ -241,7 +246,9 @@ class SettingsService extends ChangeNotifier {
   Future<void> setScrobbleMinPlayTimeMinutes(double minutes) async {
     _scrobbleMinPlayTimeMinutes = minutes.clamp(0.5, 10.0);
     await _prefs?.setDouble(
-        _scrobbleMinPlayTimeMinutesKey, _scrobbleMinPlayTimeMinutes);
+      _scrobbleMinPlayTimeMinutesKey,
+      _scrobbleMinPlayTimeMinutes,
+    );
     notifyListeners();
   }
 
@@ -250,7 +257,9 @@ class SettingsService extends ChangeNotifier {
   Future<void> setScrobbleThresholdPercent(double percent) async {
     _scrobbleThresholdPercent = percent.clamp(10.0, 100.0);
     await _prefs?.setDouble(
-        _scrobbleThresholdPercentKey, _scrobbleThresholdPercent);
+      _scrobbleThresholdPercentKey,
+      _scrobbleThresholdPercent,
+    );
     notifyListeners();
   }
 }

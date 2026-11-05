@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../services/app_state.dart';
 import '../services/network_errors.dart';
 import '../utils/validators.dart';
@@ -23,9 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
         MediaQuery.of(context).orientation == Orientation.landscape;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Voidweaver Setup'),
-      ),
+      appBar: AppBar(title: const Text('Voidweaver Setup')),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -33,7 +32,8 @@ class _LoginScreenState extends State<LoginScreen> {
               padding: const EdgeInsets.all(16.0),
               child: Consumer<AppState>(
                 builder: (context, appState, child) {
-                  final isLoading = appState.configurationLoadingState ==
+                  final isLoading =
+                      appState.configurationLoadingState ==
                       LoadingState.loading;
                   final hasError =
                       appState.configurationLoadingState == LoadingState.error;
@@ -41,8 +41,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   if (isLandscape) {
                     // Landscape layout: side-by-side design
                     return ConstrainedBox(
-                      constraints:
-                          BoxConstraints(minHeight: constraints.maxHeight),
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
                       child: Row(
                         children: [
                           // Left side: Icon and branding
@@ -76,8 +77,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           // Right side: Form
                           Expanded(
                             flex: 1,
-                            child:
-                                _buildLoginForm(isLoading, hasError, appState),
+                            child: _buildLoginForm(
+                              isLoading,
+                              hasError,
+                              appState,
+                            ),
                           ),
                         ],
                       ),
@@ -85,8 +89,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   } else {
                     // Portrait layout: traditional vertical design
                     return ConstrainedBox(
-                      constraints:
-                          BoxConstraints(minHeight: constraints.maxHeight),
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -126,15 +131,17 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.error,
-                      color: Theme.of(context).colorScheme.onErrorContainer),
+                  Icon(
+                    Icons.error,
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       appState.configurationError!,
                       style: TextStyle(
-                          color:
-                              Theme.of(context).colorScheme.onErrorContainer),
+                        color: Theme.of(context).colorScheme.onErrorContainer,
+                      ),
                     ),
                   ),
                 ],
@@ -206,20 +213,24 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       await context.read<AppState>().configure(
-            Validators.sanitizeInput(_serverUrlController.text),
-            Validators.sanitizeInput(_usernameController.text),
-            // Not trimmed: spaces at either end can be part of a password
-            _passwordController.text,
-            verifyCredentials: true,
-          );
+        Validators.sanitizeInput(_serverUrlController.text),
+        Validators.sanitizeInput(_usernameController.text),
+        // Not trimmed: spaces at either end can be part of a password
+        _passwordController.text,
+        verifyCredentials: true,
+      );
     } catch (e) {
       // Error is already handled by AppState loading states
       // Just ensure we still show a snackbar for immediate feedback
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(NetworkErrorHelper.getErrorMessage(e,
-                context: 'Connection failed')),
+            content: Text(
+              NetworkErrorHelper.getErrorMessage(
+                e,
+                context: 'Connection failed',
+              ),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

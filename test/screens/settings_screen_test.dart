@@ -51,16 +51,21 @@ void main() {
   });
 
   Future<void> pumpSettings(WidgetTester tester) async {
-    await tester.pumpWidget(ChangeNotifierProvider<AppState>.value(
-      value: appState,
-      child: const MaterialApp(home: SettingsScreen()),
-    ));
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppState>.value(
+        value: appState,
+        child: const MaterialApp(home: SettingsScreen()),
+      ),
+    );
     await tester.pump();
   }
 
   Future<void> scrollTo(WidgetTester tester, Finder finder) =>
-      tester.scrollUntilVisible(finder, 200,
-          scrollable: find.byType(Scrollable).first);
+      tester.scrollUntilVisible(
+        finder,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
 
   /// Scrolls until [finder] is built and completely in view, and taps it.
   Future<void> tapVisible(WidgetTester tester, Finder finder) async {
@@ -71,8 +76,9 @@ void main() {
   }
 
   for (final orientation in Orientation.values) {
-    testWidgets('lays out every section in ${orientation.name}',
-        (tester) async {
+    testWidgets('lays out every section in ${orientation.name}', (
+      tester,
+    ) async {
       _setOrientation(tester, orientation);
       await pumpSettings(tester);
 
@@ -101,8 +107,9 @@ void main() {
     expect(settings.themeMode, ThemeMode.dark);
   });
 
-  testWidgets('shows the ReplayGain options only when it is on',
-      (tester) async {
+  testWidgets('shows the ReplayGain options only when it is on', (
+    tester,
+  ) async {
     await pumpSettings(tester);
     await tapVisible(tester, find.text('Off'));
     await tester.pump();
@@ -121,11 +128,15 @@ void main() {
     await tapVisible(tester, find.widgetWithText(ElevatedButton, 'Slow'));
     await tester.pumpAndSettle();
 
-    expect(settings.networkConfig.requestTimeout,
-        NetworkConfig.slowConfig.requestTimeout);
+    expect(
+      settings.networkConfig.requestTimeout,
+      NetworkConfig.slowConfig.requestTimeout,
+    );
     expect(find.text('Slow connection preset applied'), findsOneWidget);
-    expect(find.text('${NetworkConfig.slowConfig.requestTimeout.inSeconds}s'),
-        findsOneWidget);
+    expect(
+      find.text('${NetworkConfig.slowConfig.requestTimeout.inSeconds}s'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('clears the cache only once confirmed', (tester) async {

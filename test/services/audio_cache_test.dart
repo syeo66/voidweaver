@@ -37,8 +37,10 @@ class FakeMediaCache implements MediaCache {
   Future<void> clear() async => content.clear();
 
   @override
-  Future<void> setTimeouts(
-      {required Duration connect, required Duration read}) async {}
+  Future<void> setTimeouts({
+    required Duration connect,
+    required Duration read,
+  }) async {}
 }
 
 Song song(String id, {int? size}) =>
@@ -83,7 +85,9 @@ void main() {
     mediaCache.reachable = false;
 
     expect(
-        await cache.prefetch(s1, 'https://a.test/rest/stream?id=s1'), isFalse);
+      await cache.prefetch(s1, 'https://a.test/rest/stream?id=s1'),
+      isFalse,
+    );
   });
 
   test('firstCached keeps the order of the songs asked for', () async {
@@ -97,7 +101,8 @@ void main() {
 
   test('ReplayGain is read from the cached start of the song', () async {
     mediaCache.content['https://a.test|s1'] = Uint8List.fromList(
-        'OggS....OpusTags....R128_TRACK_GAIN=-2304'.codeUnits);
+      'OggS....OpusTags....R128_TRACK_GAIN=-2304'.codeUnits,
+    );
 
     final data = await cache.readReplayGain(s1);
 

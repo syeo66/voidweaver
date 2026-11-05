@@ -28,9 +28,9 @@ void main() {
   final artistB = Artist(id: 'b', name: 'Artist B');
 
   List<Album> albums(String prefix, int count) => [
-        for (var i = 0; i < count; i++)
-          Album(id: '$prefix$i', name: '$prefix album $i', artist: prefix)
-      ];
+    for (var i = 0; i < count; i++)
+      Album(id: '$prefix$i', name: '$prefix album $i', artist: prefix),
+  ];
 
   Widget app(Widget home, {SubsonicApi? api}) =>
       ChangeNotifierProvider<AppState>(
@@ -43,8 +43,9 @@ void main() {
   });
 
   group('ArtistScreen', () {
-    testWidgets('lists the artists and shows the albums of a tapped one',
-        (tester) async {
+    testWidgets('lists the artists and shows the albums of a tapped one', (
+      tester,
+    ) async {
       when(mockApi.getArtists()).thenAnswer((_) async => [artistA, artistB]);
       when(mockApi.getArtistAlbums('a'))
           .thenAnswer((_) async => albums('A', 2));
@@ -64,8 +65,9 @@ void main() {
       expect(find.text('A album 1'), findsOneWidget);
     });
 
-    testWidgets('ignores artists arriving after the screen is gone',
-        (tester) async {
+    testWidgets('ignores artists arriving after the screen is gone', (
+      tester,
+    ) async {
       final artists = Completer<List<Artist>>();
       when(mockApi.getArtists()).thenAnswer((_) => artists.future);
       await tester.pumpWidget(app(const ArtistScreen(), api: mockApi));
@@ -77,8 +79,9 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('ignores an error arriving after the screen is gone',
-        (tester) async {
+    testWidgets('ignores an error arriving after the screen is gone', (
+      tester,
+    ) async {
       final artists = Completer<List<Artist>>();
       when(mockApi.getArtists()).thenAnswer((_) => artists.future);
       await tester.pumpWidget(app(const ArtistScreen(), api: mockApi));
@@ -90,8 +93,9 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('drops the albums of an artist the user went back from',
-        (tester) async {
+    testWidgets('drops the albums of an artist the user went back from', (
+      tester,
+    ) async {
       final albumsA = Completer<List<Album>>();
       when(mockApi.getArtists()).thenAnswer((_) async => [artistA, artistB]);
       when(mockApi.getArtistAlbums('a')).thenAnswer((_) => albumsA.future);
@@ -116,8 +120,9 @@ void main() {
       expect(find.text('A album 0'), findsNothing);
     });
 
-    testWidgets('drops an album error after going back to the artists',
-        (tester) async {
+    testWidgets('drops an album error after going back to the artists', (
+      tester,
+    ) async {
       final albumsA = Completer<List<Album>>();
       when(mockApi.getArtists()).thenAnswer((_) async => [artistA]);
       when(mockApi.getArtistAlbums('a')).thenAnswer((_) => albumsA.future);
@@ -149,20 +154,23 @@ void main() {
     testWidgets('shows the artist\'s albums', (tester) async {
       when(mockApi.getArtistAlbums('a'))
           .thenAnswer((_) async => albums('A', 2));
-      await tester
-          .pumpWidget(app(ArtistDetailScreen(artist: artistA), api: mockApi));
+      await tester.pumpWidget(
+        app(ArtistDetailScreen(artist: artistA), api: mockApi),
+      );
       await tester.pump();
 
       expect(find.text('A album 0'), findsOneWidget);
       expect(find.text('A album 1'), findsOneWidget);
     });
 
-    testWidgets('ignores albums arriving after the screen is gone',
-        (tester) async {
+    testWidgets('ignores albums arriving after the screen is gone', (
+      tester,
+    ) async {
       final albumsA = Completer<List<Album>>();
       when(mockApi.getArtistAlbums('a')).thenAnswer((_) => albumsA.future);
-      await tester
-          .pumpWidget(app(ArtistDetailScreen(artist: artistA), api: mockApi));
+      await tester.pumpWidget(
+        app(ArtistDetailScreen(artist: artistA), api: mockApi),
+      );
 
       await tester.pumpWidget(const SizedBox());
       albumsA.complete(albums('A', 1));
@@ -171,12 +179,14 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('ignores an error arriving after the screen is gone',
-        (tester) async {
+    testWidgets('ignores an error arriving after the screen is gone', (
+      tester,
+    ) async {
       final albumsA = Completer<List<Album>>();
       when(mockApi.getArtistAlbums('a')).thenAnswer((_) => albumsA.future);
-      await tester
-          .pumpWidget(app(ArtistDetailScreen(artist: artistA), api: mockApi));
+      await tester.pumpWidget(
+        app(ArtistDetailScreen(artist: artistA), api: mockApi),
+      );
 
       await tester.pumpWidget(const SizedBox());
       albumsA.completeError(Exception('offline'));

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
@@ -27,15 +28,23 @@ void main() {
       const fast = NetworkConfig.fastConfig;
       const slow = NetworkConfig.slowConfig;
 
-      expect(fast.connectionTimeout.inSeconds,
-          lessThan(NetworkConfig.defaultConfig.connectionTimeout.inSeconds));
-      expect(slow.connectionTimeout.inSeconds,
-          greaterThan(NetworkConfig.defaultConfig.connectionTimeout.inSeconds));
+      expect(
+        fast.connectionTimeout.inSeconds,
+        lessThan(NetworkConfig.defaultConfig.connectionTimeout.inSeconds),
+      );
+      expect(
+        slow.connectionTimeout.inSeconds,
+        greaterThan(NetworkConfig.defaultConfig.connectionTimeout.inSeconds),
+      );
 
-      expect(fast.maxRetryAttempts,
-          lessThanOrEqualTo(NetworkConfig.defaultConfig.maxRetryAttempts));
-      expect(slow.maxRetryAttempts,
-          greaterThanOrEqualTo(NetworkConfig.defaultConfig.maxRetryAttempts));
+      expect(
+        fast.maxRetryAttempts,
+        lessThanOrEqualTo(NetworkConfig.defaultConfig.maxRetryAttempts),
+      );
+      expect(
+        slow.maxRetryAttempts,
+        greaterThanOrEqualTo(NetworkConfig.defaultConfig.maxRetryAttempts),
+      );
     });
 
     test('should calculate retry delay with exponential backoff', () {
@@ -46,17 +55,25 @@ void main() {
       final delay3 = config.calculateRetryDelay(3);
 
       // First delay should be close to initial delay (with jitter)
-      expect(delay1.inMilliseconds,
-          closeTo(config.initialRetryDelay.inMilliseconds, 100));
-      expect(delay2.inMilliseconds,
-          greaterThan(delay1.inMilliseconds * 0.8)); // Account for jitter
-      expect(delay3.inMilliseconds,
-          greaterThan(delay2.inMilliseconds * 0.8)); // Account for jitter
+      expect(
+        delay1.inMilliseconds,
+        closeTo(config.initialRetryDelay.inMilliseconds, 100),
+      );
+      expect(
+        delay2.inMilliseconds,
+        greaterThan(delay1.inMilliseconds * 0.8),
+      ); // Account for jitter
+      expect(
+        delay3.inMilliseconds,
+        greaterThan(delay2.inMilliseconds * 0.8),
+      ); // Account for jitter
 
       // Should not exceed max delay (with 10% jitter)
       final maxDelay = config.calculateRetryDelay(10);
-      expect(maxDelay.inMilliseconds,
-          lessThanOrEqualTo(config.maxRetryDelay.inMilliseconds * 1.1));
+      expect(
+        maxDelay.inMilliseconds,
+        lessThanOrEqualTo(config.maxRetryDelay.inMilliseconds * 1.1),
+      );
     });
 
     test('should determine retryable errors correctly', () {
@@ -64,27 +81,42 @@ void main() {
 
       // Timeout errors should be retryable
       expect(
-          config.shouldRetry(TimeoutException('test', Duration.zero), 1), true);
+        config.shouldRetry(TimeoutException('test', Duration.zero), 1),
+        true,
+      );
       expect(
-          config.shouldRetry(
-              NetworkTimeoutException('test',
-                  attemptsMade: 1, totalDuration: Duration.zero),
-              1),
-          true);
+        config.shouldRetry(
+          NetworkTimeoutException(
+            'test',
+            attemptsMade: 1,
+            totalDuration: Duration.zero,
+          ),
+          1,
+        ),
+        true,
+      );
 
       // Connection errors should be retryable
-      expect(config.shouldRetry(const SocketException('Connection refused'), 1),
-          true);
       expect(
-          config.shouldRetry(
-              NetworkConnectionException('test', attemptsMade: 1), 1),
-          true);
+        config.shouldRetry(const SocketException('Connection refused'), 1),
+        true,
+      );
+      expect(
+        config.shouldRetry(
+          NetworkConnectionException('test', attemptsMade: 1),
+          1,
+        ),
+        true,
+      );
 
       // Should not retry after max attempts
       expect(
-          config.shouldRetry(
-              TimeoutException('test', Duration.zero), config.maxRetryAttempts),
-          false);
+        config.shouldRetry(
+          TimeoutException('test', Duration.zero),
+          config.maxRetryAttempts,
+        ),
+        false,
+      );
 
       // Should not retry non-retryable errors
       expect(config.shouldRetry(const FormatException('Bad format'), 1), false);
@@ -94,9 +126,12 @@ void main() {
       const config = NetworkConfig.defaultConfig;
 
       expect(
-          config.shouldRetry(
-              http.ClientException('Connection closed before full header'), 1),
-          true);
+        config.shouldRetry(
+          http.ClientException('Connection closed before full header'),
+          1,
+        ),
+        true,
+      );
     });
 
     test('retries server errors but not other HTTP statuses', () {
@@ -114,8 +149,10 @@ void main() {
     });
 
     test('treats an OS-level timeout as a timeout', () {
-      const error = SocketException('Connection timed out',
-          osError: OSError('Connection timed out', 110));
+      const error = SocketException(
+        'Connection timed out',
+        osError: OSError('Connection timed out', 110),
+      );
 
       expect(isTimeoutError(error), true);
       expect(isConnectionError(error), false);
@@ -141,14 +178,22 @@ void main() {
     test('should get timeout for specific request types', () {
       const config = NetworkConfig.defaultConfig;
 
-      expect(config.getTimeoutForRequestType(NetworkRequestType.connection),
-          config.connectionTimeout);
-      expect(config.getTimeoutForRequestType(NetworkRequestType.metadata),
-          config.metadataTimeout);
-      expect(config.getTimeoutForRequestType(NetworkRequestType.streaming),
-          config.streamingTimeout);
-      expect(config.getTimeoutForRequestType(NetworkRequestType.general),
-          config.requestTimeout);
+      expect(
+        config.getTimeoutForRequestType(NetworkRequestType.connection),
+        config.connectionTimeout,
+      );
+      expect(
+        config.getTimeoutForRequestType(NetworkRequestType.metadata),
+        config.metadataTimeout,
+      );
+      expect(
+        config.getTimeoutForRequestType(NetworkRequestType.streaming),
+        config.streamingTimeout,
+      );
+      expect(
+        config.getTimeoutForRequestType(NetworkRequestType.general),
+        config.requestTimeout,
+      );
     });
   });
 
@@ -164,8 +209,10 @@ void main() {
         totalDuration: const Duration(seconds: 45),
       );
 
-      final message =
-          NetworkErrorHelper.getErrorMessage(error, context: 'Loading albums');
+      final message = NetworkErrorHelper.getErrorMessage(
+        error,
+        context: 'Loading albums',
+      );
 
       expect(message, contains('Loading albums'));
       expect(message, contains('timed out'));
@@ -187,8 +234,10 @@ void main() {
 
     test('should provide user-friendly messages for socket errors', () {
       // Android's (Linux) errno for a refused connection
-      const error = SocketException('Connection refused',
-          osError: OSError('Connection refused', 111));
+      const error = SocketException(
+        'Connection refused',
+        osError: OSError('Connection refused', 111),
+      );
 
       final message = NetworkErrorHelper.getErrorMessage(error);
 
@@ -197,8 +246,10 @@ void main() {
     });
 
     test('explains a failed lookup, which is also how offline looks', () {
-      const error = SocketException("Failed host lookup: 'music.example.com'",
-          osError: OSError('No address associated with hostname', 7));
+      const error = SocketException(
+        "Failed host lookup: 'music.example.com'",
+        osError: OSError('No address associated with hostname', 7),
+      );
 
       final message = NetworkErrorHelper.getErrorMessage(error);
 
@@ -207,74 +258,97 @@ void main() {
     });
 
     test('explains no route to host', () {
-      const error = SocketException('Connection failed',
-          osError: OSError('No route to host', 113));
+      const error = SocketException(
+        'Connection failed',
+        osError: OSError('No route to host', 113),
+      );
 
-      expect(NetworkErrorHelper.getErrorMessage(error),
-          contains('Cannot reach server'));
+      expect(
+        NetworkErrorHelper.getErrorMessage(error),
+        contains('Cannot reach server'),
+      );
     });
 
     test('explains the socket error behind a failed retry', () {
-      const error = NetworkConnectionException('Connection failed',
-          attemptsMade: 3,
-          originalError: SocketException('Connection refused',
-              osError: OSError('Connection refused', 111)));
+      const error = NetworkConnectionException(
+        'Connection failed',
+        attemptsMade: 3,
+        originalError: SocketException(
+          'Connection refused',
+          osError: OSError('Connection refused', 111),
+        ),
+      );
 
-      expect(NetworkErrorHelper.getErrorMessage(error, context: 'Login'),
-          startsWith('Login: Server refused connection'));
+      expect(
+        NetworkErrorHelper.getErrorMessage(error, context: 'Login'),
+        startsWith('Login: Server refused connection'),
+      );
     });
 
     test('should explain HTTP statuses', () {
-      expect(NetworkErrorHelper.getErrorMessage(const HttpStatusException(503)),
-          contains('Service unavailable (503)'));
-      expect(NetworkErrorHelper.getErrorMessage(const HttpStatusException(404)),
-          contains('HTTP 404'));
+      expect(
+        NetworkErrorHelper.getErrorMessage(const HttpStatusException(503)),
+        contains('Service unavailable (503)'),
+      );
+      expect(
+        NetworkErrorHelper.getErrorMessage(const HttpStatusException(404)),
+        contains('HTTP 404'),
+      );
     });
 
     test('should not guess the kind of error from its message', () {
       final message = NetworkErrorHelper.getErrorMessage(
-          StateError('No host for connection'));
+        StateError('No host for connection'),
+      );
 
       expect(message, 'Something went wrong. Please try again.');
     });
 
     test('should explain wrong credentials', () {
       final message = NetworkErrorHelper.getErrorMessage(
-          const SubsonicException(40, 'Wrong username or password'),
-          context: 'Login failed');
+        const SubsonicException(40, 'Wrong username or password'),
+        context: 'Login failed',
+      );
 
       expect(message, 'Login failed: Wrong username or password.');
     });
 
     test('should show the server\'s message for other Subsonic errors', () {
       final message = NetworkErrorHelper.getErrorMessage(
-          const SubsonicException(70, 'Album not found'));
+        const SubsonicException(70, 'Album not found'),
+      );
 
       expect(message, contains('Album not found'));
     });
 
     test('should show user-facing messages as they are', () {
       final message = NetworkErrorHelper.getErrorMessage(
-          const UserFacingException('Album has no songs'),
-          context: 'Failed to play album');
+        const UserFacingException('Album has no songs'),
+        context: 'Failed to play album',
+      );
 
       expect(message, 'Failed to play album: Album has no songs');
     });
 
     test('should point to the server URL for responses that aren\'t XML', () {
       final message = NetworkErrorHelper.getErrorMessage(
-          XmlParserException('Expected a single root element'));
+        XmlParserException('Expected a single root element'),
+      );
 
       expect(message, contains('server URL'));
       expect(message, isNot(contains('XmlParserException')));
     });
 
     test('should not show the type of unknown errors', () {
-      final message = NetworkErrorHelper.getErrorMessage(StateError('boom'),
-          context: 'Failed to play song');
+      final message = NetworkErrorHelper.getErrorMessage(
+        StateError('boom'),
+        context: 'Failed to play song',
+      );
 
-      expect(message,
-          'Failed to play song: Something went wrong. Please try again.');
+      expect(
+        message,
+        'Failed to play song: Something went wrong. Please try again.',
+      );
     });
   });
 
@@ -297,8 +371,10 @@ void main() {
 
       await settingsService.setNetworkConfig(newConfig);
 
-      expect(settingsService.networkConfig.connectionTimeout,
-          const Duration(seconds: 20));
+      expect(
+        settingsService.networkConfig.connectionTimeout,
+        const Duration(seconds: 20),
+      );
       expect(settingsService.networkConfig.maxRetryAttempts, 5);
     });
 

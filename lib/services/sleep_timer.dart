@@ -36,12 +36,10 @@ class SleepTimer {
   DateTime? _startTime;
 
   SleepTimer({
-    required void Function(double volume) setVolume,
-    required void Function() onExpired,
-    DateTime Function() clock = DateTime.now,
-  })  : _setVolume = setVolume,
-        _onExpired = onExpired,
-        _clock = clock;
+    required this._setVolume,
+    required this._onExpired,
+    this._clock = DateTime.now,
+  });
 
   bool get isActive => _startTime != null;
 
@@ -78,8 +76,10 @@ class SleepTimer {
     if (left == null) return false;
     _duration = _duration! + extension;
     final newRemaining = left + extension;
-    _log.info('Sleep timer extended by ${formatClock(extension)}, '
-        'new remaining: ${formatClock(newRemaining)}');
+    _log.info(
+      'Sleep timer extended by ${formatClock(extension)}, '
+      'new remaining: ${formatClock(newRemaining)}',
+    );
     _schedule(newRemaining);
     return true;
   }
@@ -114,8 +114,10 @@ class SleepTimer {
   void _applyFade() {
     final left = remaining;
     if (left == null || _fadeLength <= Duration.zero) return;
-    final fraction =
-        (left.inMicroseconds / _fadeLength.inMicroseconds).clamp(0.0, 1.0);
+    final fraction = (left.inMicroseconds / _fadeLength.inMicroseconds).clamp(
+      0.0,
+      1.0,
+    );
     _setVolume(pow(fraction, 3).toDouble());
   }
 

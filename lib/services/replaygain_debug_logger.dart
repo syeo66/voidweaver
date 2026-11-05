@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' show Rect;
+
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:logging/logging.dart';
+
 import '../models/subsonic_models.dart';
 import '../utils/redact.dart';
 import 'settings_service.dart';
@@ -191,8 +193,12 @@ void logReplayGain(String Function() message) {
 /// playing: its ReplayGain data, the settings, and the linear [gain] it plays
 /// at. [queue] is what the queue was started from (album gains are used in
 /// smart mode only for albums).
-List<String> trackGainReport(Song song, SettingsService settings,
-    {required double gain, required String queue}) {
+List<String> trackGainReport(
+  Song song,
+  SettingsService settings, {
+  required double gain,
+  required String queue,
+}) {
   String db(double? value) => '${value?.toStringAsFixed(2) ?? 'null'} dB';
   String peak(double? value) => value?.toStringAsFixed(4) ?? 'null';
   final rule = '='.padRight(80, '=');
@@ -212,7 +218,7 @@ List<String> trackGainReport(Song song, SettingsService settings,
   ];
   final usable =
       SettingsService.plausibleGain(song.replayGainTrackGain) != null ||
-          SettingsService.plausibleGain(song.replayGainAlbumGain) != null;
+      SettingsService.plausibleGain(song.replayGainAlbumGain) != null;
   return [
     '',
     rule,

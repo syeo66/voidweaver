@@ -38,9 +38,11 @@ class FakeAudioCache implements AudioCache {
 
   /// Whether the content for an item's [cacheKey] is cached, see
   /// [MockAudioPlayer]'s `isCached`.
-  bool isCachedKey(String? cacheKey) => cached.any((id) =>
-      cacheKey == '$namespace|$id' ||
-      (cacheKey?.startsWith('$namespace|$id|') ?? false));
+  bool isCachedKey(String? cacheKey) => cached.any(
+    (id) =>
+        cacheKey == '$namespace|$id' ||
+        (cacheKey?.startsWith('$namespace|$id|') ?? false),
+  );
 
   @override
   String keyFor(Song song) => song.size == null

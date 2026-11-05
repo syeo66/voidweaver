@@ -1,16 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:logging/logging.dart';
+
 import 'subsonic_api.dart';
 
 final _log = Logger('scrobble');
 
 /// Type of scrobble operation
-enum ScrobbleType {
-  nowPlaying,
-  submission,
-}
+enum ScrobbleType { nowPlaying, submission }
 
 /// A scrobble request that can be queued and retried
 class ScrobbleRequest {
@@ -27,11 +26,11 @@ class ScrobbleRequest {
   });
 
   Map<String, dynamic> toJson() => {
-        'songId': songId,
-        'type': type.name,
-        'playedAt': playedAt?.millisecondsSinceEpoch,
-        'queuedAt': queuedAt.millisecondsSinceEpoch,
-      };
+    'songId': songId,
+    'type': type.name,
+    'playedAt': playedAt?.millisecondsSinceEpoch,
+    'queuedAt': queuedAt.millisecondsSinceEpoch,
+  };
 
   factory ScrobbleRequest.fromJson(Map<String, dynamic> json) {
     return ScrobbleRequest(
@@ -72,7 +71,8 @@ class ScrobbleQueue {
     await _loadQueue();
     _startProcessingTimer();
     _log.info(
-        'ScrobbleQueue initialized with ${_queue.length} pending requests');
+      'ScrobbleQueue initialized with ${_queue.length} pending requests',
+    );
     // Plays left from the last session, or from a login whose password the
     // server rejected, go out now rather than at the first timer tick
     unawaited(_processQueue());
@@ -80,28 +80,33 @@ class ScrobbleQueue {
 
   /// Queue a "now playing" notification
   Future<void> queueNowPlaying(String songId) async {
-    await _enqueue(ScrobbleRequest(
-      songId: songId,
-      type: ScrobbleType.nowPlaying,
-      queuedAt: DateTime.now(),
-    ));
+    await _enqueue(
+      ScrobbleRequest(
+        songId: songId,
+        type: ScrobbleType.nowPlaying,
+        queuedAt: DateTime.now(),
+      ),
+    );
   }
 
   /// Queue a scrobble submission
   Future<void> queueSubmission(String songId, {DateTime? playedAt}) async {
-    await _enqueue(ScrobbleRequest(
-      songId: songId,
-      type: ScrobbleType.submission,
-      playedAt: playedAt,
-      queuedAt: DateTime.now(),
-    ));
+    await _enqueue(
+      ScrobbleRequest(
+        songId: songId,
+        type: ScrobbleType.submission,
+        playedAt: playedAt,
+        queuedAt: DateTime.now(),
+      ),
+    );
   }
 
   /// Add a request to the queue (non-blocking)
   Future<void> _enqueue(ScrobbleRequest request) async {
     _queue.add(request);
     _log.fine(
-        'Queued ${request.type.name} for song ${request.songId} (queue size: ${_queue.length})');
+      'Queued ${request.type.name} for song ${request.songId} (queue size: ${_queue.length})',
+    );
 
     // Save queue asynchronously without blocking
     unawaited(_saveQueue());
@@ -128,7 +133,8 @@ class ScrobbleQueue {
 
         if (DateTime.now().difference(request.queuedAt) > _maxAge) {
           _log.info(
-              'Dropping old scrobble request for song ${request.songId} (age: ${DateTime.now().difference(request.queuedAt).inDays} days)');
+            'Dropping old scrobble request for song ${request.songId} (age: ${DateTime.now().difference(request.queuedAt).inDays} days)',
+          );
           _queue.remove(request);
           continue;
         }
@@ -136,19 +142,22 @@ class ScrobbleQueue {
         try {
           await _sendScrobble(request);
           _log.fine(
-              'Successfully sent ${request.type.name} for song ${request.songId}');
+            'Successfully sent ${request.type.name} for song ${request.songId}',
+          );
         } catch (e) {
           final rejected = e is SubsonicException && !e.isAuthError;
           if (request.type == ScrobbleType.submission && !rejected) {
             _log.warning(
-                'Failed to send submission for song ${request.songId}, will retry',
-                e);
+              'Failed to send submission for song ${request.songId}, will retry',
+              e,
+            );
             blocked = true;
             break;
           }
           _log.warning(
-              'Failed to send ${request.type.name} for song ${request.songId}, dropping it',
-              e);
+            'Failed to send ${request.type.name} for song ${request.songId}, dropping it',
+            e,
+          );
         }
         _queue.remove(request);
 
@@ -160,7 +169,8 @@ class ScrobbleQueue {
 
       if (_queue.isNotEmpty) {
         _log.fine(
-            'Scrobble queue processing stopped (${_queue.length} requests remaining)');
+          'Scrobble queue processing stopped (${_queue.length} requests remaining)',
+        );
         await _saveQueue();
       } else {
         _log.fine('Scrobble queue empty');
@@ -184,8 +194,10 @@ class ScrobbleQueue {
         await _api.scrobbleNowPlaying(request.songId);
         break;
       case ScrobbleType.submission:
-        await _api.scrobbleSubmission(request.songId,
-            playedAt: request.playedAt);
+        await _api.scrobbleSubmission(
+          request.songId,
+          playedAt: request.playedAt,
+        );
         break;
     }
   }
@@ -230,8 +242,9 @@ class ScrobbleQueue {
   Future<void> _saveQueue() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final queueJson =
-          json.encode(_queue.map((request) => request.toJson()).toList());
+      final queueJson = json.encode(
+        _queue.map((request) => request.toJson()).toList(),
+      );
       await prefs.setString(_storageKey, queueJson);
     } catch (e) {
       _log.warning('Error saving scrobble queue', e);

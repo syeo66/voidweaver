@@ -18,24 +18,28 @@ const _length = Duration(minutes: 1);
 
 Future<void> main(List<String> args) async {
   final port = args.isEmpty ? 8443 : int.parse(args.first);
-  final server = FakeSubsonicServer(albums: [
-    for (final album in FakeSubsonicServer.defaultAlbums)
-      FakeAlbum(album.id, album.name, album.artist, [
-        for (final song in album.songs)
-          FakeSong(song.id, song.title, length: _length)
-      ]),
-  ]);
+  final server = FakeSubsonicServer(
+    albums: [
+      for (final album in FakeSubsonicServer.defaultAlbums)
+        FakeAlbum(album.id, album.name, album.artist, [
+          for (final song in album.songs)
+            FakeSong(song.id, song.title, length: _length),
+        ]),
+    ],
+  );
   await server.start(port: port);
   // tool/emulator_check.sh waits for this line
-  stdout.writeln('Fake Subsonic server at ${server.url} '
-      '(user ${server.username}, password ${server.password})');
+  stdout.writeln(
+    'Fake Subsonic server at ${server.url} '
+    '(user ${server.username}, password ${server.password})',
+  );
 
   final stop = Completer<void>();
   final signals = [
     for (final signal in [ProcessSignal.sigint, ProcessSignal.sigterm])
       signal.watch().listen((_) {
         if (!stop.isCompleted) stop.complete();
-      })
+      }),
   ];
   await stop.future;
   // Otherwise they keep the process running

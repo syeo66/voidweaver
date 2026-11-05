@@ -99,26 +99,27 @@ class AudioSource {
   final String? album;
   final Uri? artUri;
 
-  AudioSource.uri(this.uri,
-      {this.tag,
-      this.gain = 1.0,
-      this.cacheKey,
-      this.title,
-      this.artist,
-      this.album,
-      this.artUri})
-      : id = '${++_lastId}';
+  AudioSource.uri(
+    this.uri, {
+    this.tag,
+    this.gain = 1.0,
+    this.cacheKey,
+    this.title,
+    this.artist,
+    this.album,
+    this.artUri,
+  }) : id = '${++_lastId}';
 
   Map<String, Object?> _toMap() => {
-        'id': id,
-        'uri': uri.toString(),
-        'gain': gain,
-        'cacheKey': cacheKey,
-        'title': title,
-        'artist': artist,
-        'album': album,
-        'artUri': artUri?.toString(),
-      };
+    'id': id,
+    'uri': uri.toString(),
+    'gain': gain,
+    'cacheKey': cacheKey,
+    'title': title,
+    'artist': artist,
+    'album': album,
+    'artUri': artUri?.toString(),
+  };
 }
 
 class VoidweaverPlayer {
@@ -181,27 +182,36 @@ class VoidweaverPlayer {
       _errorController.add(_exception(map));
     } else if (map['type'] == 'command') {
       final position = map['position'] as int?;
-      _commandController.add(SystemCommand(
+      _commandController.add(
+        SystemCommand(
           SystemCommandType.values.byName(map['command'] as String),
-          position == null ? null : Duration(milliseconds: position)));
+          position == null ? null : Duration(milliseconds: position),
+        ),
+      );
     } else {
       _applyState(map);
     }
   }
 
   static PlayerException _exception(Map<Object?, Object?> map) =>
-      PlayerException(map['code'] as int? ?? 0, map['message'] as String?,
-          map['index'] as int?);
+      PlayerException(
+        map['code'] as int? ?? 0,
+        map['message'] as String?,
+        map['index'] as int?,
+      );
 
   void _applyState(Map<Object?, Object?>? map) {
     if (map == null || _disposed) return;
-    final state = PlayerState(map['playing'] as bool,
-        ProcessingState.values[map['processingState'] as int]);
+    final state = PlayerState(
+      map['playing'] as bool,
+      ProcessingState.values[map['processingState'] as int],
+    );
     final index = map['index'] as int?;
     final position = Duration(milliseconds: map['position'] as int);
     final durationMs = map['duration'] as int?;
-    final duration =
-        durationMs == null ? null : Duration(milliseconds: durationMs);
+    final duration = durationMs == null
+        ? null
+        : Duration(milliseconds: durationMs);
 
     if (index != _currentIndex) {
       _currentIndex = index;
@@ -225,15 +235,19 @@ class VoidweaverPlayer {
     await _created;
     if (_disposed) return;
     _applyState(
-        await _channel.invokeMethod<Map<Object?, Object?>>(method, arguments));
+      await _channel.invokeMethod<Map<Object?, Object?>>(method, arguments),
+    );
   }
 
   /// Replaces the playlist and prepares the item at [initialIndex]. Completes
   /// once it's ready; throws a [PlayerException] if it fails to load, or a
   /// [PlayerInterruptedException] if another call replaces the playlist or
   /// stops the player first.
-  Future<Duration?> setAudioSources(List<AudioSource> sources,
-      {int initialIndex = 0, Duration initialPosition = Duration.zero}) async {
+  Future<Duration?> setAudioSources(
+    List<AudioSource> sources, {
+    int initialIndex = 0,
+    Duration initialPosition = Duration.zero,
+  }) async {
     _sequence
       ..clear()
       ..addAll(sources);
@@ -294,9 +308,9 @@ class VoidweaverPlayer {
   /// one). Completes once the target is ready, or has failed to load (the
   /// error is reported on [errorStream]).
   Future<void> seek(Duration? position, {int? index}) => _invoke('seek', {
-        'position': (position ?? Duration.zero).inMilliseconds,
-        'index': index,
-      });
+    'position': (position ?? Duration.zero).inMilliseconds,
+    'index': index,
+  });
 
   /// Whether the app was started to resume playback: Play was pressed (e.g.
   /// on Bluetooth headphones) while the app wasn't running. The app should
@@ -337,12 +351,13 @@ class MediaCache {
   /// from now on, for all players: [connect] for connecting, [read] for
   /// waiting for data on an open connection. Until this is called, Media3's
   /// defaults (8 s each) apply.
-  Future<void> setTimeouts(
-          {required Duration connect, required Duration read}) =>
-      _channel.invokeMethod('network.setTimeouts', {
-        'connect': connect.inMilliseconds,
-        'read': read.inMilliseconds,
-      });
+  Future<void> setTimeouts({
+    required Duration connect,
+    required Duration read,
+  }) => _channel.invokeMethod('network.setTimeouts', {
+    'connect': connect.inMilliseconds,
+    'read': read.inMilliseconds,
+  });
 
   /// Downloads [uri] completely into the cache under [key]. Downloads run one
   /// at a time. Throws if the download fails; what was downloaded stays
@@ -352,15 +367,18 @@ class MediaCache {
 
   /// Those of [keys] whose content is completely cached, in order.
   Future<List<String>> cachedKeys(List<String> keys) async =>
-      (await _channel
-          .invokeListMethod<String>('cache.cachedKeys', {'keys': keys})) ??
+      (await _channel.invokeListMethod<String>('cache.cachedKeys', {
+        'keys': keys,
+      })) ??
       const [];
 
   /// Up to [length] bytes from the start of the cached content for [key],
   /// without the network. Null if its start isn't cached.
   Future<Uint8List?> readHead(String key, int length) =>
-      _channel.invokeMethod<Uint8List>(
-          'cache.readHead', {'key': key, 'length': length});
+      _channel.invokeMethod<Uint8List>('cache.readHead', {
+        'key': key,
+        'length': length,
+      });
 
   Future<int> sizeInBytes() async =>
       await _channel.invokeMethod<int>('cache.size') ?? 0;

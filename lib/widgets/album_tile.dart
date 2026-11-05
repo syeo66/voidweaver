@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../services/app_state.dart';
 import '../services/image_cache_manager.dart';
 import '../services/network_errors.dart';
@@ -20,8 +21,12 @@ Future<bool> playAlbumWithFeedback(BuildContext context, Album album) async {
   } catch (e) {
     messenger.showSnackBar(
       SnackBar(
-        content: Text(NetworkErrorHelper.getErrorMessage(e,
-            context: 'Failed to play album')),
+        content: Text(
+          NetworkErrorHelper.getErrorMessage(
+            e,
+            context: 'Failed to play album',
+          ),
+        ),
         backgroundColor: errorColor,
       ),
     );
@@ -69,7 +74,10 @@ class _AlbumTileState extends State<AlbumTile> with _PlaysAlbum {
           height: 56,
           child: album.coverArt != null && api != null
               ? ImageCacheManager.buildAlbumArt(
-                  api: api, coverArtId: album.coverArt!, size: 56)
+                  api: api,
+                  coverArtId: album.coverArt!,
+                  size: 56,
+                )
               : DecoratedBox(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
@@ -142,8 +150,11 @@ class _AlbumGridTileState extends State<AlbumGridTile> with _PlaysAlbum {
     final api = context.watch<AppState>().api;
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final placeholderIcon =
-        Icon(Icons.album, size: 48, color: colors.onSurfaceVariant);
+    final placeholderIcon = Icon(
+      Icons.album,
+      size: 48,
+      color: colors.onSurfaceVariant,
+    );
     final secondLine = widget.showArtist
         ? album.artist
         : (album.songCount != null ? '${album.songCount} songs' : null);
@@ -187,16 +198,18 @@ class _AlbumGridTileState extends State<AlbumGridTile> with _PlaysAlbum {
                 children: [
                   Text(
                     album.name,
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.w500),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   if (secondLine != null)
                     Text(
                       secondLine,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: colors.onSurfaceVariant),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),

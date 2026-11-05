@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:async';
+
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:logging/logging.dart';
+
 import 'subsonic_api.dart';
 
 final _log = Logger('playback_persistence');
@@ -28,17 +30,19 @@ class PersistedPlaybackState {
   static PersistedPlaybackState? fromJson(Map<String, dynamic> json) {
     try {
       return PersistedPlaybackState(
-        playlist: (json['playlist'] as List<dynamic>?)
+        playlist:
+            (json['playlist'] as List<dynamic>?)
                 ?.map((s) => Song.fromJson(s as Map<String, dynamic>))
                 .toList() ??
             [],
         currentIndex: json['currentIndex'] as int? ?? 0,
-        currentPosition:
-            Duration(milliseconds: json['currentPositionMs'] as int? ?? 0),
+        currentPosition: Duration(
+          milliseconds: json['currentPositionMs'] as int? ?? 0,
+        ),
         isPlaying: json['isPlaying'] as bool? ?? false,
         lastUpdated: DateTime.fromMillisecondsSinceEpoch(
-            json['lastUpdated'] as int? ??
-                DateTime.now().millisecondsSinceEpoch),
+          json['lastUpdated'] as int? ?? DateTime.now().millisecondsSinceEpoch,
+        ),
         playlistSource: json['playlistSource'] as String?,
         sourceId: json['sourceId'] as String?,
       );
@@ -98,8 +102,8 @@ class PlaybackPersistenceService {
   String? _savedSourceId;
 
   PlaybackPersistenceService({
-    Duration positionSaveInterval = const Duration(seconds: 5),
-  }) : _positionSaveInterval = positionSaveInterval;
+    this._positionSaveInterval = const Duration(seconds: 5),
+  });
 
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
@@ -123,25 +127,27 @@ class PlaybackPersistenceService {
           state.playlistSource != _savedPlaylistSource ||
           state.sourceId != _savedSourceId) {
         await _prefs!.setString(
-            _queueKey,
-            jsonEncode({
-              'playlist': state.playlist.map((s) => s.toJson()).toList(),
-              'playlistSource': state.playlistSource,
-              'sourceId': state.sourceId,
-            }));
+          _queueKey,
+          jsonEncode({
+            'playlist': state.playlist.map((s) => s.toJson()).toList(),
+            'playlistSource': state.playlistSource,
+            'sourceId': state.sourceId,
+          }),
+        );
         _savedPlaylist = state.playlist;
         _savedPlaylistSource = state.playlistSource;
         _savedSourceId = state.sourceId;
         _log.fine('Saved playback queue: ${state.playlist.length} songs');
       }
       await _prefs!.setString(
-          _positionKey,
-          jsonEncode({
-            'currentIndex': state.currentIndex,
-            'currentPositionMs': state.currentPosition.inMilliseconds,
-            'isPlaying': state.isPlaying,
-            'lastUpdated': state.lastUpdated.millisecondsSinceEpoch,
-          }));
+        _positionKey,
+        jsonEncode({
+          'currentIndex': state.currentIndex,
+          'currentPositionMs': state.currentPosition.inMilliseconds,
+          'isPlaying': state.isPlaying,
+          'lastUpdated': state.lastUpdated.millisecondsSinceEpoch,
+        }),
+      );
     } catch (e) {
       _log.warning('Failed to save playback state', e);
     }
@@ -168,7 +174,8 @@ class PlaybackPersistenceService {
 
       if (state != null) {
         _log.fine(
-            'Loaded playback state: ${state.playlist.length} songs, index ${state.currentIndex}');
+          'Loaded playback state: ${state.playlist.length} songs, index ${state.currentIndex}',
+        );
       }
 
       return state;

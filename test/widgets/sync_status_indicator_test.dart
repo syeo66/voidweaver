@@ -29,23 +29,28 @@ void main() {
   tearDown(() => appState.dispose());
 
   Future<void> pump(WidgetTester tester) async {
-    await tester.pumpWidget(ChangeNotifierProvider<AppState>.value(
-      value: appState,
-      child: const MaterialApp(
-        home: Scaffold(body: Center(child: SyncStatusIndicator())),
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppState>.value(
+        value: appState,
+        child: const MaterialApp(
+          home: Scaffold(body: Center(child: SyncStatusIndicator())),
+        ),
       ),
-    ));
+    );
   }
 
   String tooltip(WidgetTester tester) =>
       tester.widget<Tooltip>(find.byType(Tooltip)).message!;
 
   Color iconColor(WidgetTester tester) => tester
-      .widget<IconTheme>(find
-          .descendant(
+      .widget<IconTheme>(
+        find
+            .descendant(
               of: find.byType(SyncStatusIndicator),
-              matching: find.byType(IconTheme))
-          .first)
+              matching: find.byType(IconTheme),
+            )
+            .first,
+      )
       .data
       .color!;
 

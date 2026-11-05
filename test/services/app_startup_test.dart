@@ -19,10 +19,13 @@ void main() {
     // The player AppState creates once it's configured
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-            const MethodChannel('voidweaver_player'), (_) async => null);
+          const MethodChannel('voidweaver_player'),
+          (_) async => null,
+        );
     // Nothing listens there, so loading the albums fails after its retries
     FlutterSecureStorage.setMockInitialValues(
-        savedCredentials('https://127.0.0.1:1', 'alice', 'secret'));
+      savedCredentials('https://127.0.0.1:1', 'alice', 'secret'),
+    );
     SharedPreferences.setMockInitialValues({});
 
     appState = AppState();
@@ -50,8 +53,9 @@ void main() {
     addTearDown(() => temp.delete(recursive: true));
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-            const MethodChannel('plugins.flutter.io/path_provider'),
-            (_) async => temp.path);
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (_) async => temp.path,
+        );
 
     var notified = false;
     await appState.clearConfiguration();
@@ -64,23 +68,26 @@ void main() {
     expect(appState.albumError, isNull);
   });
 
-  test('a logout that cannot remove the credentials still clears the rest',
-      () async {
-    final temp = await Directory.systemTemp.createTemp();
-    addTearDown(() => temp.delete(recursive: true));
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(
+  test(
+    'a logout that cannot remove the credentials still clears the rest',
+    () async {
+      final temp = await Directory.systemTemp.createTemp();
+      addTearDown(() => temp.delete(recursive: true));
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
             const MethodChannel('plugins.flutter.io/path_provider'),
-            (_) async => temp.path);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('playbackQueue', '{}');
-    FlutterSecureStoragePlatform.instance = _FailingDeleteStorage();
+            (_) async => temp.path,
+          );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('playbackQueue', '{}');
+      FlutterSecureStoragePlatform.instance = _FailingDeleteStorage();
 
-    await appState.clearConfiguration();
+      await appState.clearConfiguration();
 
-    expect(appState.isConfigured, isFalse);
-    expect(prefs.containsKey('playbackQueue'), isFalse);
-  });
+      expect(appState.isConfigured, isFalse);
+      expect(prefs.containsKey('playbackQueue'), isFalse);
+    },
+  );
 }
 
 /// Secure storage whose deleteAll() fails, like a Keystore error

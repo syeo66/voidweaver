@@ -37,35 +37,48 @@ void main() {
 
     tearDown(() => api.dispose());
 
-    Future<CachedNetworkImage> pumpCover(WidgetTester tester, Widget cover,
-        {double pixelRatio = 3}) async {
-      await tester.pumpWidget(MediaQuery(
-        data: MediaQueryData(devicePixelRatio: pixelRatio),
-        child: Center(child: cover),
-      ));
+    Future<CachedNetworkImage> pumpCover(
+      WidgetTester tester,
+      Widget cover, {
+      double pixelRatio = 3,
+    }) async {
+      await tester.pumpWidget(
+        MediaQuery(
+          data: MediaQueryData(devicePixelRatio: pixelRatio),
+          child: Center(child: cover),
+        ),
+      );
       return tester.widget<CachedNetworkImage>(find.byType(CachedNetworkImage));
     }
 
-    testWidgets('fetches the size of the given width and height',
-        (tester) async {
+    testWidgets('fetches the size of the given width and height', (
+      tester,
+    ) async {
       final image = await pumpCover(
-          tester,
-          ImageCacheManager.buildCoverArt(
-              api: api, coverArtId: 'al-1', width: 50, height: 50));
+        tester,
+        ImageCacheManager.buildCoverArt(
+          api: api,
+          coverArtId: 'al-1',
+          width: 50,
+          height: 50,
+        ),
+      );
 
       expect(Uri.parse(image.imageUrl).queryParameters['size'], '150');
       expect(image.cacheKey, api.coverArtCacheKey('al-1', size: 150));
     });
 
-    testWidgets('fetches the size of the box it is laid out in',
-        (tester) async {
+    testWidgets('fetches the size of the box it is laid out in', (
+      tester,
+    ) async {
       final image = await pumpCover(
-          tester,
-          SizedBox(
-              width: 200,
-              height: 200,
-              child: ImageCacheManager.buildCoverArt(
-                  api: api, coverArtId: 'al-1')));
+        tester,
+        SizedBox(
+          width: 200,
+          height: 200,
+          child: ImageCacheManager.buildCoverArt(api: api, coverArtId: 'al-1'),
+        ),
+      );
 
       expect(Uri.parse(image.imageUrl).queryParameters['size'], '600');
       expect(image.cacheKey, api.coverArtCacheKey('al-1', size: 600));

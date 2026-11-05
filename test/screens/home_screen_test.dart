@@ -63,13 +63,13 @@ void main() {
   // Without cover art, so no image is loaded, and with ReplayGain data, so
   // it isn't read from the file
   Song song(String id) => Song(
-        id: id,
-        title: 'Title $id',
-        artist: 'Artist $id',
-        album: 'Album $id',
-        duration: 180,
-        replayGainTrackGain: -6.0,
-      );
+    id: id,
+    title: 'Title $id',
+    artist: 'Artist $id',
+    album: 'Album $id',
+    duration: 180,
+    replayGainTrackGain: -6.0,
+  );
 
   final album = Album(
     id: 'album1',
@@ -82,17 +82,22 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     mockApi = MockSubsonicApi();
     when(mockApi.getArtists()).thenAnswer((_) async => []);
-    when(mockApi.getStreamUrl(any)).thenAnswer((invocation) =>
-        'https://music.test/rest/stream?id=${invocation.positionalArguments.first}');
+    when(mockApi.getStreamUrl(any)).thenAnswer(
+      (invocation) =>
+          'https://music.test/rest/stream?id=${invocation.positionalArguments.first}',
+    );
     when(mockApi.readReplayGain(any))
         .thenAnswer((_) async => const ReplayGainData());
 
     settings = SettingsService();
     await settings.initialize();
     // Offline: preloading downloads nothing
-    service = AudioPlayerService(mockApi, settings,
-        audioPlayer: MockAudioPlayer(),
-        audioCache: FakeAudioCache()..reachable = false);
+    service = AudioPlayerService(
+      mockApi,
+      settings,
+      audioPlayer: MockAudioPlayer(),
+      audioCache: FakeAudioCache()..reachable = false,
+    );
     appState = _FakeAppState(mockApi, service, [album]);
   });
 
@@ -101,10 +106,12 @@ void main() {
   });
 
   Future<void> pumpHome(WidgetTester tester) async {
-    await tester.pumpWidget(ChangeNotifierProvider<AppState>.value(
-      value: appState,
-      child: const MaterialApp(home: HomeScreen()),
-    ));
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppState>.value(
+        value: appState,
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
     await tester.pump();
   }
 
@@ -137,8 +144,9 @@ void main() {
         expect(find.text('No song playing'), findsOneWidget);
       });
 
-      testWidgets('Now Playing shows the song and the playlist',
-          (tester) async {
+      testWidgets('Now Playing shows the song and the playlist', (
+        tester,
+      ) async {
         _setOrientation(tester, orientation);
         await pumpHome(tester);
         await playAlbum(tester);
@@ -151,14 +159,17 @@ void main() {
         expect(find.text('Album s1'), findsOneWidget);
         expect(find.text('Title s2'), portrait ? findsOneWidget : findsNothing);
         // A phone in landscape has only room for the covers, not the label
-        expect(find.text('Playlist: 1 of 2'),
-            portrait ? findsOneWidget : findsNothing);
+        expect(
+          find.text('Playlist: 1 of 2'),
+          portrait ? findsOneWidget : findsNothing,
+        );
         expect(find.byKey(const ValueKey('playlist-item-0')), findsOneWidget);
         expect(find.byKey(const ValueKey('playlist-item-1')), findsOneWidget);
       });
 
-      testWidgets('Now Playing shows a song that is in the queue twice',
-          (tester) async {
+      testWidgets('Now Playing shows a song that is in the queue twice', (
+        tester,
+      ) async {
         _setOrientation(tester, orientation);
         await pumpHome(tester);
         final repeated = Album(
@@ -196,8 +207,9 @@ void main() {
     });
   }
 
-  testWidgets('a tablet in landscape has room for the playlist label',
-      (tester) async {
+  testWidgets('a tablet in landscape has room for the playlist label', (
+    tester,
+  ) async {
     tester.view.devicePixelRatio = 2.0;
     tester.view.physicalSize = const Size(2560, 1600);
     addTearDown(tester.view.reset);
@@ -236,7 +248,8 @@ void main() {
 
   testWidgets('shows why random songs could not be played', (tester) async {
     when(mockApi.getRandomSongs(any)).thenAnswer(
-        (_) async => throw const UserFacingException('Server is down'));
+      (_) async => throw const UserFacingException('Server is down'),
+    );
     await pumpHome(tester);
 
     await tester.runAsync(() async {
@@ -245,14 +258,17 @@ void main() {
     });
     await tester.pump();
 
-    expect(find.text('Failed to play random songs: Server is down'),
-        findsOneWidget);
+    expect(
+      find.text('Failed to play random songs: Server is down'),
+      findsOneWidget,
+    );
     // The button is enabled again
     expect(
-        tester
-            .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.shuffle))
-            .onPressed,
-        isNotNull);
+      tester
+          .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.shuffle))
+          .onPressed,
+      isNotNull,
+    );
   });
 
   Future<void> openLogout(WidgetTester tester) async {
@@ -293,8 +309,10 @@ void main() {
     await openLogout(tester);
 
     expect(
-        find.textContaining(
-            '3 plays haven\'t been sent to the server yet and will be lost.'),
-        findsOneWidget);
+      find.textContaining(
+        '3 plays haven\'t been sent to the server yet and will be lost.',
+      ),
+      findsOneWidget,
+    );
   });
 }

@@ -112,9 +112,11 @@ class Album {
       created: json['created'] != null
           ? DateTime.tryParse(json['created'] as String)
           : null,
-      songs: (json['songs'] as List<dynamic>?)
+      songs:
+          (json['songs'] as List<dynamic>?)
               ?.map(
-                  (songJson) => Song.fromJson(songJson as Map<String, dynamic>))
+                (songJson) => Song.fromJson(songJson as Map<String, dynamic>),
+              )
               .toList() ??
           [],
     );
@@ -242,10 +244,13 @@ class Song {
       replayGainAlbumPeak: replayGain('albumPeak'),
     );
 
-    logReplayGain(() => '[ReplayGain XML] "${song.title}" (id=${song.id}), '
-        '${nested != null ? 'nested <replayGain>' : 'song attributes'}: '
-        'trackGain=${song.replayGainTrackGain}, albumGain=${song.replayGainAlbumGain}, '
-        'trackPeak=${song.replayGainTrackPeak}, albumPeak=${song.replayGainAlbumPeak}');
+    logReplayGain(
+      () =>
+          '[ReplayGain XML] "${song.title}" (id=${song.id}), '
+          '${nested != null ? 'nested <replayGain>' : 'song attributes'}: '
+          'trackGain=${song.replayGainTrackGain}, albumGain=${song.replayGainAlbumGain}, '
+          'trackPeak=${song.replayGainTrackPeak}, albumPeak=${song.replayGainAlbumPeak}',
+    );
 
     return song;
   }
@@ -327,18 +332,22 @@ class Song {
       albumGain = (replayGain['albumGain'] as num?)?.toDouble();
       trackPeak = (replayGain['trackPeak'] as num?)?.toDouble();
       albumPeak = (replayGain['albumPeak'] as num?)?.toDouble();
-      logReplayGain(() =>
-          '[ReplayGain JSON] "${json['title']}" (id=${json['id']}): nested replayGain='
-          '{trackGain: $trackGain, albumGain: $albumGain, trackPeak: $trackPeak, albumPeak: $albumPeak}');
+      logReplayGain(
+        () =>
+            '[ReplayGain JSON] "${json['title']}" (id=${json['id']}): nested replayGain='
+            '{trackGain: $trackGain, albumGain: $albumGain, trackPeak: $trackPeak, albumPeak: $albumPeak}',
+      );
     } else {
       // Fallback to flat format for backwards compatibility
       trackGain = (json['replayGainTrackGain'] as num?)?.toDouble();
       albumGain = (json['replayGainAlbumGain'] as num?)?.toDouble();
       trackPeak = (json['replayGainTrackPeak'] as num?)?.toDouble();
       albumPeak = (json['replayGainAlbumPeak'] as num?)?.toDouble();
-      logReplayGain(() =>
-          '[ReplayGain JSON] "${json['title']}" (id=${json['id']}): flat fields='
-          '{trackGain: $trackGain, albumGain: $albumGain, trackPeak: $trackPeak, albumPeak: $albumPeak}');
+      logReplayGain(
+        () =>
+            '[ReplayGain JSON] "${json['title']}" (id=${json['id']}): flat fields='
+            '{trackGain: $trackGain, albumGain: $albumGain, trackPeak: $trackPeak, albumPeak: $albumPeak}',
+      );
     }
 
     return Song(
@@ -454,18 +463,17 @@ class SearchResult {
         songs.add(Song.fromXml(element));
       }
     } else {
-      _log.fine(() =>
-          'No searchResult3 element, found: ${doc.findAllElements('*').map((e) => e.name.local).toList()}');
+      _log.fine(
+        () =>
+            'No searchResult3 element, found: ${doc.findAllElements('*').map((e) => e.name.local).toList()}',
+      );
     }
 
-    final result = SearchResult(
-      artists: artists,
-      albums: albums,
-      songs: songs,
-    );
+    final result = SearchResult(artists: artists, albums: albums, songs: songs);
 
     _log.fine(
-        'SearchResult created: ${artists.length} artists, ${albums.length} albums, ${songs.length} songs');
+      'SearchResult created: ${artists.length} artists, ${albums.length} albums, ${songs.length} songs',
+    );
 
     return result;
   }

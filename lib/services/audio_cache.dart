@@ -19,8 +19,7 @@ class AudioCache {
   final String namespace;
   final MediaCache _cache;
 
-  AudioCache({this.namespace = '', MediaCache cache = const MediaCache()})
-      : _cache = cache;
+  AudioCache({this.namespace = '', this._cache = const MediaCache()});
 
   /// The cache key of [song], see [AudioSource.cacheKey]. It includes the
   /// file's size, so a file replaced on the server under the same id (a new

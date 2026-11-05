@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
+
 import 'network_config.dart';
 
 final _log = Logger('network');
@@ -10,10 +12,7 @@ class NetworkRetryService {
   final NetworkConfig config;
   final http.Client _httpClient;
 
-  NetworkRetryService({
-    required this.config,
-    required http.Client httpClient,
-  }) : _httpClient = httpClient;
+  NetworkRetryService({required this.config, required this._httpClient});
 
   /// Execute an HTTP GET request with retry logic and timeout handling.
   /// Without [retry] the request is sent once: for requests that aren't safe
@@ -49,20 +48,23 @@ class NetworkRetryService {
 
       try {
         _log.fine(
-            'Network request attempt $attemptNumber/$maxAttempts: $contextDescription');
+          'Network request attempt $attemptNumber/$maxAttempts: $contextDescription',
+        );
 
         final response = await _executeWithTimeout(request, requestType);
 
         _log.fine(
-            'Network request succeeded on attempt $attemptNumber: $contextDescription (${response.statusCode})');
+          'Network request succeeded on attempt $attemptNumber: $contextDescription (${response.statusCode})',
+        );
 
         return response;
       } catch (error) {
         lastError = error;
 
         _log.warning(
-            'Network request failed on attempt $attemptNumber: $contextDescription',
-            error);
+          'Network request failed on attempt $attemptNumber: $contextDescription',
+          error,
+        );
 
         // Check if we should retry this error
         if (attemptNumber >= maxAttempts ||

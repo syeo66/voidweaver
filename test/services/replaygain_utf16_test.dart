@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -13,7 +14,6 @@ void main() {
       // Create a TXXX frame for REPLAYGAIN_TRACK_GAIN = -12.68 dB
       final frameData = Uint8List.fromList([
         0x01, // Encoding: UTF-16 with BOM
-
         // Description: "REPLAYGAIN_TRACK_GAIN" in UTF-16LE with BOM
         0xFF, 0xFE, // BOM (Little Endian)
         0x52, 0x00, 0x45, 0x00, 0x50, 0x00, 0x4C, 0x00, // R E P L
@@ -23,7 +23,6 @@ void main() {
         0x5F, 0x00, 0x47, 0x00, 0x41, 0x00, 0x49, 0x00, // _ G A I
         0x4E, 0x00, // N
         0x00, 0x00, // Null terminator (2 bytes for UTF-16)
-
         // Value: "-12.68 dB" in UTF-16LE with BOM
         0xFF, 0xFE, // BOM (Little Endian)
         0x2D, 0x00, 0x31, 0x00, 0x32, 0x00, 0x2E, 0x00, // - 1 2 .
@@ -83,8 +82,10 @@ void main() {
       expect(decoded, '-13.20 dB');
 
       // Test parsing the gain value
-      final cleanStr =
-          decoded.replaceAll(RegExp(r'\s*db\s*$', caseSensitive: false), '');
+      final cleanStr = decoded.replaceAll(
+        RegExp(r'\s*db\s*$', caseSensitive: false),
+        '',
+      );
       final gain = double.tryParse(cleanStr);
 
       expect(gain, -13.20);

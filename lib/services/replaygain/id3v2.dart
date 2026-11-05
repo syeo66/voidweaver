@@ -28,8 +28,10 @@ ReplayGainData parseId3v2(Uint8List bytes) {
     tagSize = bytes.length; // Use available data
   }
 
-  readerLog(() =>
-      'Found ID3v2.$version.$revision tag, size: $tagSize, available: ${bytes.length}');
+  readerLog(
+    () =>
+        'Found ID3v2.$version.$revision tag, size: $tagSize, available: ${bytes.length}',
+  );
 
   double? trackGain;
   double? albumGain;
@@ -45,7 +47,8 @@ ReplayGainData parseId3v2(Uint8List bytes) {
           (bytes[10] << 21) | (bytes[11] << 14) | (bytes[12] << 7) | bytes[13];
     } else {
       // A plain integer, not counting its own size field
-      offset += 4 +
+      offset +=
+          4 +
           ((bytes[10] << 24) |
               (bytes[11] << 16) |
               (bytes[12] << 8) |
@@ -61,13 +64,15 @@ ReplayGainData parseId3v2(Uint8List bytes) {
     int frameSize;
     if (version >= 4) {
       // ID3v2.4 uses synchsafe integers
-      frameSize = (bytes[offset] << 21) |
+      frameSize =
+          (bytes[offset] << 21) |
           (bytes[offset + 1] << 14) |
           (bytes[offset + 2] << 7) |
           bytes[offset + 3];
     } else {
       // ID3v2.3 uses regular integers
-      frameSize = (bytes[offset] << 24) |
+      frameSize =
+          (bytes[offset] << 24) |
           (bytes[offset + 1] << 16) |
           (bytes[offset + 2] << 8) |
           bytes[offset + 3];
@@ -190,8 +195,8 @@ ReplayGainData _parseTxxxFrame(Uint8List frameData) {
 
     if (descEnd >= frameData.length) return const ReplayGainData();
 
-    description =
-        String.fromCharCodes(frameData.sublist(offset, descEnd)).toUpperCase();
+    description = String.fromCharCodes(frameData.sublist(offset, descEnd))
+        .toUpperCase();
     offset = descEnd + 1;
 
     // Get the value
@@ -206,8 +211,10 @@ ReplayGainData _parseTxxxFrame(Uint8List frameData) {
 
   double? parseGain(String gainStr) {
     // Remove " dB" suffix and parse
-    final cleanStr =
-        gainStr.replaceAll(RegExp(r'\s*db\s*$', caseSensitive: false), '');
+    final cleanStr = gainStr.replaceAll(
+      RegExp(r'\s*db\s*$', caseSensitive: false),
+      '',
+    );
     return double.tryParse(cleanStr);
   }
 

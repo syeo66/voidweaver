@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -98,11 +99,11 @@ void main() {
       var callCount = 0;
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) async {
-        callCount++;
-        if (callCount <= 2) {
-          throw Exception('Network error');
-        }
-      });
+            callCount++;
+            if (callCount <= 2) {
+              throw Exception('Network error');
+            }
+          });
 
       await scrobbleQueue.initialize();
       await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
@@ -113,9 +114,9 @@ void main() {
       expect(scrobbleQueue.queueSize, 1);
 
       await scrobbleQueue.processQueue();
-      verify(mockApi.scrobbleSubmission('song1',
-              playedAt: anyNamed('playedAt')))
-          .called(3);
+      verify(
+        mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
+      ).called(3);
       expect(scrobbleQueue.queueSize, 0);
     });
 
@@ -128,35 +129,37 @@ void main() {
       await Future.delayed(const Duration(seconds: 1));
 
       // Retried by the 30 s timer, not in a loop
-      verify(mockApi.scrobbleSubmission('song1',
-              playedAt: anyNamed('playedAt')))
-          .called(1);
+      verify(
+        mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
+      ).called(1);
       expect(scrobbleQueue.queueSize, 1);
     });
 
-    test('should keep a submission through repeated network failures',
-        () async {
-      when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
-          .thenThrow(Exception('Network error'));
+    test(
+      'should keep a submission through repeated network failures',
+      () async {
+        when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
+            .thenThrow(Exception('Network error'));
 
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
-      for (var i = 0; i < 10; i++) {
-        await scrobbleQueue.processQueue();
-      }
+        await scrobbleQueue.initialize();
+        await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
+        for (var i = 0; i < 10; i++) {
+          await scrobbleQueue.processQueue();
+        }
 
-      // Only dropped once it's older than 7 days
-      expect(scrobbleQueue.queueSize, 1);
-    });
+        // Only dropped once it's older than 7 days
+        expect(scrobbleQueue.queueSize, 1);
+      },
+    );
 
     test('should keep later requests behind a failed submission', () async {
       final sent = <String>[];
       var online = false;
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((invocation) async {
-        if (!online) throw Exception('Network error');
-        sent.add(invocation.positionalArguments[0] as String);
-      });
+            if (!online) throw Exception('Network error');
+            sent.add(invocation.positionalArguments[0] as String);
+          });
 
       await scrobbleQueue.initialize();
       await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
@@ -165,7 +168,8 @@ void main() {
 
       // song2 wasn't tried while song1 was failing
       verifyNever(
-          mockApi.scrobbleSubmission('song2', playedAt: anyNamed('playedAt')));
+        mockApi.scrobbleSubmission('song2', playedAt: anyNamed('playedAt')),
+      );
       expect(scrobbleQueue.queueSize, 2);
 
       online = true;
@@ -196,23 +200,26 @@ void main() {
       await scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now());
       await Future.delayed(const Duration(milliseconds: 500));
 
-      verify(mockApi.scrobbleSubmission('song2',
-              playedAt: anyNamed('playedAt')))
-          .called(1);
+      verify(
+        mockApi.scrobbleSubmission('song2', playedAt: anyNamed('playedAt')),
+      ).called(1);
       expect(scrobbleQueue.queueSize, 0);
     });
 
-    test('should keep a submission refused because of the credentials',
-        () async {
-      when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
-          .thenThrow(const SubsonicException(40, 'Wrong username or password'));
+    test(
+      'should keep a submission refused because of the credentials',
+      () async {
+        when(
+          mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')),
+        ).thenThrow(const SubsonicException(40, 'Wrong username or password'));
 
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
-      await Future.delayed(const Duration(milliseconds: 300));
+        await scrobbleQueue.initialize();
+        await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
+        await Future.delayed(const Duration(milliseconds: 300));
 
-      expect(scrobbleQueue.queueSize, 1);
-    });
+        expect(scrobbleQueue.queueSize, 1);
+      },
+    );
 
     test('should drop requests older than 7 days', () async {
       SharedPreferences.setMockInitialValues({
@@ -230,7 +237,8 @@ void main() {
       await scrobbleQueue.processQueue();
 
       verifyNever(
-          mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')));
+        mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')),
+      );
       expect(scrobbleQueue.queueSize, 0);
     });
 
@@ -267,9 +275,9 @@ void main() {
       });
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) async {
-        await Future.delayed(const Duration(milliseconds: 100));
-        throw Exception('Network error');
-      });
+            await Future.delayed(const Duration(milliseconds: 100));
+            throw Exception('Network error');
+          });
 
       await scrobbleQueue.initialize();
       await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
@@ -294,9 +302,9 @@ void main() {
       });
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) async {
-        await Future.delayed(const Duration(milliseconds: 100));
-        throw Exception('Network error');
-      });
+            await Future.delayed(const Duration(milliseconds: 100));
+            throw Exception('Network error');
+          });
 
       // Create and queue requests
       await scrobbleQueue.initialize();
@@ -350,8 +358,8 @@ void main() {
       });
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) async {
-        await Future.delayed(const Duration(milliseconds: 50));
-      });
+            await Future.delayed(const Duration(milliseconds: 50));
+          });
 
       await scrobbleQueue.initialize();
       await scrobbleQueue.queueNowPlaying('song1');
@@ -362,9 +370,9 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 800));
 
       verify(mockApi.scrobbleNowPlaying('song1')).called(1);
-      verify(mockApi.scrobbleSubmission('song2',
-              playedAt: anyNamed('playedAt')))
-          .called(1);
+      verify(
+        mockApi.scrobbleSubmission('song2', playedAt: anyNamed('playedAt')),
+      ).called(1);
       verify(mockApi.scrobbleNowPlaying('song3')).called(1);
       expect(scrobbleQueue.queueSize, 0);
     });
@@ -444,10 +452,14 @@ void main() {
 
       expect(restored.songId, request.songId);
       expect(restored.type, request.type);
-      expect(restored.playedAt?.millisecondsSinceEpoch,
-          request.playedAt?.millisecondsSinceEpoch);
-      expect(restored.queuedAt.millisecondsSinceEpoch,
-          request.queuedAt.millisecondsSinceEpoch);
+      expect(
+        restored.playedAt?.millisecondsSinceEpoch,
+        request.playedAt?.millisecondsSinceEpoch,
+      );
+      expect(
+        restored.queuedAt.millisecondsSinceEpoch,
+        request.queuedAt.millisecondsSinceEpoch,
+      );
     });
 
     test('should immediately try to process on enqueue', () async {
@@ -484,9 +496,9 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 300));
 
       // Should have been processed
-      verify(mockApi.scrobbleSubmission('song1',
-              playedAt: anyNamed('playedAt')))
-          .called(2);
+      verify(
+        mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
+      ).called(2);
       expect(scrobbleQueue.queueSize, 0);
     });
 

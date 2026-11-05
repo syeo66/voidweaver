@@ -15,8 +15,11 @@ class FakeSong {
   final String title;
   final Duration length;
 
-  const FakeSong(this.id, this.title,
-      {this.length = const Duration(seconds: 4)});
+  const FakeSong(
+    this.id,
+    this.title, {
+    this.length = const Duration(seconds: 4),
+  });
 }
 
 class FakeAlbum {
@@ -128,7 +131,10 @@ class FakeSubsonicServer {
       ..useCertificateChainBytes(utf8.encode(fakeServerCertificate))
       ..usePrivateKeyBytes(utf8.encode(fakeServerPrivateKey));
     _server = await HttpServer.bindSecure(
-        InternetAddress.loopbackIPv4, port, context);
+      InternetAddress.loopbackIPv4,
+      port,
+      context,
+    );
     _server!.listen((request) => unawaited(_handle(request)));
   }
 
@@ -145,16 +151,17 @@ class FakeSubsonicServer {
 
   /// The requests to [endpoint] so far
   List<FakeRequest> requestsTo(String endpoint) => [
-        for (final r in requests)
-          if (r.endpoint == endpoint) r
-      ];
+    for (final r in requests)
+      if (r.endpoint == endpoint) r,
+  ];
 
   Future<void> _handle(HttpRequest request) async {
     final response = request.response;
     try {
       final segments = request.uri.pathSegments;
-      var endpoint =
-          segments.length == 2 && segments[0] == 'rest' ? segments[1] : '';
+      var endpoint = segments.length == 2 && segments[0] == 'rest'
+          ? segments[1]
+          : '';
       if (endpoint.endsWith('.view')) {
         endpoint = endpoint.substring(0, endpoint.length - 5);
       }
@@ -180,11 +187,15 @@ class FakeSubsonicServer {
         case 'getRandomSongs':
           final size = int.tryParse(params['size'] ?? '') ?? 10;
           final songs = _songs.toList()..shuffle(_random);
-          return _xml(response,
-              '<randomSongs>${songs.take(size).map(_songXml).join()}</randomSongs>');
+          return _xml(
+            response,
+            '<randomSongs>${songs.take(size).map(_songXml).join()}</randomSongs>',
+          );
         case 'getScanStatus':
-          return _xml(response,
-              '<scanStatus scanning="false" count="${_songs.length}" lastScan="2026-01-01T00:00:00Z"/>');
+          return _xml(
+            response,
+            '<scanStatus scanning="false" count="${_songs.length}" lastScan="2026-01-01T00:00:00Z"/>',
+          );
         case 'scrobble':
           return _scrobble(response, params);
         case 'stream':
@@ -219,16 +230,20 @@ class FakeSubsonicServer {
 
   void _xml(HttpResponse response, String body) {
     response.headers.contentType = ContentType('application', 'xml');
-    response.write('<?xml version="1.0" encoding="UTF-8"?>'
-        '<subsonic-response xmlns="http://subsonic.org/restapi" status="ok" version="1.16.1" type="navidrome" serverVersion="fake" openSubsonic="true">'
-        '$body</subsonic-response>');
+    response.write(
+      '<?xml version="1.0" encoding="UTF-8"?>'
+      '<subsonic-response xmlns="http://subsonic.org/restapi" status="ok" version="1.16.1" type="navidrome" serverVersion="fake" openSubsonic="true">'
+      '$body</subsonic-response>',
+    );
   }
 
   void _xmlError(HttpResponse response, int code, String message) {
     response.headers.contentType = ContentType('application', 'xml');
-    response.write('<?xml version="1.0" encoding="UTF-8"?>'
-        '<subsonic-response xmlns="http://subsonic.org/restapi" status="failed" version="1.16.1" type="navidrome" serverVersion="fake" openSubsonic="true">'
-        '<error code="$code" message="${_escape(message)}"/></subsonic-response>');
+    response.write(
+      '<?xml version="1.0" encoding="UTF-8"?>'
+      '<subsonic-response xmlns="http://subsonic.org/restapi" status="failed" version="1.16.1" type="navidrome" serverVersion="fake" openSubsonic="true">'
+      '<error code="$code" message="${_escape(message)}"/></subsonic-response>',
+    );
   }
 
   static String _escape(String s) => s
@@ -238,8 +253,10 @@ class FakeSubsonicServer {
       .replaceAll('>', '&gt;');
 
   String _albumAttributes(FakeAlbum album) {
-    final duration =
-        album.songs.fold(0, (sum, song) => sum + song.length.inSeconds);
+    final duration = album.songs.fold(
+      0,
+      (sum, song) => sum + song.length.inSeconds,
+    );
     return 'id="${album.id}" name="${_escape(album.name)}" '
         'artist="${_escape(album.artist)}" artistId="${album.artistId}" '
         'coverArt="${album.id}" songCount="${album.songs.length}" '
@@ -261,15 +278,19 @@ class FakeSubsonicServer {
     final offset = int.tryParse(params['offset'] ?? '') ?? 0;
     final size = int.tryParse(params['size'] ?? '') ?? 10;
     final list = albums.skip(offset).take(size);
-    _xml(response,
-        '<albumList2>${list.map((a) => '<album ${_albumAttributes(a)}/>').join()}</albumList2>');
+    _xml(
+      response,
+      '<albumList2>${list.map((a) => '<album ${_albumAttributes(a)}/>').join()}</albumList2>',
+    );
   }
 
   void _album(HttpResponse response, String? id) {
     final album = albums.where((a) => a.id == id).firstOrNull;
     if (album == null) return _xmlError(response, 70, 'Album not found');
-    _xml(response,
-        '<album ${_albumAttributes(album)}>${album.songs.map(_songXml).join()}</album>');
+    _xml(
+      response,
+      '<album ${_albumAttributes(album)}>${album.songs.map(_songXml).join()}</album>',
+    );
   }
 
   Map<String, List<FakeAlbum>> get _albumsByArtist {
@@ -281,9 +302,11 @@ class FakeSubsonicServer {
   }
 
   void _artists(HttpResponse response) {
-    final entries = _albumsByArtist.entries.map((e) =>
-        '<index name="${e.key[0]}"><artist id="${e.value.first.artistId}" '
-        'name="${_escape(e.key)}" albumCount="${e.value.length}"/></index>');
+    final entries = _albumsByArtist.entries.map(
+      (e) =>
+          '<index name="${e.key[0]}"><artist id="${e.value.first.artistId}" '
+          'name="${_escape(e.key)}" albumCount="${e.value.length}"/></index>',
+    );
     _xml(response, '<artists>${entries.join()}</artists>');
   }
 
@@ -293,22 +316,29 @@ class FakeSubsonicServer {
         .firstOrNull;
     if (entry == null) return _xmlError(response, 70, 'Artist not found');
     _xml(
-        response,
-        '<artist id="$id" name="${_escape(entry.key)}" albumCount="${entry.value.length}">'
-        '${entry.value.map((a) => '<album ${_albumAttributes(a)}/>').join()}</artist>');
+      response,
+      '<artist id="$id" name="${_escape(entry.key)}" albumCount="${entry.value.length}">'
+      '${entry.value.map((a) => '<album ${_albumAttributes(a)}/>').join()}</artist>',
+    );
   }
 
   void _search(HttpResponse response, String query) {
     final q = query.replaceAll('"', '').toLowerCase();
     bool matches(String s) => s.toLowerCase().contains(q);
-    final artists = _albumsByArtist.entries.where((e) => matches(e.key)).map((e) =>
-        '<artist id="${e.value.first.artistId}" name="${_escape(e.key)}" albumCount="${e.value.length}"/>');
+    final artists = _albumsByArtist.entries
+        .where((e) => matches(e.key))
+        .map(
+          (e) =>
+              '<artist id="${e.value.first.artistId}" name="${_escape(e.key)}" albumCount="${e.value.length}"/>',
+        );
     final found = albums
         .where((a) => matches(a.name))
         .map((a) => '<album ${_albumAttributes(a)}/>');
     final songs = _songs.where((s) => matches(s.title)).map(_songXml);
-    _xml(response,
-        '<searchResult3>${artists.join()}${found.join()}${songs.join()}</searchResult3>');
+    _xml(
+      response,
+      '<searchResult3>${artists.join()}${found.join()}${songs.join()}</searchResult3>',
+    );
   }
 
   void _scrobble(HttpResponse response, Map<String, String> params) {
@@ -317,9 +347,13 @@ class FakeSubsonicServer {
       return _xmlError(response, 70, 'Song not found');
     }
     final time = int.tryParse(params['time'] ?? '');
-    scrobbles.add(FakeScrobble(id,
+    scrobbles.add(
+      FakeScrobble(
+        id,
         submission: params['submission'] != 'false',
-        time: time == null ? null : DateTime.fromMillisecondsSinceEpoch(time)));
+        time: time == null ? null : DateTime.fromMillisecondsSinceEpoch(time),
+      ),
+    );
     _xml(response, '');
   }
 
@@ -330,8 +364,10 @@ class FakeSubsonicServer {
     final response = request.response;
     final song = _songs.where((s) => s.id == id).firstOrNull;
     if (song == null) return _xmlError(response, 70, 'Song not found');
-    final bytes = _audio[song.id] ??=
-        _wav(song.length, 220.0 + 110 * _songs.toList().indexOf(song));
+    final bytes = _audio[song.id] ??= _wav(
+      song.length,
+      220.0 + 110 * _songs.toList().indexOf(song),
+    );
 
     response.headers.contentType = ContentType('audio', 'wav');
     response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
@@ -344,13 +380,17 @@ class FakeSubsonicServer {
       if (range[2]!.isNotEmpty) end = min(int.parse(range[2]!), end);
       if (start > end) {
         response.statusCode = HttpStatus.requestedRangeNotSatisfiable;
-        response.headers
-            .set(HttpHeaders.contentRangeHeader, 'bytes */${bytes.length}');
+        response.headers.set(
+          HttpHeaders.contentRangeHeader,
+          'bytes */${bytes.length}',
+        );
         return;
       }
       response.statusCode = HttpStatus.partialContent;
       response.headers.set(
-          HttpHeaders.contentRangeHeader, 'bytes $start-$end/${bytes.length}');
+        HttpHeaders.contentRangeHeader,
+        'bytes $start-$end/${bytes.length}',
+      );
     }
     response.contentLength = end - start + 1;
     if (request.method != 'HEAD') {
@@ -392,13 +432,16 @@ class FakeSubsonicServer {
 
   /// A 2x2 purple PNG
   static final _coverPng = base64Decode(
-      'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGNIM54JRAwQCgAg'
-      'ugTJFh6ueAAAAABJRU5ErkJggg==');
+    'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGNIM54JRAwQCgAg'
+    'ugTJFh6ueAAAAABJRU5ErkJggg==',
+  );
 }
 
 class _TrustFakeServer extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) =>
-      super.createHttpClient(SecurityContext(withTrustedRoots: false)
-        ..setTrustedCertificatesBytes(utf8.encode(fakeServerCa)));
+      super.createHttpClient(
+        SecurityContext(withTrustedRoots: false)
+          ..setTrustedCertificatesBytes(utf8.encode(fakeServerCa)),
+      );
 }

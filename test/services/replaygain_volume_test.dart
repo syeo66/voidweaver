@@ -24,56 +24,80 @@ void main() {
       await settings.setReplayGainPreamp(6);
 
       expect(
-          settings.calculateVolumeAdjustment(
-              trackGain: -8, albumGain: -6, trackPeak: 0.9, albumPeak: 0.9),
-          1.0);
+        settings.calculateVolumeAdjustment(
+          trackGain: -8,
+          albumGain: -6,
+          trackPeak: 0.9,
+          albumPeak: 0.9,
+        ),
+        1.0,
+      );
     });
 
     test('track uses the track gain', () async {
       await settings.setReplayGainMode(ReplayGainMode.track);
 
       expect(
-          settings.calculateVolumeAdjustment(
-              trackGain: -6, albumGain: -9, trackPeak: 0.5, albumPeak: 0.5),
-          closeTo(dbToLinear(-6), 1e-9));
+        settings.calculateVolumeAdjustment(
+          trackGain: -6,
+          albumGain: -9,
+          trackPeak: 0.5,
+          albumPeak: 0.5,
+        ),
+        closeTo(dbToLinear(-6), 1e-9),
+      );
     });
 
     test('album uses the album gain', () async {
       await settings.setReplayGainMode(ReplayGainMode.album);
 
       expect(
-          settings.calculateVolumeAdjustment(
-              trackGain: -6, albumGain: -9, trackPeak: 0.5, albumPeak: 0.5),
-          closeTo(dbToLinear(-9), 1e-9));
+        settings.calculateVolumeAdjustment(
+          trackGain: -6,
+          albumGain: -9,
+          trackPeak: 0.5,
+          albumPeak: 0.5,
+        ),
+        closeTo(dbToLinear(-9), 1e-9),
+      );
     });
 
     test('smart uses the album gain for an album', () async {
       await settings.setReplayGainMode(ReplayGainMode.smart);
 
       expect(
-          settings.calculateVolumeAdjustment(
-              trackGain: -6,
-              albumGain: -9,
-              trackPeak: 0.5,
-              albumPeak: 0.5,
-              fromAlbum: true),
-          closeTo(dbToLinear(-9), 1e-9));
+        settings.calculateVolumeAdjustment(
+          trackGain: -6,
+          albumGain: -9,
+          trackPeak: 0.5,
+          albumPeak: 0.5,
+          fromAlbum: true,
+        ),
+        closeTo(dbToLinear(-9), 1e-9),
+      );
     });
 
     test('smart uses the track gain outside an album', () async {
       await settings.setReplayGainMode(ReplayGainMode.smart);
 
       expect(
-          settings.calculateVolumeAdjustment(
-              trackGain: -6, albumGain: -9, trackPeak: 0.5, albumPeak: 0.5),
-          closeTo(dbToLinear(-6), 1e-9));
+        settings.calculateVolumeAdjustment(
+          trackGain: -6,
+          albumGain: -9,
+          trackPeak: 0.5,
+          albumPeak: 0.5,
+        ),
+        closeTo(dbToLinear(-6), 1e-9),
+      );
     });
 
     test('album falls back to the track gain', () async {
       await settings.setReplayGainMode(ReplayGainMode.album);
 
-      expect(settings.calculateVolumeAdjustment(trackGain: -6, trackPeak: 0.5),
-          closeTo(dbToLinear(-6), 1e-9));
+      expect(
+        settings.calculateVolumeAdjustment(trackGain: -6, trackPeak: 0.5),
+        closeTo(dbToLinear(-6), 1e-9),
+      );
     });
   });
 
@@ -83,7 +107,9 @@ void main() {
       await settings.setReplayGainFallbackGain(-3);
 
       expect(
-          settings.calculateVolumeAdjustment(), closeTo(dbToLinear(-3), 1e-9));
+        settings.calculateVolumeAdjustment(),
+        closeTo(dbToLinear(-3), 1e-9),
+      );
     });
 
     test('applies in album mode without track or album gain', () async {
@@ -91,15 +117,19 @@ void main() {
       await settings.setReplayGainFallbackGain(-3);
 
       expect(
-          settings.calculateVolumeAdjustment(), closeTo(dbToLinear(-3), 1e-9));
+        settings.calculateVolumeAdjustment(),
+        closeTo(dbToLinear(-3), 1e-9),
+      );
     });
 
     test('is ignored when the track has a gain', () async {
       await settings.setReplayGainMode(ReplayGainMode.track);
       await settings.setReplayGainFallbackGain(-3);
 
-      expect(settings.calculateVolumeAdjustment(trackGain: -6, trackPeak: 0.5),
-          closeTo(dbToLinear(-6), 1e-9));
+      expect(
+        settings.calculateVolumeAdjustment(trackGain: -6, trackPeak: 0.5),
+        closeTo(dbToLinear(-6), 1e-9),
+      );
     });
 
     test('is clamped to ±15 dB', () async {
@@ -115,8 +145,10 @@ void main() {
       await settings.setReplayGainMode(ReplayGainMode.track);
       await settings.setReplayGainPreamp(2);
 
-      expect(settings.calculateVolumeAdjustment(trackGain: -6, trackPeak: 0.5),
-          closeTo(dbToLinear(-4), 1e-9));
+      expect(
+        settings.calculateVolumeAdjustment(trackGain: -6, trackPeak: 0.5),
+        closeTo(dbToLinear(-4), 1e-9),
+      );
     });
 
     test('is added to the fallback gain', () async {
@@ -125,7 +157,9 @@ void main() {
       await settings.setReplayGainFallbackGain(-3);
 
       expect(
-          settings.calculateVolumeAdjustment(), closeTo(dbToLinear(-5), 1e-9));
+        settings.calculateVolumeAdjustment(),
+        closeTo(dbToLinear(-5), 1e-9),
+      );
     });
 
     test('is clamped to ±15 dB', () async {
@@ -147,25 +181,33 @@ void main() {
 
     test('lowers a gain that would push the peak above full scale', () {
       // +6 dB is about 2x, so a peak of 0.8 would reach 1.6
-      expect(settings.calculateVolumeAdjustment(trackGain: 6, trackPeak: 0.8),
-          closeTo(1 / 0.8, 1e-9));
+      expect(
+        settings.calculateVolumeAdjustment(trackGain: 6, trackPeak: 0.8),
+        closeTo(1 / 0.8, 1e-9),
+      );
     });
 
     test('keeps a positive gain that stays below full scale', () {
-      expect(settings.calculateVolumeAdjustment(trackGain: 6, trackPeak: 0.4),
-          closeTo(dbToLinear(6), 1e-9));
+      expect(
+        settings.calculateVolumeAdjustment(trackGain: 6, trackPeak: 0.4),
+        closeTo(dbToLinear(6), 1e-9),
+      );
     });
 
     test('limits the preamp too', () async {
       await settings.setReplayGainPreamp(6);
 
-      expect(settings.calculateVolumeAdjustment(trackGain: 0, trackPeak: 0.8),
-          closeTo(1 / 0.8, 1e-9));
+      expect(
+        settings.calculateVolumeAdjustment(trackGain: 0, trackPeak: 0.8),
+        closeTo(1 / 0.8, 1e-9),
+      );
     });
 
     test('leaves a negative gain alone', () {
-      expect(settings.calculateVolumeAdjustment(trackGain: -6, trackPeak: 1.2),
-          closeTo(dbToLinear(-6), 1e-9));
+      expect(
+        settings.calculateVolumeAdjustment(trackGain: -6, trackPeak: 1.2),
+        closeTo(dbToLinear(-6), 1e-9),
+      );
     });
 
     test('assumes full scale without a peak, so no gain above 1', () {
@@ -176,25 +218,35 @@ void main() {
       await settings.setReplayGainMode(ReplayGainMode.album);
 
       expect(
-          settings.calculateVolumeAdjustment(
-              albumGain: 6, albumPeak: 0.9, trackPeak: 0.5),
-          closeTo(1 / 0.9, 1e-9));
+        settings.calculateVolumeAdjustment(
+          albumGain: 6,
+          albumPeak: 0.9,
+          trackPeak: 0.5,
+        ),
+        closeTo(1 / 0.9, 1e-9),
+      );
     });
 
     test('falls back to the track peak in album mode', () async {
       await settings.setReplayGainMode(ReplayGainMode.album);
 
-      expect(settings.calculateVolumeAdjustment(albumGain: 6, trackPeak: 0.8),
-          closeTo(1 / 0.8, 1e-9));
+      expect(
+        settings.calculateVolumeAdjustment(albumGain: 6, trackPeak: 0.8),
+        closeTo(1 / 0.8, 1e-9),
+      );
     });
 
     test('off lets the gain go above full scale', () async {
       await settings.setReplayGainPreventClipping(false);
 
-      expect(settings.calculateVolumeAdjustment(trackGain: 6, trackPeak: 0.8),
-          closeTo(dbToLinear(6), 1e-9));
-      expect(settings.calculateVolumeAdjustment(trackGain: 6),
-          closeTo(dbToLinear(6), 1e-9));
+      expect(
+        settings.calculateVolumeAdjustment(trackGain: 6, trackPeak: 0.8),
+        closeTo(dbToLinear(6), 1e-9),
+      );
+      expect(
+        settings.calculateVolumeAdjustment(trackGain: 6),
+        closeTo(dbToLinear(6), 1e-9),
+      );
     });
   });
 
@@ -208,24 +260,30 @@ void main() {
       await settings.setReplayGainMode(ReplayGainMode.track);
 
       for (final gain in [60.0, -45.0, double.nan, double.infinity]) {
-        expect(settings.calculateVolumeAdjustment(trackGain: gain),
-            closeTo(dbToLinear(-4), 1e-9),
-            reason: 'trackGain $gain');
+        expect(
+          settings.calculateVolumeAdjustment(trackGain: gain),
+          closeTo(dbToLinear(-4), 1e-9),
+          reason: 'trackGain $gain',
+        );
       }
     });
 
     test('the limit itself is still used', () async {
       await settings.setReplayGainMode(ReplayGainMode.track);
 
-      expect(settings.calculateVolumeAdjustment(trackGain: -30),
-          closeTo(dbToLinear(-30), 1e-9));
+      expect(
+        settings.calculateVolumeAdjustment(trackGain: -30),
+        closeTo(dbToLinear(-30), 1e-9),
+      );
     });
 
     test('album mode falls back to the track gain', () async {
       await settings.setReplayGainMode(ReplayGainMode.album);
 
-      expect(settings.calculateVolumeAdjustment(trackGain: -6, albumGain: 99),
-          closeTo(dbToLinear(-6), 1e-9));
+      expect(
+        settings.calculateVolumeAdjustment(trackGain: -6, albumGain: 99),
+        closeTo(dbToLinear(-6), 1e-9),
+      );
     });
 
     test('a peak out of range counts as missing', () async {
@@ -235,9 +293,10 @@ void main() {
       // Without a usable peak, full scale is assumed: no gain above 1
       for (final peak in [0.0, -0.5, 32768.0, double.nan]) {
         expect(
-            settings.calculateVolumeAdjustment(trackGain: 6, trackPeak: peak),
-            closeTo(1.0, 1e-9),
-            reason: 'trackPeak $peak');
+          settings.calculateVolumeAdjustment(trackGain: 6, trackPeak: peak),
+          closeTo(1.0, 1e-9),
+          reason: 'trackPeak $peak',
+        );
       }
     });
 
@@ -246,9 +305,13 @@ void main() {
       await settings.setReplayGainPreventClipping(true);
 
       expect(
-          settings.calculateVolumeAdjustment(
-              albumGain: 6, trackPeak: 0.5, albumPeak: 1000),
-          closeTo(dbToLinear(6), 1e-9));
+        settings.calculateVolumeAdjustment(
+          albumGain: 6,
+          trackPeak: 0.5,
+          albumPeak: 1000,
+        ),
+        closeTo(dbToLinear(6), 1e-9),
+      );
     });
   });
 
@@ -266,7 +329,9 @@ void main() {
     expect(restarted.replayGainPreamp, 3);
     expect(restarted.replayGainPreventClipping, isFalse);
     expect(restarted.replayGainFallbackGain, -4);
-    expect(restarted.calculateVolumeAdjustment(albumGain: -7),
-        closeTo(dbToLinear(-4), 1e-9));
+    expect(
+      restarted.calculateVolumeAdjustment(albumGain: -7),
+      closeTo(dbToLinear(-4), 1e-9),
+    );
   });
 }

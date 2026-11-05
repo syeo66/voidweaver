@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logging/logging.dart';
 import 'package:voidweaver_player/voidweaver_player.dart' show MediaCache;
+
 import 'subsonic_api.dart';
 import '../models/album_list_type.dart';
 import 'audio_player_service.dart';
@@ -19,19 +21,9 @@ import '../utils/validators.dart';
 
 final _log = Logger('app_state');
 
-enum SyncStatus {
-  idle,
-  syncing,
-  success,
-  error,
-}
+enum SyncStatus { idle, syncing, success, error }
 
-enum LoadingState {
-  idle,
-  loading,
-  success,
-  error,
-}
+enum LoadingState { idle, loading, success, error }
 
 class AppState extends ChangeNotifier {
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage(
@@ -130,8 +122,12 @@ class AppState extends ChangeNotifier {
   /// login) the server is pinged first, so an unreachable server or wrong
   /// credentials fail here. Saved credentials aren't checked, so the app
   /// still starts offline.
-  Future<void> configure(String serverUrl, String username, String password,
-      {bool verifyCredentials = false}) async {
+  Future<void> configure(
+    String serverUrl,
+    String username,
+    String password, {
+    bool verifyCredentials = false,
+  }) async {
     serverUrl = Validators.normalizeServerUrl(serverUrl);
     _configurationLoadingState = LoadingState.loading;
     _configurationError = null;
@@ -258,11 +254,13 @@ class AppState extends ChangeNotifier {
     final timeouts = (config.connectionTimeout, config.streamingTimeout);
     if (timeouts == _playerTimeouts) return;
     _playerTimeouts = timeouts;
-    unawaited(const MediaCache()
-        .setTimeouts(connect: timeouts.$1, read: timeouts.$2)
-        .catchError((Object e) {
-      _log.warning('Could not set the player\'s timeouts', e);
-    }));
+    unawaited(
+      const MediaCache()
+          .setTimeouts(connect: timeouts.$1, read: timeouts.$2)
+          .catchError((Object e) {
+            _log.warning('Could not set the player\'s timeouts', e);
+          }),
+    );
   }
 
   /// Removes downloaded audio, cached library data and cover art.
@@ -295,8 +293,10 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final albums =
-          await api.getAlbumList(type: type, forceRefresh: forceRefresh);
+      final albums = await api.getAlbumList(
+        type: type,
+        forceRefresh: forceRefresh,
+      );
       // Logged out or switched to the other order meanwhile, in which case
       // the load for that order finishes
       if (!identical(api, _api) || type != albumListType) return;
@@ -304,8 +304,10 @@ class AppState extends ChangeNotifier {
       _lastSyncTime = DateTime.now();
     } catch (e) {
       if (!identical(api, _api) || type != albumListType) return;
-      _albumError = NetworkErrorHelper.getErrorMessage(e,
-          context: 'Failed to load albums');
+      _albumError = NetworkErrorHelper.getErrorMessage(
+        e,
+        context: 'Failed to load albums',
+      );
     }
     _isLoading = false;
     notifyListeners();
@@ -407,15 +409,19 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _saveServerConfig(
-      String serverUrl, String username, String password) async {
+    String serverUrl,
+    String username,
+    String password,
+  ) async {
     try {
       await _secureStorage.write(
-          key: credentialsKey,
-          value: jsonEncode({
-            'serverUrl': serverUrl,
-            'username': username,
-            'password': password,
-          }));
+        key: credentialsKey,
+        value: jsonEncode({
+          'serverUrl': serverUrl,
+          'username': username,
+          'password': password,
+        }),
+      );
       _savedCredentials = (serverUrl, username, password);
     } catch (e) {
       // Unknown whether it was written

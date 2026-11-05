@@ -49,19 +49,24 @@ void main() {
   setUp(() => player = _FakePlayer());
 
   // Grid tile size by default; a list tile is as wide as the screen
-  Future<void> pump(WidgetTester tester, Widget tile,
-          {AudioPlayerService? withPlayer, Size size = const Size(200, 260)}) =>
-      tester.pumpWidget(ChangeNotifierProvider<AppState>(
-        create: (_) => _FakeAppState(withPlayer ?? player),
-        child: MaterialApp(
-          home: Scaffold(
-            body: Align(
-              alignment: Alignment.topLeft,
-              child: SizedBox.fromSize(size: size, child: tile),
-            ),
+  Future<void> pump(
+    WidgetTester tester,
+    Widget tile, {
+    AudioPlayerService? withPlayer,
+    Size size = const Size(200, 260),
+  }) => tester.pumpWidget(
+    ChangeNotifierProvider<AppState>(
+      create: (_) => _FakeAppState(withPlayer ?? player),
+      child: MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox.fromSize(size: size, child: tile),
           ),
         ),
-      ));
+      ),
+    ),
+  );
 
   group('AlbumTile', () {
     testWidgets('shows the album and its length', (tester) async {
@@ -83,8 +88,9 @@ void main() {
       expect(player.played, [album]);
     });
 
-    testWidgets('shows a spinner while starting and ignores another tap',
-        (tester) async {
+    testWidgets('shows a spinner while starting and ignores another tap', (
+      tester,
+    ) async {
       await pump(tester, AlbumTile(album: album), size: const Size(400, 100));
 
       await tester.tap(find.text('Some Album'));
@@ -130,25 +136,33 @@ void main() {
 
       await tester.tap(find.text('Some Album'));
       await tester.pump();
-      player.result
-          .completeError(const UserFacingException('Album has no songs'));
+      player.result.completeError(
+        const UserFacingException('Album has no songs'),
+      );
       await tester.pump();
 
-      expect(find.text('Failed to play album: Album has no songs'),
-          findsOneWidget);
+      expect(
+        find.text('Failed to play album: Album has no songs'),
+        findsOneWidget,
+      );
       expect(find.byType(CircularProgressIndicator), findsNothing);
     });
 
     testWidgets('does nothing without a player', (tester) async {
-      await tester.pumpWidget(ChangeNotifierProvider<AppState>(
-        create: (_) => _FakeAppState(null),
-        child: MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-                width: 200, height: 260, child: AlbumGridTile(album: album)),
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppState>(
+          create: (_) => _FakeAppState(null),
+          child: MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 200,
+                height: 260,
+                child: AlbumGridTile(album: album),
+              ),
+            ),
           ),
         ),
-      ));
+      );
 
       await tester.tap(find.text('Some Album'));
       await tester.pump();

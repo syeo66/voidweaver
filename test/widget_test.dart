@@ -9,8 +9,9 @@ import 'package:voidweaver/main.dart';
 import 'package:voidweaver/services/app_state.dart';
 
 void main() {
-  testWidgets('App can be instantiated without errors',
-      (WidgetTester tester) async {
+  testWidgets('App can be instantiated without errors', (
+    WidgetTester tester,
+  ) async {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const MyApp());
 
@@ -28,8 +29,9 @@ void main() {
     expect(app.title, equals('Voidweaver'));
   });
 
-  testWidgets('App supports both light and dark themes',
-      (WidgetTester tester) async {
+  testWidgets('App supports both light and dark themes', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(const MyApp());
     await tester.pump();
 
@@ -43,11 +45,14 @@ void main() {
     SharedPreferences.setMockInitialValues({'themeMode': ThemeMode.dark.index});
     await tester.pumpWidget(const MyApp());
     // Initialization does real I/O, so let it run outside the fake clock
-    for (var i = 0;
-        i < 50 && find.byType(CircularProgressIndicator).evaluate().isNotEmpty;
-        i++) {
+    for (
+      var i = 0;
+      i < 50 && find.byType(CircularProgressIndicator).evaluate().isNotEmpty;
+      i++
+    ) {
       await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)));
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
       await tester.pump();
     }
 
@@ -58,8 +63,9 @@ void main() {
     expect(themeMode(), equals(ThemeMode.dark));
 
     final appState = Provider.of<AppState>(
-        tester.element(find.byType(AppRouter)),
-        listen: false);
+      tester.element(find.byType(AppRouter)),
+      listen: false,
+    );
     await appState.settingsService!.setThemeMode(ThemeMode.light);
     await tester.pump();
     expect(themeMode(), equals(ThemeMode.light));

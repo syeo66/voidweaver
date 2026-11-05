@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import '../../services/settings_service.dart';
 import '../../utils/validators.dart';
 import 'settings_snackbars.dart';
@@ -27,8 +29,8 @@ class ScrobblingSection extends StatelessWidget {
               'A song is scrobbled once it has played for the minimum time '
               'or reached the percentage threshold below, whichever comes first.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 16),
 
@@ -50,7 +52,8 @@ class ScrobblingSection extends StatelessWidget {
                     Validators.validateScrobbleMinPlayTimeMinutes(value);
                 if (validationError == null) {
                   unawaited(
-                      settingsService.setScrobbleMinPlayTimeMinutes(value));
+                    settingsService.setScrobbleMinPlayTimeMinutes(value),
+                  );
                 } else {
                   showSettingsError(context, validationError);
                 }
@@ -59,8 +62,8 @@ class ScrobblingSection extends StatelessWidget {
             Text(
               'Scrobble once a song has played for this long',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
 
             const SizedBox(height: 16),
@@ -90,8 +93,8 @@ class ScrobblingSection extends StatelessWidget {
             Text(
               'Scrobble once this percentage of a song has played',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),

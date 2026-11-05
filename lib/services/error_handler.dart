@@ -41,7 +41,10 @@ class ErrorHandler {
   }
 
   FlutterErrorDetails _errorDetails(
-      Object error, StackTrace? stackTrace, String context) {
+    Object error,
+    StackTrace? stackTrace,
+    String context,
+  ) {
     return FlutterErrorDetails(
       exception: error,
       stack: stackTrace,
@@ -75,7 +78,8 @@ class ErrorHandler {
   /// Manually report an error that was caught and handled
   void reportError(Object error, StackTrace? stackTrace, {String? context}) {
     _handleFlutterError(
-        _errorDetails(error, stackTrace, context ?? 'Manually reported error'));
+      _errorDetails(error, stackTrace, context ?? 'Manually reported error'),
+    );
   }
 }
 
@@ -89,7 +93,10 @@ abstract class ErrorReporter {
 class ConsoleErrorReporter implements ErrorReporter {
   @override
   void reportError(FlutterErrorDetails details) {
-    _log.severe(details.context?.toString() ?? 'Uncaught error',
-        details.exception, details.stack);
+    _log.severe(
+      details.context?.toString() ?? 'Uncaught error',
+      details.exception,
+      details.stack,
+    );
   }
 }

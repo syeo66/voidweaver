@@ -16,10 +16,11 @@ void main() {
       // Mock the SharedPreferences plugin for testing
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(
-              const MethodChannel('plugins.flutter.io/shared_preferences'),
-              (MethodCall methodCall) async {
-        return <String, dynamic>{};
-      });
+            const MethodChannel('plugins.flutter.io/shared_preferences'),
+            (MethodCall methodCall) async {
+              return <String, dynamic>{};
+            },
+          );
 
       expect(
         () => SubsonicApi(
@@ -38,11 +39,13 @@ void main() {
           username: 'testuser',
           password: 'testpass',
         ),
-        throwsA(isA<ArgumentError>().having(
-          (e) => e.message,
-          'message',
-          contains('Server URL must use HTTPS protocol for security'),
-        )),
+        throwsA(
+          isA<ArgumentError>().having(
+            (e) => e.message,
+            'message',
+            contains('Server URL must use HTTPS protocol for security'),
+          ),
+        ),
       );
     });
 
@@ -53,11 +56,13 @@ void main() {
           username: 'testuser',
           password: 'testpass',
         ),
-        throwsA(isA<ArgumentError>().having(
-          (e) => e.message,
-          'message',
-          contains('Server URL must use HTTPS protocol for security'),
-        )),
+        throwsA(
+          isA<ArgumentError>().having(
+            (e) => e.message,
+            'message',
+            contains('Server URL must use HTTPS protocol for security'),
+          ),
+        ),
       );
     });
 
@@ -68,11 +73,13 @@ void main() {
           username: 'testuser',
           password: 'testpass',
         ),
-        throwsA(isA<ArgumentError>().having(
-          (e) => e.message,
-          'message',
-          contains('Server URL must use HTTPS protocol for security'),
-        )),
+        throwsA(
+          isA<ArgumentError>().having(
+            (e) => e.message,
+            'message',
+            contains('Server URL must use HTTPS protocol for security'),
+          ),
+        ),
       );
     });
 
@@ -80,10 +87,11 @@ void main() {
       // Mock the SharedPreferences plugin for testing
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(
-              const MethodChannel('plugins.flutter.io/shared_preferences'),
-              (MethodCall methodCall) async {
-        return <String, dynamic>{};
-      });
+            const MethodChannel('plugins.flutter.io/shared_preferences'),
+            (MethodCall methodCall) async {
+              return <String, dynamic>{};
+            },
+          );
 
       final api = SubsonicApi(
         serverUrl: 'https://demo.navidrome.org',
@@ -114,7 +122,9 @@ void main() {
     // A connection error, which other requests retry
     final refused = SocketException('Connection refused');
     final config = NetworkConfig.defaultConfig.copyWith(
-        initialRetryDelay: Duration.zero, maxRetryDelay: Duration.zero);
+      initialRetryDelay: Duration.zero,
+      maxRetryDelay: Duration.zero,
+    );
 
     Future<int> attemptsOf(Future<void> Function(SubsonicApi api) request) {
       final client = _ThrowingHttpClient(refused);
@@ -139,9 +149,12 @@ void main() {
     // ScrobbleQueue retries it later
     test('send a scrobble submission only once', () async {
       expect(
-          await attemptsOf((api) =>
-              api.scrobbleSubmission('song1', playedAt: DateTime(2026, 11, 2))),
-          1);
+        await attemptsOf(
+          (api) =>
+              api.scrobbleSubmission('song1', playedAt: DateTime(2026, 11, 2)),
+        ),
+        1,
+      );
     });
   });
 
@@ -196,40 +209,53 @@ void main() {
     });
 
     test('differs between servers for the same id', () {
-      expect(apiFor('https://a.example.com').coverArtCacheKey('al-1'),
-          isNot(apiFor('https://b.example.com').coverArtCacheKey('al-1')));
+      expect(
+        apiFor('https://a.example.com').coverArtCacheKey('al-1'),
+        isNot(apiFor('https://b.example.com').coverArtCacheKey('al-1')),
+      );
     });
 
     test('differs between sizes, which the URL requests', () {
       final api = apiFor('https://a.example.com');
 
-      expect(api.coverArtCacheKey('al-1', size: 150),
-          isNot(api.coverArtCacheKey('al-1', size: 600)));
       expect(
-          Uri.parse(api.getCoverArtUrl('al-1', size: 600))
-              .queryParameters['size'],
-          '600');
+        api.coverArtCacheKey('al-1', size: 150),
+        isNot(api.coverArtCacheKey('al-1', size: 600)),
+      );
+      expect(
+        Uri.parse(api.getCoverArtUrl('al-1', size: 600))
+            .queryParameters['size'],
+        '600',
+      );
     });
   });
 
   group('SubsonicApi.libraryVersionFrom', () {
-    String? versionOf(String scanStatus) =>
-        SubsonicApi.libraryVersionFrom(SubsonicApi.parseResponse(
-            '<subsonic-response xmlns="http://subsonic.org/restapi" '
-            'status="ok" version="1.16.1">$scanStatus</subsonic-response>'));
+    String? versionOf(String scanStatus) => SubsonicApi.libraryVersionFrom(
+      SubsonicApi.parseResponse(
+        '<subsonic-response xmlns="http://subsonic.org/restapi" '
+        'status="ok" version="1.16.1">$scanStatus</subsonic-response>',
+      ),
+    );
 
     test('combines the last scan and the song count', () {
       expect(
-          versionOf('<scanStatus scanning="false" count="1234" '
-              'folderCount="12" lastScan="2026-10-19T08:00:00Z"/>'),
-          '2026-10-19T08:00:00Z/1234');
+        versionOf(
+          '<scanStatus scanning="false" count="1234" '
+          'folderCount="12" lastScan="2026-10-19T08:00:00Z"/>',
+        ),
+        '2026-10-19T08:00:00Z/1234',
+      );
     });
 
     test('is unknown while scanning', () {
       expect(
-          versionOf('<scanStatus scanning="true" count="1000" '
-              'lastScan="2026-10-19T08:00:00Z"/>'),
-          isNull);
+        versionOf(
+          '<scanStatus scanning="true" count="1000" '
+          'lastScan="2026-10-19T08:00:00Z"/>',
+        ),
+        isNull,
+      );
     });
 
     test('is unknown without the last scan', () {
@@ -240,30 +266,38 @@ void main() {
   group('SubsonicApi.parseResponse', () {
     test('returns the document for an ok response', () {
       final doc = SubsonicApi.parseResponse(
-          '<subsonic-response xmlns="http://subsonic.org/restapi" '
-          'status="ok" version="1.16.1"/>');
+        '<subsonic-response xmlns="http://subsonic.org/restapi" '
+        'status="ok" version="1.16.1"/>',
+      );
       expect(doc.rootElement.getAttribute('status'), 'ok');
     });
 
     test('throws the server error for a failed response', () {
       expect(
         () => SubsonicApi.parseResponse(
-            '<subsonic-response xmlns="http://subsonic.org/restapi" '
-            'status="failed" version="1.16.1">'
-            '<error code="40" message="Wrong username or password"/>'
-            '</subsonic-response>'),
-        throwsA(isA<SubsonicException>()
-            .having((e) => e.code, 'code', 40)
-            .having((e) => e.isAuthError, 'isAuthError', isTrue)
-            .having(
-                (e) => e.toString(), 'message', 'Wrong username or password')),
+          '<subsonic-response xmlns="http://subsonic.org/restapi" '
+          'status="failed" version="1.16.1">'
+          '<error code="40" message="Wrong username or password"/>'
+          '</subsonic-response>',
+        ),
+        throwsA(
+          isA<SubsonicException>()
+              .having((e) => e.code, 'code', 40)
+              .having((e) => e.isAuthError, 'isAuthError', isTrue)
+              .having(
+                (e) => e.toString(),
+                'message',
+                'Wrong username or password',
+              ),
+        ),
       );
     });
 
     test('throws for a failed response without an error element', () {
       expect(
         () => SubsonicApi.parseResponse(
-            '<subsonic-response status="failed" version="1.16.1"/>'),
+          '<subsonic-response status="failed" version="1.16.1"/>',
+        ),
         throwsA(isA<SubsonicException>().having((e) => e.code, 'code', null)),
       );
     });
@@ -279,11 +313,14 @@ void main() {
 
     test('parses albums on another isolate', () async {
       final albums = await SubsonicApi.parseInBackground(
-          bytes('<subsonic-response status="ok"><albumList2>'
-              '<album id="1" name="Müde" artist="A" songCount="3"/>'
-              '<album id="2" name="Second" artist="B"/>'
-              '</albumList2></subsonic-response>'),
-          SubsonicApi.albumsFromXml);
+        bytes(
+          '<subsonic-response status="ok"><albumList2>'
+          '<album id="1" name="Müde" artist="A" songCount="3"/>'
+          '<album id="2" name="Second" artist="B"/>'
+          '</albumList2></subsonic-response>',
+        ),
+        SubsonicApi.albumsFromXml,
+      );
 
       expect(albums.map((a) => a.name), ['Müde', 'Second']);
       expect(albums.first.songCount, 3);
@@ -292,21 +329,29 @@ void main() {
     test('keeps the type and code of a server error', () async {
       await expectLater(
         SubsonicApi.parseInBackground(
-            bytes('<subsonic-response status="failed">'
-                '<error code="40" message="Wrong username or password"/>'
-                '</subsonic-response>'),
-            SubsonicApi.albumsFromXml),
-        throwsA(isA<SubsonicException>()
-            .having((e) => e.isAuthError, 'isAuthError', isTrue)),
+          bytes(
+            '<subsonic-response status="failed">'
+            '<error code="40" message="Wrong username or password"/>'
+            '</subsonic-response>',
+          ),
+          SubsonicApi.albumsFromXml,
+        ),
+        throwsA(
+          isA<SubsonicException>().having(
+            (e) => e.isAuthError,
+            'isAuthError',
+            isTrue,
+          ),
+        ),
       );
     });
   });
 
   group('SubsonicApi.fetchAllAlbumPages', () {
     List<Album> albums(int from, int count) => [
-          for (var i = from; i < from + count; i++)
-            Album(id: 'a$i', name: 'Album $i', artist: 'Artist', songs: [])
-        ];
+      for (var i = from; i < from + count; i++)
+        Album(id: 'a$i', name: 'Album $i', artist: 'Artist', songs: []),
+    ];
 
     test('requests pages until one comes back short', () async {
       final offsets = <int>[];
@@ -357,21 +402,22 @@ void main() {
       );
 
       expect(
-          song.copyWith(replayGainTrackGain: -6.5),
-          Song(
-            id: '1',
-            title: 'Title',
-            artist: 'Artist',
-            album: 'Album',
-            albumId: 'al1',
-            coverArt: 'cover',
-            duration: 200,
-            track: 3,
-            contentType: 'audio/flac',
-            suffix: 'flac',
-            replayGainTrackGain: -6.5,
-            replayGainTrackPeak: 0.9,
-          ));
+        song.copyWith(replayGainTrackGain: -6.5),
+        Song(
+          id: '1',
+          title: 'Title',
+          artist: 'Artist',
+          album: 'Album',
+          albumId: 'al1',
+          coverArt: 'cover',
+          duration: 200,
+          track: 3,
+          contentType: 'audio/flac',
+          suffix: 'flac',
+          replayGainTrackGain: -6.5,
+          replayGainTrackPeak: 0.9,
+        ),
+      );
     });
   });
 }
@@ -379,7 +425,7 @@ void main() {
 /// An HTTP client whose requests fail with an error the API doesn't expect.
 class _ThrowingHttpClient implements HttpClient {
   _ThrowingHttpClient([Object? error])
-      : error = error ?? StateError('unexpected');
+    : error = error ?? StateError('unexpected');
 
   /// What every request fails with
   final Object error;

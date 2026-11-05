@@ -3,12 +3,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
+
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:xml/xml.dart';
 import 'package:logging/logging.dart';
+
 import '../models/album_list_type.dart';
 import '../models/subsonic_models.dart';
 import 'api_cache.dart';
@@ -63,10 +65,9 @@ class SubsonicApi {
   SubsonicApi({
     required this.serverUrl,
     required this.username,
-    required String password,
+    required this._password,
     NetworkConfig? networkConfig,
-  })  : _password = password,
-        _networkConfig = networkConfig ?? NetworkConfig.defaultConfig {
+  }) : _networkConfig = networkConfig ?? NetworkConfig.defaultConfig {
     // Enforce HTTPS for security
     final uri = Uri.tryParse(serverUrl);
     if (uri == null || uri.scheme.toLowerCase() != 'https') {
@@ -134,8 +135,11 @@ class SubsonicApi {
     NetworkRequestType requestType = NetworkRequestType.metadata,
     bool retry = true,
   ]) async {
-    return _watchCredentials(() async => _parseBody(
-        await _fetchBody(endpoint, extraParams, requestType, retry: retry)));
+    return _watchCredentials(
+      () async => _parseBody(
+        await _fetchBody(endpoint, extraParams, requestType, retry: retry),
+      ),
+    );
   }
 
   /// Runs [request], updating [credentialsRejected] from its outcome
@@ -168,16 +172,21 @@ class SubsonicApi {
     NetworkRequestType requestType,
     T Function(XmlDocument doc) parse,
   ) async {
-    return _watchCredentials(() async => parseInBackground(
-        await _fetchBody(endpoint, extraParams, requestType), parse));
+    return _watchCredentials(
+      () async => parseInBackground(
+        await _fetchBody(endpoint, extraParams, requestType),
+        parse,
+      ),
+    );
   }
 
   /// Parses [body] with [parse] on a background isolate. Static, so the
   /// closure sent to the isolate can't capture an API (and its HTTP client).
   @visibleForTesting
   static Future<T> parseInBackground<T>(
-          Uint8List body, T Function(XmlDocument doc) parse) =>
-      Isolate.run(() => parse(_parseBody(body)));
+    Uint8List body,
+    T Function(XmlDocument doc) parse,
+  ) => Isolate.run(() => parse(_parseBody(body)));
 
   static XmlDocument _parseBody(Uint8List body) =>
       parseResponse(utf8.decode(body, allowMalformed: true));
@@ -194,8 +203,8 @@ class SubsonicApi {
       params.addAll(extraParams);
     }
 
-    final uri =
-        Uri.parse('$serverUrl/rest/$endpoint').replace(queryParameters: params);
+    final uri = Uri.parse('$serverUrl/rest/$endpoint')
+        .replace(queryParameters: params);
 
     try {
       final response = await _retryService.getWithRetry(
@@ -247,9 +256,8 @@ class SubsonicApi {
 
   @visibleForTesting
   static List<Album> albumsFromXml(XmlDocument doc) => [
-        for (final element in doc.findAllElements('album'))
-          Album.fromXml(element)
-      ];
+    for (final element in doc.findAllElements('album')) Album.fromXml(element),
+  ];
 
   static List<Album> _albumsFromJson(dynamic json) => (json as List<dynamic>)
       .map((a) => Album.fromJson(a as Map<String, dynamic>))
@@ -268,18 +276,16 @@ class SubsonicApi {
   /// [AlbumListType.recent] is only the first page: its order changes with
   /// every play, so it's fetched again whenever it expires, and nobody
   /// scrolls past the last 500 albums played.
-  Future<List<Album>> getAlbumList(
-      {AlbumListType type = AlbumListType.recent,
-      bool forceRefresh = false}) async {
+  Future<List<Album>> getAlbumList({
+    AlbumListType type = AlbumListType.recent,
+    bool forceRefresh = false,
+  }) async {
     Future<List<Album>> fetchPage(int offset) => _makeLargeRequest(
-        'getAlbumList2',
-        {
-          'type': type.name,
-          'size': '$_albumPageSize',
-          'offset': '$offset',
-        },
-        NetworkRequestType.metadata,
-        albumsFromXml);
+      'getAlbumList2',
+      {'type': type.name, 'size': '$_albumPageSize', 'offset': '$offset'},
+      NetworkRequestType.metadata,
+      albumsFromXml,
+    );
 
     return await _cache.getOrFetch<List<Album>>(
       'getAlbumList2',
@@ -303,7 +309,10 @@ class SubsonicApi {
     final XmlDocument doc;
     try {
       doc = await _makeRequest(
-          'getScanStatus', null, NetworkRequestType.metadata);
+        'getScanStatus',
+        null,
+        NetworkRequestType.metadata,
+      );
     } on SubsonicException catch (e) {
       // Not supported, or not allowed for this user
       _log.fine('getScanStatus failed', e);
@@ -330,15 +339,16 @@ class SubsonicApi {
   /// album added between requests shifts the pages by one.
   @visibleForTesting
   static Future<List<Album>> fetchAllAlbumPages(
-      Future<List<Album>> Function(int offset) fetchPage,
-      {int pageSize = _albumPageSize}) async {
+    Future<List<Album>> Function(int offset) fetchPage, {
+    int pageSize = _albumPageSize,
+  }) async {
     final albums = <Album>[];
     final seen = <String>{};
     while (true) {
       final page = await fetchPage(albums.length);
       final added = [
         for (final album in page)
-          if (seen.add(album.id)) album
+          if (seen.add(album.id)) album,
       ];
       albums.addAll(added);
       if (page.length < pageSize || added.isEmpty) return albums;
@@ -350,8 +360,9 @@ class SubsonicApi {
       'getAlbum',
       {'id': id},
       () async {
-        final doc = await _makeRequest(
-            'getAlbum', {'id': id}, NetworkRequestType.metadata);
+        final doc = await _makeRequest('getAlbum', {
+          'id': id,
+        }, NetworkRequestType.metadata);
         final albumElements = doc.findAllElements('album');
         if (albumElements.isEmpty) {
           _log.fine(() => 'getAlbum response for ID $id: ${doc.toXmlString()}');
@@ -369,10 +380,11 @@ class SubsonicApi {
   /// A fresh pick of random songs on every call. Not cached: subsoxy weights
   /// each pick by the listening history, so a repeated call must reach it.
   Future<List<Song>> getRandomSongs([int count = 50]) async {
-    final doc =
-        await _makeRequest('getRandomSongs', {'size': count.toString()});
+    final doc = await _makeRequest('getRandomSongs', {
+      'size': count.toString(),
+    });
     return [
-      for (final element in doc.findAllElements('song')) Song.fromXml(element)
+      for (final element in doc.findAllElements('song')) Song.fromXml(element),
     ];
   }
 
@@ -380,8 +392,8 @@ class SubsonicApi {
     final params = _getAuthParams();
     params['id'] = id;
 
-    final uri =
-        Uri.parse('$serverUrl/rest/stream').replace(queryParameters: params);
+    final uri = Uri.parse('$serverUrl/rest/stream')
+        .replace(queryParameters: params);
     return uri.toString();
   }
 
@@ -392,8 +404,8 @@ class SubsonicApi {
     final params = _getAuthParams();
     params['id'] = id;
 
-    final uri =
-        Uri.parse('$serverUrl/rest/download').replace(queryParameters: params);
+    final uri = Uri.parse('$serverUrl/rest/download')
+        .replace(queryParameters: params);
     return uri.toString();
   }
 
@@ -403,8 +415,11 @@ class SubsonicApi {
   /// the tags. From the stream if the server refuses the download. No data
   /// after a few seconds, see [ReplayGainReader.readFromUrl].
   Future<ReplayGainData> readReplayGain(String id) =>
-      ReplayGainReader.readFromUrl(getDownloadUrl(id),
-          fallbackUrl: getStreamUrl(id), client: _httpClient);
+      ReplayGainReader.readFromUrl(
+        getDownloadUrl(id),
+        fallbackUrl: getStreamUrl(id),
+        client: _httpClient,
+      );
 
   /// URL of the cover art [id], scaled by the server to [size] pixels
   String getCoverArtUrl(String id, {int size = 300}) {
@@ -427,10 +442,7 @@ class SubsonicApi {
   /// This updates the "now playing" status but doesn't affect play counts.
   /// Throws on failure; use [ScrobbleQueue] rather than calling this directly.
   Future<void> scrobbleNowPlaying(String songId) async {
-    final params = {
-      'id': songId,
-      'submission': 'false',
-    };
+    final params = {'id': songId, 'submission': 'false'};
 
     await _makeRequest('scrobble', params);
     _log.fine('Now playing notification sent for song: $songId');
@@ -446,10 +458,7 @@ class SubsonicApi {
   /// length, but passes it on). The queue's own retry is the only one, so a
   /// lost answer costs one extra submission at most.
   Future<void> scrobbleSubmission(String songId, {DateTime? playedAt}) async {
-    final params = {
-      'id': songId,
-      'submission': 'true',
-    };
+    final params = {'id': songId, 'submission': 'true'};
 
     // Add timestamp if provided (milliseconds since epoch)
     if (playedAt != null) {
@@ -462,8 +471,12 @@ class SubsonicApi {
 
   /// Searches for artists, albums, and songs.
   /// Returns a SearchResult containing separate lists for each type.
-  Future<SearchResult> search(String query,
-      {int artistCount = 20, int albumCount = 20, int songCount = 20}) async {
+  Future<SearchResult> search(
+    String query, {
+    int artistCount = 20,
+    int albumCount = 20,
+    int songCount = 20,
+  }) async {
     final params = {
       'query': query,
       'artistCount': artistCount.toString(),
@@ -474,7 +487,8 @@ class SubsonicApi {
       'search3',
       params,
       () async => SearchResult.fromXml(
-          await _makeRequest('search3', params, NetworkRequestType.metadata)),
+        await _makeRequest('search3', params, NetworkRequestType.metadata),
+      ),
       // Only in memory: every query would add an entry that's never read
       // again
       cacheDuration: const Duration(minutes: 5),
@@ -487,8 +501,12 @@ class SubsonicApi {
     return await _cache.getOrFetch<List<Artist>>(
       'getArtists',
       null,
-      () => _makeLargeRequest('getArtists', null, NetworkRequestType.metadata,
-          _sortedArtistsFromXml),
+      () => _makeLargeRequest(
+        'getArtists',
+        null,
+        NetworkRequestType.metadata,
+        _sortedArtistsFromXml,
+      ),
       cacheDuration: const Duration(minutes: 15),
       usePersistentCache: true,
       toJson: (artists) => artists.map((a) => a.toJson()).toList(),
@@ -499,9 +517,9 @@ class SubsonicApi {
   }
 
   static List<Artist> _sortedArtistsFromXml(XmlDocument doc) => [
-        for (final element in doc.findAllElements('artist'))
-          Artist.fromXml(element)
-      ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    for (final element in doc.findAllElements('artist'))
+      Artist.fromXml(element),
+  ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
   /// Gets all albums for a specific artist.
   /// Returns a list of Album objects for the given artist ID.

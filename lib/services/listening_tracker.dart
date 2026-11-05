@@ -23,8 +23,7 @@ class ListeningTracker {
   Duration _lastPosition = Duration.zero;
   DateTime? _lastPositionTime;
 
-  ListeningTracker(this._settings, {DateTime Function() clock = DateTime.now})
-      : _clock = clock;
+  ListeningTracker(this._settings, {this._clock = DateTime.now});
 
   /// Whether the play has started (and has a start time to scrobble with)
   bool get hasStarted => _startedAt != null;
@@ -36,8 +35,11 @@ class ListeningTracker {
   /// if [playing], otherwise on [markStarted]. A song resumed from an earlier
   /// session counts as heard up to [position], and as scrobbled if that's
   /// past the threshold: that happened in the earlier session.
-  void startPlay(Duration position, Duration songDuration,
-      {required bool playing}) {
+  void startPlay(
+    Duration position,
+    Duration songDuration, {
+    required bool playing,
+  }) {
     _startedAt = playing ? _clock() : null;
     _scrobbled =
         position > Duration.zero && reachedThreshold(position, songDuration);
@@ -98,7 +100,8 @@ class ListeningTracker {
   /// [SettingsService.scrobbleThresholdPercent]).
   bool reachedThreshold(Duration played, Duration songDuration) {
     final minPlayTime = Duration(
-        milliseconds: (_settings.scrobbleMinPlayTimeMinutes * 60000).round());
+      milliseconds: (_settings.scrobbleMinPlayTimeMinutes * 60000).round(),
+    );
     if (played >= minPlayTime) return true;
 
     final fraction = _settings.scrobbleThresholdPercent / 100;

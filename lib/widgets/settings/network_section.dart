@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import '../../screens/advanced_network_dialog.dart';
 import '../../services/settings_service.dart';
 import 'settings_snackbars.dart';
@@ -38,7 +40,9 @@ class NetworkSection extends StatelessWidget {
                       await settingsService.setNetworkConfigToFast();
                       if (context.mounted) {
                         showSettingsSuccess(
-                            context, 'Fast connection preset applied');
+                          context,
+                          'Fast connection preset applied',
+                        );
                       }
                     },
                     child: const Text('Fast'),
@@ -51,7 +55,9 @@ class NetworkSection extends StatelessWidget {
                       await settingsService.resetNetworkConfigToDefault();
                       if (context.mounted) {
                         showSettingsSuccess(
-                            context, 'Default connection preset applied');
+                          context,
+                          'Default connection preset applied',
+                        );
                       }
                     },
                     child: const Text('Default'),
@@ -64,7 +70,9 @@ class NetworkSection extends StatelessWidget {
                       await settingsService.setNetworkConfigToSlow();
                       if (context.mounted) {
                         showSettingsSuccess(
-                            context, 'Slow connection preset applied');
+                          context,
+                          'Slow connection preset applied',
+                        );
                       }
                     },
                     child: const Text('Slow'),
@@ -93,17 +101,24 @@ class NetworkSection extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildConfigRow('Connection Timeout',
-                      '${settingsService.networkConfig.connectionTimeout.inSeconds}s'),
-                  _buildConfigRow('Request Timeout',
-                      '${settingsService.networkConfig.requestTimeout.inSeconds}s'),
-                  _buildConfigRow('Max Retries',
-                      '${settingsService.networkConfig.maxRetryAttempts}'),
                   _buildConfigRow(
-                      'Retry on Timeout',
-                      settingsService.networkConfig.enableRetryOnTimeout
-                          ? 'Yes'
-                          : 'No'),
+                    'Connection Timeout',
+                    '${settingsService.networkConfig.connectionTimeout.inSeconds}s',
+                  ),
+                  _buildConfigRow(
+                    'Request Timeout',
+                    '${settingsService.networkConfig.requestTimeout.inSeconds}s',
+                  ),
+                  _buildConfigRow(
+                    'Max Retries',
+                    '${settingsService.networkConfig.maxRetryAttempts}',
+                  ),
+                  _buildConfigRow(
+                    'Retry on Timeout',
+                    settingsService.networkConfig.enableRetryOnTimeout
+                        ? 'Yes'
+                        : 'No',
+                  ),
                 ],
               ),
             ),
@@ -132,22 +147,22 @@ class NetworkSection extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label),
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
         ],
       ),
     );
   }
 
   void _showAdvancedNetworkSettings(
-      BuildContext context, SettingsService settingsService) {
-    unawaited(showDialog(
-      context: context,
-      builder: (context) => AdvancedNetworkSettingsDialog(
-        settingsService: settingsService,
+    BuildContext context,
+    SettingsService settingsService,
+  ) {
+    unawaited(
+      showDialog(
+        context: context,
+        builder: (context) =>
+            AdvancedNetworkSettingsDialog(settingsService: settingsService),
       ),
-    ));
+    );
   }
 }

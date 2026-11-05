@@ -15,11 +15,14 @@ void main() {
 
     test('masks a plaintext password param', () {
       expect(
-          redactCredentials('/rest/ping?p=hunter2'), '/rest/ping?p=[REDACTED]');
+        redactCredentials('/rest/ping?p=hunter2'),
+        '/rest/ping?p=[REDACTED]',
+      );
     });
 
     test('masks a URL embedded in an exception message', () {
-      const message = 'ClientException: Connection refused, '
+      const message =
+          'ClientException: Connection refused, '
           'uri=https://host/rest/getAlbum?id=7&u=alice&t=abc&s=xyz';
       final redacted = redactCredentials(message);
       expect(redacted, isNot(contains('alice')));

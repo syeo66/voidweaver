@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../services/subsonic_api.dart';
 import '../widgets/artist_albums_view.dart';
 
@@ -6,10 +7,7 @@ import '../widgets/artist_albums_view.dart';
 class ArtistDetailScreen extends StatelessWidget {
   final Artist artist;
 
-  const ArtistDetailScreen({
-    super.key,
-    required this.artist,
-  });
+  const ArtistDetailScreen({super.key, required this.artist});
 
   @override
   Widget build(BuildContext context) {

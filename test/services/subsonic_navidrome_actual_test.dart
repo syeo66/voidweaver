@@ -65,14 +65,26 @@ void main() {
       expect(Song.fromJson(song.toJson()).size, 12979081);
 
       // The CRITICAL assertions - ReplayGain MUST be parsed!
-      expect(song.replayGainTrackGain, -12.68,
-          reason: 'ReplayGain trackGain should be parsed from nested element');
-      expect(song.replayGainAlbumGain, -13.2,
-          reason: 'ReplayGain albumGain should be parsed from nested element');
-      expect(song.replayGainTrackPeak, 1.0,
-          reason: 'ReplayGain trackPeak should be parsed from nested element');
-      expect(song.replayGainAlbumPeak, 1.0,
-          reason: 'ReplayGain albumPeak should be parsed from nested element');
+      expect(
+        song.replayGainTrackGain,
+        -12.68,
+        reason: 'ReplayGain trackGain should be parsed from nested element',
+      );
+      expect(
+        song.replayGainAlbumGain,
+        -13.2,
+        reason: 'ReplayGain albumGain should be parsed from nested element',
+      );
+      expect(
+        song.replayGainTrackPeak,
+        1.0,
+        reason: 'ReplayGain trackPeak should be parsed from nested element',
+      );
+      expect(
+        song.replayGainAlbumPeak,
+        1.0,
+        reason: 'ReplayGain albumPeak should be parsed from nested element',
+      );
     });
 
     test('parses full album response with multiple songs', () {

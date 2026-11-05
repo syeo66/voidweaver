@@ -16,8 +16,9 @@ class CredentialsBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rejected =
-        context.select<AppState, bool>((state) => state.credentialsRejected);
+    final rejected = context.select<AppState, bool>(
+      (state) => state.credentialsRejected,
+    );
     if (!rejected) return const SizedBox.shrink();
 
     final colors = Theme.of(context).colorScheme;
@@ -31,10 +32,12 @@ class CredentialsBanner extends StatelessWidget {
       ),
       actions: [
         TextButton(
-          onPressed: () => unawaited(showDialog<void>(
-            context: context,
-            builder: (context) => const UpdatePasswordDialog(),
-          )),
+          onPressed: () => unawaited(
+            showDialog<void>(
+              context: context,
+              builder: (context) => const UpdatePasswordDialog(),
+            ),
+          ),
           child: const Text('Update password'),
         ),
       ],

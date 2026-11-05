@@ -22,25 +22,31 @@ class _FakePlatform {
 
   void install() {
     _messenger.setMockMethodCallHandler(
-        const MethodChannel('voidweaver_player'), (call) async {
-      calls.add(call);
-      if (call.method == 'create') {
-        playerId = (call.arguments as Map)['id'] as String;
-        _messenger.setMockMethodCallHandler(
-            MethodChannel('voidweaver_player/$playerId'), (call) async {
-          calls.add(call);
-          return onPlayerCall != null ? onPlayerCall!(call) : state;
-        });
-        _messenger.setMockStreamHandler(
+      const MethodChannel('voidweaver_player'),
+      (call) async {
+        calls.add(call);
+        if (call.method == 'create') {
+          playerId = (call.arguments as Map)['id'] as String;
+          _messenger.setMockMethodCallHandler(
+            MethodChannel('voidweaver_player/$playerId'),
+            (call) async {
+              calls.add(call);
+              return onPlayerCall != null ? onPlayerCall!(call) : state;
+            },
+          );
+          _messenger.setMockStreamHandler(
             EventChannel('voidweaver_player/$playerId/events'),
             MockStreamHandler.inline(
-                onListen: (_, sink) => events = sink,
-                onCancel: (_) => events = null));
-        return null;
-      }
-      if (call.method == 'dispose') return null;
-      return onPluginCall?.call(call);
-    });
+              onListen: (_, sink) => events = sink,
+              onCancel: (_) => events = null,
+            ),
+          );
+          return null;
+        }
+        if (call.method == 'dispose') return null;
+        return onPluginCall?.call(call);
+      },
+    );
   }
 
   List<String> get methods => [for (final call in calls) call.method];
@@ -49,19 +55,19 @@ class _FakePlatform {
       calls.lastWhere((call) => call.method == method);
 }
 
-Map<String, Object?> _state(
-        {bool playing = false,
-        int processingState = 0,
-        int? index,
-        int position = 0,
-        int? duration}) =>
-    {
-      'playing': playing,
-      'processingState': processingState,
-      'index': index,
-      'position': position,
-      'duration': duration,
-    };
+Map<String, Object?> _state({
+  bool playing = false,
+  int processingState = 0,
+  int? index,
+  int position = 0,
+  int? duration,
+}) => {
+  'playing': playing,
+  'processingState': processingState,
+  'index': index,
+  'position': position,
+  'duration': duration,
+};
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -76,52 +82,60 @@ void main() {
 
   tearDown(() => player.dispose());
 
-  AudioSource source(String name, {double gain = 1.0}) =>
-      AudioSource.uri(Uri.parse('https://music.example.com/$name'),
-          tag: name,
-          gain: gain,
-          cacheKey: 'server|$name',
-          title: 'Title $name',
-          artist: 'Artist',
-          album: 'Album',
-          artUri: Uri.parse('https://music.example.com/art/$name'));
+  AudioSource source(String name, {double gain = 1.0}) => AudioSource.uri(
+    Uri.parse('https://music.example.com/$name'),
+    tag: name,
+    gain: gain,
+    cacheKey: 'server|$name',
+    title: 'Title $name',
+    artist: 'Artist',
+    album: 'Album',
+    artUri: Uri.parse('https://music.example.com/art/$name'),
+  );
 
   group('setAudioSources', () {
-    test('hands the items with their gain, cache key and metadata over',
-        () async {
-      final a = source('a', gain: 0.5);
-      final b = source('b');
+    test(
+      'hands the items with their gain, cache key and metadata over',
+      () async {
+        final a = source('a', gain: 0.5);
+        final b = source('b');
 
-      await player.setAudioSources([a, b],
-          initialIndex: 1, initialPosition: const Duration(seconds: 30));
+        await player.setAudioSources(
+          [a, b],
+          initialIndex: 1,
+          initialPosition: const Duration(seconds: 30),
+        );
 
-      final arguments = platform.lastCall('setAudioSources').arguments
-          as Map<Object?, Object?>;
-      expect(arguments['initialIndex'], 1);
-      expect(arguments['initialPosition'], 30000);
-      expect(arguments['sources'], [
-        {
-          'id': a.id,
-          'uri': 'https://music.example.com/a',
-          'gain': 0.5,
-          'cacheKey': 'server|a',
-          'title': 'Title a',
-          'artist': 'Artist',
-          'album': 'Album',
-          'artUri': 'https://music.example.com/art/a',
-        },
-        containsPair('id', b.id),
-      ]);
-      expect(player.sequence, [a, b]);
-      expect(player.gainOf(a), 0.5);
-    });
+        final arguments =
+            platform.lastCall('setAudioSources').arguments
+                as Map<Object?, Object?>;
+        expect(arguments['initialIndex'], 1);
+        expect(arguments['initialPosition'], 30000);
+        expect(arguments['sources'], [
+          {
+            'id': a.id,
+            'uri': 'https://music.example.com/a',
+            'gain': 0.5,
+            'cacheKey': 'server|a',
+            'title': 'Title a',
+            'artist': 'Artist',
+            'album': 'Album',
+            'artUri': 'https://music.example.com/art/a',
+          },
+          containsPair('id', b.id),
+        ]);
+        expect(player.sequence, [a, b]);
+        expect(player.gainOf(a), 0.5);
+      },
+    );
 
     test('applies the state it returns', () async {
       platform.state = _state(
-          processingState: ProcessingState.ready.index,
-          index: 1,
-          position: 30000,
-          duration: 180000);
+        processingState: ProcessingState.ready.index,
+        index: 1,
+        position: 30000,
+        duration: 180000,
+      );
       final indexes = <int?>[];
       player.currentIndexStream.listen(indexes.add);
 
@@ -138,23 +152,29 @@ void main() {
 
     test('throws a PlayerException with the failed item', () async {
       platform.onPlayerCall = (_) async => throw PlatformException(
-          code: 'error',
-          message: 'Source error',
-          details: {'code': 2001, 'message': 'Source error', 'index': 1});
+        code: 'error',
+        message: 'Source error',
+        details: {'code': 2001, 'message': 'Source error', 'index': 1},
+      );
 
       await expectLater(
-          player.setAudioSources([source('a'), source('b')]),
-          throwsA(isA<PlayerException>()
+        player.setAudioSources([source('a'), source('b')]),
+        throwsA(
+          isA<PlayerException>()
               .having((e) => e.code, 'code', 2001)
-              .having((e) => e.index, 'index', 1)));
+              .having((e) => e.index, 'index', 1),
+        ),
+      );
     });
 
     test('throws a PlayerInterruptedException when replaced', () async {
-      platform.onPlayerCall =
-          (_) async => throw PlatformException(code: 'interrupted');
+      platform.onPlayerCall = (_) async =>
+          throw PlatformException(code: 'interrupted');
 
-      await expectLater(player.setAudioSources([source('a')]),
-          throwsA(isA<PlayerInterruptedException>()));
+      await expectLater(
+        player.setAudioSources([source('a')]),
+        throwsA(isA<PlayerInterruptedException>()),
+      );
     });
   });
 
@@ -172,10 +192,11 @@ void main() {
       player.positionStream.listen(positions.add);
 
       final playing = _state(
-          playing: true,
-          processingState: ProcessingState.ready.index,
-          index: 0,
-          position: 200);
+        playing: true,
+        processingState: ProcessingState.ready.index,
+        index: 0,
+        position: 200,
+      );
       platform.events!.success(playing);
       platform.events!.success(playing);
       platform.events!.success({...playing, 'position': 400});
@@ -184,7 +205,7 @@ void main() {
       expect(states, [const PlayerState(true, ProcessingState.ready)]);
       expect(positions, [
         const Duration(milliseconds: 200),
-        const Duration(milliseconds: 400)
+        const Duration(milliseconds: 400),
       ]);
       expect(player.playing, isTrue);
     });
@@ -193,8 +214,12 @@ void main() {
       await connect();
       final errors = player.errorStream.first;
 
-      platform.events!.success(
-          {'type': 'error', 'code': 2001, 'message': 'offline', 'index': 2});
+      platform.events!.success({
+        'type': 'error',
+        'code': 2001,
+        'message': 'offline',
+        'index': 2,
+      });
 
       final error = await errors;
       expect(error.code, 2001);
@@ -208,12 +233,17 @@ void main() {
       player.commandStream.listen(commands.add);
 
       platform.events!.success({'type': 'command', 'command': 'next'});
-      platform.events!
-          .success({'type': 'command', 'command': 'seek', 'position': 42000});
+      platform.events!.success({
+        'type': 'command',
+        'command': 'seek',
+        'position': 42000,
+      });
       await pumpEventQueue();
 
-      expect(commands.map((c) => c.type),
-          [SystemCommandType.next, SystemCommandType.seek]);
+      expect(commands.map((c) => c.type), [
+        SystemCommandType.next,
+        SystemCommandType.seek,
+      ]);
       expect(commands.first.position, isNull);
       expect(commands.last.position, const Duration(seconds: 42));
     });
@@ -238,14 +268,17 @@ void main() {
     await player.setVolume(-0.5);
     await player.setVolume(2.0);
 
-    expect([
-      for (final call in platform.calls)
-        if (call.method == 'setVolume') call.arguments
-    ], [
-      {'volume': 0.25},
-      {'volume': 0.0},
-      {'volume': 1.0},
-    ]);
+    expect(
+      [
+        for (final call in platform.calls)
+          if (call.method == 'setVolume') call.arguments,
+      ],
+      [
+        {'volume': 0.25},
+        {'volume': 0.0},
+        {'volume': 1.0},
+      ],
+    );
     expect(player.volume, 1.0);
   });
 
@@ -267,7 +300,7 @@ void main() {
 
     final seeks = [
       for (final call in platform.calls)
-        if (call.method == 'seek') call.arguments
+        if (call.method == 'seek') call.arguments,
     ];
     expect(seeks, [
       {'position': 5000, 'index': 2},
@@ -280,37 +313,48 @@ void main() {
 
     test('passes the key and URL to prefetch', () async {
       await cache.prefetch(
-          'server|a', Uri.parse('https://music.example.com/a'));
+        'server|a',
+        Uri.parse('https://music.example.com/a'),
+      );
 
-      expect(platform.lastCall('cache.prefetch').arguments,
-          {'key': 'server|a', 'uri': 'https://music.example.com/a'});
+      expect(platform.lastCall('cache.prefetch').arguments, {
+        'key': 'server|a',
+        'uri': 'https://music.example.com/a',
+      });
     });
 
-    test('reports the cached keys, none if the platform returns null',
-        () async {
-      platform.onPluginCall = (call) => ['server|b'];
-      expect(await cache.cachedKeys(['server|a', 'server|b']), ['server|b']);
+    test(
+      'reports the cached keys, none if the platform returns null',
+      () async {
+        platform.onPluginCall = (call) => ['server|b'];
+        expect(await cache.cachedKeys(['server|a', 'server|b']), ['server|b']);
 
-      platform.onPluginCall = (call) => null;
-      expect(await cache.cachedKeys(['server|a']), isEmpty);
-      expect(await cache.sizeInBytes(), 0);
-    });
+        platform.onPluginCall = (call) => null;
+        expect(await cache.cachedKeys(['server|a']), isEmpty);
+        expect(await cache.sizeInBytes(), 0);
+      },
+    );
 
     test('passes the timeouts in milliseconds', () async {
       await cache.setTimeouts(
-          connect: const Duration(seconds: 15),
-          read: const Duration(seconds: 60));
+        connect: const Duration(seconds: 15),
+        read: const Duration(seconds: 60),
+      );
 
-      expect(platform.lastCall('network.setTimeouts').arguments,
-          {'connect': 15000, 'read': 60000});
+      expect(platform.lastCall('network.setTimeouts').arguments, {
+        'connect': 15000,
+        'read': 60000,
+      });
     });
 
     test('returns the head of a cached item', () async {
       platform.onPluginCall = (call) => Uint8List.fromList([1, 2, 3]);
 
       expect(await cache.readHead('server|a', 3), [1, 2, 3]);
-      expect(platform.lastCall('cache.readHead').arguments,
-          {'key': 'server|a', 'length': 3});
+      expect(platform.lastCall('cache.readHead').arguments, {
+        'key': 'server|a',
+        'length': 3,
+      });
     });
   });
 }

@@ -24,17 +24,17 @@ void main() {
   late MockSubsonicApi mockApi;
 
   SearchResult resultWithArtists(int count) => SearchResult(
-        artists: [
-          for (var i = 0; i < count; i++) Artist(id: 'a$i', name: 'Artist $i')
-        ],
-        albums: [],
-        songs: [],
-      );
+    artists: [
+      for (var i = 0; i < count; i++) Artist(id: 'a$i', name: 'Artist $i'),
+    ],
+    albums: [],
+    songs: [],
+  );
 
   Widget screen() => ChangeNotifierProvider<AppState>(
-        create: (_) => _FakeAppState(mockApi),
-        child: const MaterialApp(home: SearchScreen()),
-      );
+    create: (_) => _FakeAppState(mockApi),
+    child: const MaterialApp(home: SearchScreen()),
+  );
 
   setUp(() {
     mockApi = MockSubsonicApi();
@@ -80,8 +80,9 @@ void main() {
     expect(find.text('Artists (2)'), findsNothing);
   });
 
-  testWidgets('drops a response that arrives after clearing the query',
-      (tester) async {
+  testWidgets('drops a response that arrives after clearing the query', (
+    tester,
+  ) async {
     final pending = Completer<SearchResult>();
     when(mockApi.search(any)).thenAnswer((_) => pending.future);
     await tester.pumpWidget(screen());
@@ -96,8 +97,10 @@ void main() {
     await tester.pump();
 
     expect(find.textContaining('Artists ('), findsNothing);
-    expect(find.text('Enter a search term to find artists, albums, and songs'),
-        findsOneWidget);
+    expect(
+      find.text('Enter a search term to find artists, albums, and songs'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('does not search after the screen is closed', (tester) async {

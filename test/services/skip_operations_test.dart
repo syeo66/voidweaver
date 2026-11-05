@@ -31,20 +31,20 @@ void main() {
   // ReplayGain values are set so the service doesn't try to read them from
   // the (fake) stream URL.
   Song song(String id) => Song(
-        id: id,
-        title: 'Title $id',
-        artist: 'Artist',
-        album: 'Album',
-        duration: 180,
-        replayGainTrackGain: -6.0,
-      );
+    id: id,
+    title: 'Title $id',
+    artist: 'Artist',
+    album: 'Album',
+    duration: 180,
+    replayGainTrackGain: -6.0,
+  );
 
   Album album(int count) => Album(
-        id: 'album1',
-        name: 'Album',
-        artist: 'Artist',
-        songs: [for (var i = 1; i <= count; i++) song('s$i')],
-      );
+    id: 'album1',
+    name: 'Album',
+    artist: 'Artist',
+    songs: [for (var i = 1; i <= count; i++) song('s$i')],
+  );
 
   /// Lets the service react to player events emitted on broadcast streams.
   Future<void> settle() => Future.delayed(const Duration(milliseconds: 20));
@@ -67,21 +67,28 @@ void main() {
     when(mockSettings.replayGainPreventClipping).thenReturn(true);
     when(mockSettings.scrobbleMinPlayTimeMinutes).thenReturn(4.0);
     when(mockSettings.scrobbleThresholdPercent).thenReturn(50.0);
-    when(mockSettings.calculateVolumeAdjustment(
-      trackGain: anyNamed('trackGain'),
-      albumGain: anyNamed('albumGain'),
-      trackPeak: anyNamed('trackPeak'),
-      albumPeak: anyNamed('albumPeak'),
-      fromAlbum: anyNamed('fromAlbum'),
-    )).thenReturn(1.0);
+    when(
+      mockSettings.calculateVolumeAdjustment(
+        trackGain: anyNamed('trackGain'),
+        albumGain: anyNamed('albumGain'),
+        trackPeak: anyNamed('trackPeak'),
+        albumPeak: anyNamed('albumPeak'),
+        fromAlbum: anyNamed('fromAlbum'),
+      ),
+    ).thenReturn(1.0);
 
     when(mockApi.getStreamUrl(any)).thenAnswer(
-        (invocation) => urlFor(invocation.positionalArguments.first as String));
+      (invocation) => urlFor(invocation.positionalArguments.first as String),
+    );
     when(mockApi.readReplayGain(any))
         .thenAnswer((_) async => const ReplayGainData());
 
-    service = AudioPlayerService(mockApi, mockSettings,
-        audioPlayer: player, audioCache: cache);
+    service = AudioPlayerService(
+      mockApi,
+      mockSettings,
+      audioPlayer: player,
+      audioCache: cache,
+    );
   });
 
   tearDown(() async {
@@ -91,23 +98,34 @@ void main() {
 
   group('starting playback', () {
     test('passes on the error of a failed load unchanged', () async {
-      when(mockApi.getRandomSongs(any)).thenThrow(
-          const NetworkConnectionException('offline', attemptsMade: 3));
+      when(
+        mockApi.getRandomSongs(any),
+      ).thenThrow(const NetworkConnectionException('offline', attemptsMade: 3));
 
-      await expectLater(service.playRandomSongs(),
-          throwsA(isA<NetworkConnectionException>()));
+      await expectLater(
+        service.playRandomSongs(),
+        throwsA(isA<NetworkConnectionException>()),
+      );
       expect(service.playbackState, PlaybackState.stopped);
     });
 
-    test('reports an album without songs with a message for the user',
-        () async {
-      when(mockApi.getAlbum('album1')).thenAnswer((_) async => album(0));
+    test(
+      'reports an album without songs with a message for the user',
+      () async {
+        when(mockApi.getAlbum('album1')).thenAnswer((_) async => album(0));
 
-      await expectLater(
+        await expectLater(
           service.playAlbum(album(0)),
-          throwsA(isA<UserFacingException>()
-              .having((e) => e.message, 'message', 'Album has no songs')));
-    });
+          throwsA(
+            isA<UserFacingException>().having(
+              (e) => e.message,
+              'message',
+              'Album has no songs',
+            ),
+          ),
+        );
+      },
+    );
   });
 
   group('next()', () {
@@ -388,15 +406,20 @@ void main() {
     test('before a new queue is loaded moves where it starts', () async {
       final reading = Completer<ReplayGainData>();
       when(mockApi.readReplayGain(any)).thenAnswer((_) => reading.future);
-      final unread =
-          Album(id: 'album2', name: 'Album', artist: 'Artist', songs: [
-        Song(
+      final unread = Album(
+        id: 'album2',
+        name: 'Album',
+        artist: 'Artist',
+        songs: [
+          Song(
             id: 'u1',
             title: 'Title u1',
             artist: 'Artist',
             album: 'Album',
-            duration: 180)
-      ]);
+            duration: 180,
+          ),
+        ],
+      );
 
       final starting = service.playAlbum(unread);
       await settle();

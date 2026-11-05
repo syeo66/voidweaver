@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../services/app_state.dart';
 import '../../services/network_errors.dart';
 import '../../utils/format.dart';
@@ -33,9 +34,10 @@ class CacheSectionState extends State<CacheSection> {
       builder: (context) => AlertDialog(
         title: const Text('Clear Cache?'),
         content: const Text(
-            'This deletes downloaded songs, saved album and artist lists, and '
-            'cover art. They will be downloaded again as needed, but won\'t '
-            'be available offline until then.'),
+          'This deletes downloaded songs, saved album and artist lists, and '
+          'cover art. They will be downloaded again as needed, but won\'t '
+          'be available offline until then.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -65,8 +67,12 @@ class CacheSectionState extends State<CacheSection> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(NetworkErrorHelper.getErrorMessage(e,
-              context: 'Failed to clear cache')),
+          content: Text(
+            NetworkErrorHelper.getErrorMessage(
+              e,
+              context: 'Failed to clear cache',
+            ),
+          ),
           duration: const Duration(seconds: 3),
         ),
       );
@@ -88,17 +94,14 @@ class CacheSectionState extends State<CacheSection> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Cache',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
+            Text('Cache', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 8),
             Text(
               'Upcoming songs are downloaded so playback continues offline. '
               'Album lists and cover art are also kept for offline browsing.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 8),
             FutureBuilder<int>(
@@ -110,8 +113,8 @@ class CacheSectionState extends State<CacheSection> {
                       ? 'Downloaded songs: calculating…'
                       : 'Downloaded songs: ${formatBytes(size)}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 );
               },
             ),

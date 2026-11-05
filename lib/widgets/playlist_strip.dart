@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../services/audio_player_service.dart';
 import '../services/image_cache_manager.dart';
 import '../services/subsonic_api.dart';
@@ -89,8 +90,9 @@ class _PlaylistStripState extends State<PlaylistStrip> {
 
     // Calculate the scroll position to center the current track
     // Item width depends on compact mode
-    final double itemWidth =
-        widget.isCompact ? 60.0 + 8.0 : 80.0 + 8.0; // width + margin
+    final double itemWidth = widget.isCompact
+        ? 60.0 + 8.0
+        : 80.0 + 8.0; // width + margin
     final double targetPosition = _currentIndex * itemWidth;
 
     // Get the viewport width to center the item
@@ -133,8 +135,9 @@ class _PlaylistStripState extends State<PlaylistStrip> {
                 Text(
                   'Playlist: ${_currentIndex + 1} of ${_currentPlaylist.length}',
                   style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: labelFontSize),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: labelFontSize,
+                  ),
                 ),
                 const SizedBox(height: 4),
               ],
@@ -170,8 +173,9 @@ class _PlaylistStripState extends State<PlaylistStrip> {
         const Divider(),
         Text(
           'Playlist: ${_currentIndex + 1} of ${_currentPlaylist.length}',
-          style:
-              TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: 8),
         SizedBox(
@@ -239,18 +243,17 @@ class _PlaylistItem extends StatelessWidget {
               border: isCurrentSong
                   ? Border.all(
                       color: Theme.of(context).colorScheme.primary,
-                      width: isCompact ? 2 : 3)
+                      width: isCompact ? 2 : 3,
+                    )
                   : null,
               boxShadow: isCurrentSong
                   ? [
                       BoxShadow(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .primary
+                        color: Theme.of(context).colorScheme.primary
                             .withValues(alpha: 0.3),
                         blurRadius: isCompact ? 4 : 8,
                         spreadRadius: isCompact ? 0.5 : 1,
-                      )
+                      ),
                     ]
                   : null,
             ),
@@ -269,8 +272,8 @@ class _PlaylistItem extends StatelessWidget {
                             color: isCurrentSong
                                 ? Theme.of(context).colorScheme.primary
                                 : Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
+                                      .colorScheme
+                                      .onSurfaceVariant,
                             size: iconSize * 0.8,
                           ),
                           errorWidget: (context, url, error) => Icon(
@@ -278,8 +281,8 @@ class _PlaylistItem extends StatelessWidget {
                             color: isCurrentSong
                                 ? Theme.of(context).colorScheme.primary
                                 : Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
+                                      .colorScheme
+                                      .onSurfaceVariant,
                             size: iconSize * 0.8,
                           ),
                         ),

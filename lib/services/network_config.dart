@@ -58,11 +58,14 @@ class NetworkConfig {
   Duration calculateRetryDelay(int attemptNumber) {
     if (attemptNumber <= 0) return initialRetryDelay;
 
-    final exponentialDelay = initialRetryDelay.inMilliseconds *
+    final exponentialDelay =
+        initialRetryDelay.inMilliseconds *
         math.pow(retryBackoffMultiplier, attemptNumber - 1);
 
-    final clampedDelay =
-        math.min(exponentialDelay, maxRetryDelay.inMilliseconds.toDouble());
+    final clampedDelay = math.min(
+      exponentialDelay,
+      maxRetryDelay.inMilliseconds.toDouble(),
+    );
 
     // Add jitter to prevent thundering herd effect
     final jitter = math.Random().nextDouble() * 0.1; // 10% jitter
@@ -141,21 +144,27 @@ class NetworkConfig {
 
   factory NetworkConfig.fromJson(Map<String, dynamic> json) {
     return NetworkConfig(
-      connectionTimeout:
-          Duration(milliseconds: json['connectionTimeout'] as int? ?? 15000),
-      requestTimeout:
-          Duration(milliseconds: json['requestTimeout'] as int? ?? 30000),
-      metadataTimeout:
-          Duration(milliseconds: json['metadataTimeout'] as int? ?? 20000),
-      streamingTimeout:
-          Duration(milliseconds: json['streamingTimeout'] as int? ?? 60000),
+      connectionTimeout: Duration(
+        milliseconds: json['connectionTimeout'] as int? ?? 15000,
+      ),
+      requestTimeout: Duration(
+        milliseconds: json['requestTimeout'] as int? ?? 30000,
+      ),
+      metadataTimeout: Duration(
+        milliseconds: json['metadataTimeout'] as int? ?? 20000,
+      ),
+      streamingTimeout: Duration(
+        milliseconds: json['streamingTimeout'] as int? ?? 60000,
+      ),
       maxRetryAttempts: json['maxRetryAttempts'] as int? ?? 3,
-      initialRetryDelay:
-          Duration(milliseconds: json['initialRetryDelay'] as int? ?? 500),
+      initialRetryDelay: Duration(
+        milliseconds: json['initialRetryDelay'] as int? ?? 500,
+      ),
       retryBackoffMultiplier:
           (json['retryBackoffMultiplier'] as num?)?.toDouble() ?? 2.0,
-      maxRetryDelay:
-          Duration(milliseconds: json['maxRetryDelay'] as int? ?? 10000),
+      maxRetryDelay: Duration(
+        milliseconds: json['maxRetryDelay'] as int? ?? 10000,
+      ),
       enableRetryOnTimeout: json['enableRetryOnTimeout'] as bool? ?? true,
       enableRetryOnConnectionError:
           json['enableRetryOnConnectionError'] as bool? ?? true,
@@ -171,12 +180,7 @@ class NetworkConfig {
 }
 
 /// Types of network requests for timeout selection
-enum NetworkRequestType {
-  connection,
-  metadata,
-  streaming,
-  general,
-}
+enum NetworkRequestType { connection, metadata, streaming, general }
 
 /// Exception thrown when network request times out after all retries
 class NetworkTimeoutException implements Exception {

@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../services/app_state.dart';
 import '../services/image_cache_manager.dart';
 import '../services/subsonic_api.dart';
@@ -44,8 +46,10 @@ class _SearchScreenState extends State<SearchScreen>
 
   void _onQueryChanged(String query) {
     _debounce?.cancel();
-    _debounce =
-        Timer(const Duration(milliseconds: 500), () => _performSearch(query));
+    _debounce = Timer(
+      const Duration(milliseconds: 500),
+      () => _performSearch(query),
+    );
   }
 
   Future<void> _performSearch(String query) async {
@@ -82,8 +86,10 @@ class _SearchScreenState extends State<SearchScreen>
       if (mounted && generation == _searchGeneration) {
         setState(() {
           _isLoading = false;
-          _errorMessage =
-              NetworkErrorHelper.getErrorMessage(e, context: 'Search failed');
+          _errorMessage = NetworkErrorHelper.getErrorMessage(
+            e,
+            context: 'Search failed',
+          );
         });
       }
     }
@@ -136,15 +142,9 @@ class _SearchScreenState extends State<SearchScreen>
                 TabBar(
                   controller: _tabController,
                   tabs: [
-                    Tab(
-                      text: 'Artists (${_searchResult!.artists.length})',
-                    ),
-                    Tab(
-                      text: 'Albums (${_searchResult!.albums.length})',
-                    ),
-                    Tab(
-                      text: 'Songs (${_searchResult!.songs.length})',
-                    ),
+                    Tab(text: 'Artists (${_searchResult!.artists.length})'),
+                    Tab(text: 'Albums (${_searchResult!.albums.length})'),
+                    Tab(text: 'Songs (${_searchResult!.songs.length})'),
                   ],
                 ),
             ],
@@ -165,8 +165,11 @@ class _SearchScreenState extends State<SearchScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline,
-                size: 64, color: Theme.of(context).colorScheme.error),
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Theme.of(context).colorScheme.error,
+            ),
             const SizedBox(height: 16),
             Text(
               _errorMessage,
@@ -188,15 +191,18 @@ class _SearchScreenState extends State<SearchScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search,
-                size: 64,
-                color: Theme.of(context).colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.search,
+              size: 64,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             SizedBox(height: 16),
             Text(
               'Enter a search term to find artists, albums, and songs',
               style: TextStyle(
-                  fontSize: 16,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+                fontSize: 16,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
           ],
@@ -209,15 +215,18 @@ class _SearchScreenState extends State<SearchScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off,
-                size: 64,
-                color: Theme.of(context).colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.search_off,
+              size: 64,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             SizedBox(height: 16),
             Text(
               'No results found',
               style: TextStyle(
-                  fontSize: 16,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+                fontSize: 16,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -226,11 +235,7 @@ class _SearchScreenState extends State<SearchScreen>
 
     return TabBarView(
       controller: _tabController,
-      children: [
-        _buildArtistsList(),
-        _buildAlbumsList(),
-        _buildSongsList(),
-      ],
+      children: [_buildArtistsList(), _buildAlbumsList(), _buildSongsList()],
     );
   }
 
@@ -240,15 +245,18 @@ class _SearchScreenState extends State<SearchScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.person_search,
-                size: 64,
-                color: Theme.of(context).colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.person_search,
+              size: 64,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             SizedBox(height: 16),
             Text(
               'No artists found',
               style: TextStyle(
-                  fontSize: 16,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+                fontSize: 16,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -269,15 +277,18 @@ class _SearchScreenState extends State<SearchScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.album,
-                size: 64,
-                color: Theme.of(context).colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.album,
+              size: 64,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             SizedBox(height: 16),
             Text(
               'No albums found',
               style: TextStyle(
-                  fontSize: 16,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+                fontSize: 16,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -298,15 +309,18 @@ class _SearchScreenState extends State<SearchScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.music_note,
-                size: 64,
-                color: Theme.of(context).colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.music_note,
+              size: 64,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             SizedBox(height: 16),
             Text(
               'No songs found',
               style: TextStyle(
-                  fontSize: 16,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+                fontSize: 16,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -326,7 +340,9 @@ class _SearchScreenState extends State<SearchScreen>
       leading: CircleAvatar(
         backgroundImage: artist.coverArt != null
             ? ImageCacheManager.coverArtProvider(
-                context.read<AppState>().api!, artist.coverArt!)
+                context.read<AppState>().api!,
+                artist.coverArt!,
+              )
             : null,
         child: artist.coverArt == null ? const Icon(Icons.person) : null,
       ),
@@ -399,8 +415,13 @@ class _SearchScreenState extends State<SearchScreen>
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                  content: Text(NetworkErrorHelper.getErrorMessage(e,
-                      context: 'Failed to play song'))),
+                content: Text(
+                  NetworkErrorHelper.getErrorMessage(
+                    e,
+                    context: 'Failed to play song',
+                  ),
+                ),
+              ),
             );
           }
         }

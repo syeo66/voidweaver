@@ -65,7 +65,9 @@ void main() {
 
     testWidgets('keeps the loaded albums when a refresh fails', (tester) async {
       await _pumpAlbumList(
-          tester, _StubAppState(stubAlbums: [album], stubError: 'offline'));
+        tester,
+        _StubAppState(stubAlbums: [album], stubError: 'offline'),
+      );
 
       expect(find.text('Loaded Album'), findsOneWidget);
       expect(find.text('offline'), findsNothing);
@@ -86,8 +88,9 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
 
-    testWidgets('switches between recently played and recently added',
-        (tester) async {
+    testWidgets('switches between recently played and recently added', (
+      tester,
+    ) async {
       final appState = _StubAppState(stubAlbums: [album]);
       await _pumpAlbumList(tester, appState);
 
@@ -101,16 +104,18 @@ void main() {
       expect(selector().selected, {AlbumListType.newest});
     });
 
-    testWidgets('keeps the selector when nothing was played yet',
-        (tester) async {
+    testWidgets('keeps the selector when nothing was played yet', (
+      tester,
+    ) async {
       await _pumpAlbumList(tester, _StubAppState());
 
       expect(find.text('No albums played yet'), findsOneWidget);
       expect(find.text('Recently added'), findsOneWidget);
     });
 
-    testWidgets('offers recently added when nothing was played yet',
-        (tester) async {
+    testWidgets('offers recently added when nothing was played yet', (
+      tester,
+    ) async {
       final appState = _StubAppState();
       await _pumpAlbumList(tester, appState);
       expect(find.text('Refresh'), findsNothing);

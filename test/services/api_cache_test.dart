@@ -30,15 +30,10 @@ void main() {
       const expectedResult = 'test_result';
 
       var callCount = 0;
-      final result = await cache.getOrFetch<String>(
-        endpoint,
-        params,
-        () async {
-          callCount++;
-          return expectedResult;
-        },
-        cacheDuration: const Duration(seconds: 10),
-      );
+      final result = await cache.getOrFetch<String>(endpoint, params, () async {
+        callCount++;
+        return expectedResult;
+      }, cacheDuration: const Duration(seconds: 10));
 
       expect(result, expectedResult);
       expect(callCount, 1);
@@ -65,16 +60,11 @@ void main() {
 
       var callCount = 0;
       Future<String> makeRequest() {
-        return cache.getOrFetch<String>(
-          endpoint,
-          params,
-          () async {
-            callCount++;
-            await Future.delayed(const Duration(milliseconds: 50));
-            return expectedResult;
-          },
-          cacheDuration: const Duration(seconds: 10),
-        );
+        return cache.getOrFetch<String>(endpoint, params, () async {
+          callCount++;
+          await Future.delayed(const Duration(milliseconds: 50));
+          return expectedResult;
+        }, cacheDuration: const Duration(seconds: 10));
       }
 
       // Start multiple concurrent requests
@@ -190,9 +180,14 @@ void main() {
 
     test('should persist typed data across instances using codecs', () async {
       final albums = [
-        Album(id: 'a1', name: 'First', artist: 'Artist', songs: [
-          Song(id: 's1', title: 'Song', artist: 'Artist', album: 'First'),
-        ]),
+        Album(
+          id: 'a1',
+          name: 'First',
+          artist: 'Artist',
+          songs: [
+            Song(id: 's1', title: 'Song', artist: 'Artist', album: 'First'),
+          ],
+        ),
       ];
       Object? toJson(List<Album> data) => data.map((a) => a.toJson()).toList();
       List<Album> fromJson(dynamic json) => (json as List<dynamic>)
@@ -200,18 +195,29 @@ void main() {
           .toList();
 
       await cache.getOrFetch<List<Album>>(
-          'getAlbumList2', null, () async => albums,
-          usePersistentCache: true, toJson: toJson, fromJson: fromJson);
+        'getAlbumList2',
+        null,
+        () async => albums,
+        usePersistentCache: true,
+        toJson: toJson,
+        fromJson: fromJson,
+      );
 
       // A fresh instance (e.g. after app restart) has an empty memory cache
       final restarted = ApiCache.forTesting(directory: directory);
       await restarted.initialize();
       var fetched = false;
-      final result = await restarted
-          .getOrFetch<List<Album>>('getAlbumList2', null, () async {
-        fetched = true;
-        return <Album>[];
-      }, usePersistentCache: true, toJson: toJson, fromJson: fromJson);
+      final result = await restarted.getOrFetch<List<Album>>(
+        'getAlbumList2',
+        null,
+        () async {
+          fetched = true;
+          return <Album>[];
+        },
+        usePersistentCache: true,
+        toJson: toJson,
+        fromJson: fromJson,
+      );
 
       expect(fetched, isFalse);
       expect(result, albums);
@@ -219,105 +225,170 @@ void main() {
 
     test('persists entries too large to decode on the UI isolate', () async {
       final large = 'x' * (128 * 1024);
-      await cache.getOrFetch<List<String>>('large', null, () async => [large],
-          usePersistentCache: true,
-          fromJson: (json) => (json as List<dynamic>).cast<String>());
+      await cache.getOrFetch<List<String>>(
+        'large',
+        null,
+        () async => [large],
+        usePersistentCache: true,
+        fromJson: (json) => (json as List<dynamic>).cast<String>(),
+      );
 
       final restarted = ApiCache.forTesting(directory: directory);
       await restarted.initialize();
       final result = await restarted.getOrFetch<List<String>>(
-          'large', null, () async => fail('read from the file'),
-          usePersistentCache: true,
-          fromJson: (json) => (json as List<dynamic>).cast<String>());
+        'large',
+        null,
+        () async => fail('read from the file'),
+        usePersistentCache: true,
+        fromJson: (json) => (json as List<dynamic>).cast<String>(),
+      );
 
       expect(result, [large]);
     });
 
-    test('clearAll removes persisted entries before the cache was used',
-        () async {
-      await cache.getOrFetch<String>('endpoint', null, () async => 'saved',
-          usePersistentCache: true);
+    test(
+      'clearAll removes persisted entries before the cache was used',
+      () async {
+        await cache.getOrFetch<String>(
+          'endpoint',
+          null,
+          () async => 'saved',
+          usePersistentCache: true,
+        );
 
-      // Not initialized and nothing loaded, as right after a restart
-      final restarted = ApiCache.forTesting(directory: directory);
-      await restarted.clearAll();
+        // Not initialized and nothing loaded, as right after a restart
+        final restarted = ApiCache.forTesting(directory: directory);
+        await restarted.clearAll();
 
-      expect(filesIn(directory), isEmpty);
-    });
+        expect(filesIn(directory), isEmpty);
+      },
+    );
 
     test('a corrupted file is dropped and fetched again', () async {
-      await cache.getOrFetch<String>('endpoint', null, () async => 'saved',
-          usePersistentCache: true);
+      await cache.getOrFetch<String>(
+        'endpoint',
+        null,
+        () async => 'saved',
+        usePersistentCache: true,
+      );
       final file = filesIn(directory).single;
       file.writeAsStringSync('{not json');
 
       final restarted = ApiCache.forTesting(directory: directory);
       final result = await restarted.getOrFetch<String>(
-          'endpoint', null, () async => 'fetched',
-          usePersistentCache: true);
+        'endpoint',
+        null,
+        () async => 'fetched',
+        usePersistentCache: true,
+      );
 
       expect(result, 'fetched');
     });
 
     test('works in memory when the storage is unavailable', () async {
       final memoryOnly = ApiCache.forTesting();
-      await memoryOnly.getOrFetch<String>('endpoint', null, () async => 'a',
-          usePersistentCache: true);
+      await memoryOnly.getOrFetch<String>(
+        'endpoint',
+        null,
+        () async => 'a',
+        usePersistentCache: true,
+      );
       final result = await memoryOnly.getOrFetch<String>(
-          'endpoint', null, () async => 'b',
-          usePersistentCache: true);
+        'endpoint',
+        null,
+        () async => 'b',
+        usePersistentCache: true,
+      );
 
       expect(result, 'a');
     });
 
     test('should serve stale memory data when fetch fails', () async {
-      await cache.getOrFetch<String>('endpoint', null, () async => 'fresh',
-          cacheDuration: Duration.zero);
+      await cache.getOrFetch<String>(
+        'endpoint',
+        null,
+        () async => 'fresh',
+        cacheDuration: Duration.zero,
+      );
       await Future.delayed(const Duration(milliseconds: 5));
 
       final result = await cache.getOrFetch<String>(
-          'endpoint', null, () async => throw Exception('offline'));
+        'endpoint',
+        null,
+        () async => throw Exception('offline'),
+      );
 
       expect(result, 'fresh');
     });
 
-    test('should serve stale persistent data when fetch fails after restart',
-        () async {
-      await cache.getOrFetch<String>('endpoint', null, () async => 'saved',
-          cacheDuration: Duration.zero, usePersistentCache: true);
-      await Future.delayed(const Duration(milliseconds: 5));
+    test(
+      'should serve stale persistent data when fetch fails after restart',
+      () async {
+        await cache.getOrFetch<String>(
+          'endpoint',
+          null,
+          () async => 'saved',
+          cacheDuration: Duration.zero,
+          usePersistentCache: true,
+        );
+        await Future.delayed(const Duration(milliseconds: 5));
 
-      final restarted = ApiCache.forTesting(directory: directory);
-      await restarted.initialize();
-      final result = await restarted.getOrFetch<String>(
-          'endpoint', null, () async => throw Exception('offline'),
-          usePersistentCache: true);
+        final restarted = ApiCache.forTesting(directory: directory);
+        await restarted.initialize();
+        final result = await restarted.getOrFetch<String>(
+          'endpoint',
+          null,
+          () async => throw Exception('offline'),
+          usePersistentCache: true,
+        );
 
-      expect(result, 'saved');
-    });
+        expect(result, 'saved');
+      },
+    );
 
     test('should fetch despite a valid entry with forceRefresh', () async {
-      await cache.getOrFetch<String>('endpoint', null, () async => 'old',
-          cacheDuration: const Duration(minutes: 3), usePersistentCache: true);
+      await cache.getOrFetch<String>(
+        'endpoint',
+        null,
+        () async => 'old',
+        cacheDuration: const Duration(minutes: 3),
+        usePersistentCache: true,
+      );
 
       final result = await cache.getOrFetch<String>(
-          'endpoint', null, () async => 'new',
-          usePersistentCache: true, forceRefresh: true);
+        'endpoint',
+        null,
+        () async => 'new',
+        usePersistentCache: true,
+        forceRefresh: true,
+      );
       final cached = await cache.getOrFetch<String>(
-          'endpoint', null, () async => 'not fetched',
-          usePersistentCache: true);
+        'endpoint',
+        null,
+        () async => 'not fetched',
+        usePersistentCache: true,
+      );
 
       expect(result, 'new');
       expect(cached, 'new');
     });
 
     test('should serve the cached entry when a forced refresh fails', () async {
-      await cache.getOrFetch<String>('endpoint', null, () async => 'cached',
-          cacheDuration: const Duration(minutes: 3), usePersistentCache: true);
+      await cache.getOrFetch<String>(
+        'endpoint',
+        null,
+        () async => 'cached',
+        cacheDuration: const Duration(minutes: 3),
+        usePersistentCache: true,
+      );
 
       final result = await cache.getOrFetch<String>(
-          'endpoint', null, () async => throw Exception('offline'),
-          usePersistentCache: true, forceRefresh: true);
+        'endpoint',
+        null,
+        () async => throw Exception('offline'),
+        usePersistentCache: true,
+        forceRefresh: true,
+      );
 
       expect(result, 'cached');
     });
@@ -367,12 +438,12 @@ void main() {
 
       test('fetches when the version is unknown', () async {
         Future<String> getUnversioned() => cache.getOrFetch<String>(
-              'unversioned',
-              null,
-              () async => 'data ${++fetches}',
-              cacheDuration: expired,
-              version: () async => null,
-            );
+          'unversioned',
+          null,
+          () async => 'data ${++fetches}',
+          cacheDuration: expired,
+          version: () async => null,
+        );
         await getUnversioned();
         expect(await getUnversioned(), 'data 2');
       });
@@ -397,30 +468,46 @@ void main() {
     });
 
     group('scopes', () {
-      Future<String> get(ApiCache cache, String value,
-              {bool persistent = true}) =>
-          cache.getOrFetch<String>('endpoint', null, () async => value,
-              usePersistentCache: persistent);
+      Future<String> get(
+        ApiCache cache,
+        String value, {
+        bool persistent = true,
+      }) => cache.getOrFetch<String>(
+        'endpoint',
+        null,
+        () async => value,
+        usePersistentCache: persistent,
+      );
 
       test('another login sees neither memory nor persisted entries', () async {
         final serverA = ApiCache.forTesting(
-            directory: directory, namespace: 'https://a|user');
+          directory: directory,
+          namespace: 'https://a|user',
+        );
         final serverB = ApiCache.forTesting(
-            directory: directory, namespace: 'https://b|user');
+          directory: directory,
+          namespace: 'https://b|user',
+        );
 
         expect(await get(serverA, 'from A'), 'from A');
         expect(await get(serverB, 'from B'), 'from B');
 
         final restartedA = ApiCache.forTesting(
-            directory: directory, namespace: 'https://a|user');
+          directory: directory,
+          namespace: 'https://a|user',
+        );
         expect(await get(restartedA, 'fetched again'), 'from A');
       });
 
       test('the same server with another user is another scope', () async {
         final alice = ApiCache.forTesting(
-            directory: directory, namespace: 'https://a|alice');
+          directory: directory,
+          namespace: 'https://a|alice',
+        );
         final bob = ApiCache.forTesting(
-            directory: directory, namespace: 'https://a|bob');
+          directory: directory,
+          namespace: 'https://a|bob',
+        );
 
         await get(alice, 'alice');
         expect(await get(bob, 'bob'), 'bob');
@@ -430,8 +517,11 @@ void main() {
         final fetch = Completer<String>();
         final loggedOut = ApiCache.forTesting(directory: directory);
         final result = loggedOut.getOrFetch<String>(
-            'endpoint', null, () => fetch.future,
-            usePersistentCache: true);
+          'endpoint',
+          null,
+          () => fetch.future,
+          usePersistentCache: true,
+        );
         // Let it reach the fetcher
         await Future<void>.delayed(Duration.zero);
 
@@ -449,15 +539,18 @@ void main() {
       test('clearAll waits for a write in progress', () async {
         final writing = Completer<void>();
         final saving = cache.getOrFetch<List<String>>(
-            'large', null, () async => List.filled(200000, 'entry'),
-            usePersistentCache: true,
-            toJson: (data) {
-              // Called when the write starts; the list is then encoded on an
-              // isolate, so the write is still running when clearAll() starts
-              writing.complete();
-              return data;
-            },
-            fromJson: (json) => (json as List<dynamic>).cast<String>());
+          'large',
+          null,
+          () async => List.filled(200000, 'entry'),
+          usePersistentCache: true,
+          toJson: (data) {
+            // Called when the write starts; the list is then encoded on an
+            // isolate, so the write is still running when clearAll() starts
+            writing.complete();
+            return data;
+          },
+          fromJson: (json) => (json as List<dynamic>).cast<String>(),
+        );
         await writing.future;
 
         await cache.clearAll();
@@ -468,7 +561,9 @@ void main() {
 
       test('clearAll removes the entries of other logins too', () async {
         final other = ApiCache.forTesting(
-            directory: directory, namespace: 'https://other|user');
+          directory: directory,
+          namespace: 'https://other|user',
+        );
         await get(other, 'other');
         await get(cache, 'mine');
 
@@ -484,7 +579,10 @@ void main() {
     test('should rethrow when fetch fails and nothing is cached', () async {
       expect(
         cache.getOrFetch<String>(
-            'endpoint', null, () async => throw Exception('offline')),
+          'endpoint',
+          null,
+          () async => throw Exception('offline'),
+        ),
         throwsException,
       );
     });

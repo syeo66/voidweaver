@@ -23,6 +23,8 @@ class _TrustTestCa extends HttpOverrides {
 
   @override
   HttpClient createHttpClient(SecurityContext? context) =>
-      super.createHttpClient(SecurityContext(withTrustedRoots: true)
-        ..setTrustedCertificatesBytes(_ca));
+      super.createHttpClient(
+        SecurityContext(withTrustedRoots: true)
+          ..setTrustedCertificatesBytes(_ca),
+      );
 }

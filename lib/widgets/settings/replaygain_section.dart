@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../services/app_state.dart';
 import '../../services/settings_service.dart';
 import '../../utils/validators.dart';
@@ -29,8 +31,8 @@ class ReplayGainSection extends StatelessWidget {
             Text(
               'Normalize volume levels for consistent playback',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 8),
             Container(
@@ -42,15 +44,19 @@ class ReplayGainSection extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.check_circle_outline,
-                      color: Colors.green, size: 20),
+                  const Icon(
+                    Icons.check_circle_outline,
+                    color: Colors.green,
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'ReplayGain metadata is read directly from your audio files for accurate volume normalization.',
                       style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context).colorScheme.onSurface),
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                     ),
                   ),
                 ],
@@ -59,10 +65,7 @@ class ReplayGainSection extends StatelessWidget {
             const SizedBox(height: 16),
 
             // ReplayGain Mode
-            Text(
-              'Mode',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text('Mode', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             RadioGroup<ReplayGainMode>(
               groupValue: settingsService.replayGainMode,
@@ -106,8 +109,9 @@ class ReplayGainSection extends StatelessWidget {
                 label:
                     '${settingsService.replayGainPreamp.toStringAsFixed(1)} dB',
                 onChanged: (value) {
-                  final validationError =
-                      Validators.validateReplayGainPreamp(value);
+                  final validationError = Validators.validateReplayGainPreamp(
+                    value,
+                  );
                   if (validationError == null) {
                     unawaited(settingsService.setReplayGainPreamp(value));
                     _refreshAudioVolume(context);
@@ -119,8 +123,8 @@ class ReplayGainSection extends StatelessWidget {
               Text(
                 'Adjust the overall volume level',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
 
               const SizedBox(height: 16),
@@ -128,12 +132,14 @@ class ReplayGainSection extends StatelessWidget {
               // Prevent Clipping
               SwitchListTile(
                 title: const Text('Prevent Clipping'),
-                subtitle:
-                    const Text('Reduce volume to prevent audio distortion'),
+                subtitle: const Text(
+                  'Reduce volume to prevent audio distortion',
+                ),
                 value: settingsService.replayGainPreventClipping,
                 onChanged: (value) {
                   unawaited(
-                      settingsService.setReplayGainPreventClipping(value));
+                    settingsService.setReplayGainPreventClipping(value),
+                  );
                   _refreshAudioVolume(context);
                 },
               ),
@@ -167,8 +173,8 @@ class ReplayGainSection extends StatelessWidget {
               Text(
                 'Gain applied to songs without ReplayGain data',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
           ],

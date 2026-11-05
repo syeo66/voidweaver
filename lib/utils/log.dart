@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
+
 import 'redact.dart';
 
 /// Lowest level printed for all loggers. Debug builds print everything,

@@ -27,8 +27,8 @@ class ErrorBoundary extends StatefulWidget {
   /// outside any boundary still get the previous [ErrorWidget.builder].
   static void install() {
     final outside = ErrorWidget.builder;
-    ErrorWidget.builder =
-        (details) => _BoundaryErrorWidget(details: details, outside: outside);
+    ErrorWidget.builder = (details) =>
+        _BoundaryErrorWidget(details: details, outside: outside);
   }
 
   @override
@@ -95,7 +95,8 @@ class _BoundaryErrorWidgetState extends State<_BoundaryErrorWidget> {
     final boundary = _boundary;
     if (boundary != null) {
       WidgetsBinding.instance.addPostFrameCallback(
-          (_) => boundary._onDescendantError(widget.details));
+        (_) => boundary._onDescendantError(widget.details),
+      );
     }
   }
 
@@ -132,11 +133,7 @@ class ErrorDisplay extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.error_outline,
-            size: 64,
-            color: theme.colorScheme.error,
-          ),
+          Icon(Icons.error_outline, size: 64, color: theme.colorScheme.error),
           const SizedBox(height: 16),
           Text(
             'Something went wrong',

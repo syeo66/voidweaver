@@ -10,17 +10,30 @@ void main() {
     });
 
     test('appends the error', () {
-      final record = LogRecord(Level.WARNING, 'Search failed', 'subsonic_api',
-          const FormatException('bad xml'));
-      expect(formatLogRecord(record),
-          'W/subsonic_api: Search failed: FormatException: bad xml');
+      final record = LogRecord(
+        Level.WARNING,
+        'Search failed',
+        'subsonic_api',
+        const FormatException('bad xml'),
+      );
+      expect(
+        formatLogRecord(record),
+        'W/subsonic_api: Search failed: FormatException: bad xml',
+      );
     });
 
     test('appends the stack trace on its own lines', () {
-      final record = LogRecord(Level.SEVERE, 'Uncaught error', 'error_handler',
-          'boom', StackTrace.fromString('#0 main'));
-      expect(formatLogRecord(record),
-          'S/error_handler: Uncaught error: boom\n#0 main');
+      final record = LogRecord(
+        Level.SEVERE,
+        'Uncaught error',
+        'error_handler',
+        'boom',
+        StackTrace.fromString('#0 main'),
+      );
+      expect(
+        formatLogRecord(record),
+        'S/error_handler: Uncaught error: boom\n#0 main',
+      );
     });
 
     test('redacts credentials in the message and the error', () {

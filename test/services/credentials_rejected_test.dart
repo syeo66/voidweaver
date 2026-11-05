@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/app_state.dart';
 
 import '../test_helpers/saved_credentials.dart';
+
 import 'package:voidweaver/services/subsonic_api.dart';
 
 import '../test_helpers/fake_subsonic_server.dart';
@@ -30,7 +31,9 @@ void main() {
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-            const MethodChannel('voidweaver_player'), (_) async => null);
+          const MethodChannel('voidweaver_player'),
+          (_) async => null,
+        );
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
   });
@@ -42,7 +45,10 @@ void main() {
 
   SubsonicApi api({String password = 'secret'}) {
     final api = SubsonicApi(
-        serverUrl: server.url, username: 'alice', password: password);
+      serverUrl: server.url,
+      username: 'alice',
+      password: password,
+    );
     addTearDown(api.dispose);
     return api;
   }
@@ -55,7 +61,9 @@ void main() {
 
       server.password = 'changed';
       await expectLater(
-          client.getRandomSongs(), throwsA(isA<SubsonicException>()));
+        client.getRandomSongs(),
+        throwsA(isA<SubsonicException>()),
+      );
       expect(client.credentialsRejected.value, isTrue);
 
       server.password = 'secret';
@@ -66,16 +74,24 @@ void main() {
     test('is set by requests parsed on a background isolate', () async {
       final client = api(password: 'wrong');
       await expectLater(
-          client.getArtists(),
-          throwsA(isA<SubsonicException>()
-              .having((e) => e.isAuthError, 'isAuthError', isTrue)));
+        client.getArtists(),
+        throwsA(
+          isA<SubsonicException>().having(
+            (e) => e.isAuthError,
+            'isAuthError',
+            isTrue,
+          ),
+        ),
+      );
       expect(client.credentialsRejected.value, isTrue);
     });
 
     test('is not set by other server errors', () async {
       final client = api();
       await expectLater(
-          client.getAlbum('missing'), throwsA(isA<SubsonicException>()));
+        client.getAlbum('missing'),
+        throwsA(isA<SubsonicException>()),
+      );
       expect(client.credentialsRejected.value, isFalse);
     });
 
@@ -91,8 +107,11 @@ void main() {
   test('the fake server serves albums, songs and scrobbles', () async {
     final client = api();
     final albums = await client.getAlbumList();
-    expect(albums.map((a) => a.name),
-        ['First Light', 'Second Wind', 'Third Rail']);
+    expect(albums.map((a) => a.name), [
+      'First Light',
+      'Second Wind',
+      'Third Rail',
+    ]);
     final album = await client.getAlbum(albums.first.id);
     expect(album.songs.map((s) => s.title), ['Dawn', 'Noon', 'Dusk']);
     expect(album.songs.first.duration, 4);
@@ -134,7 +153,8 @@ void main() {
     /// they aren't checked
     Future<AppState> loggedIn() async {
       FlutterSecureStorage.setMockInitialValues(
-          savedCredentials(server.url, 'alice', 'secret'));
+        savedCredentials(server.url, 'alice', 'secret'),
+      );
       final appState = AppState();
       addTearDown(appState.dispose);
       await appState.initialize();
@@ -156,8 +176,10 @@ void main() {
 
       // A wrong one changes nothing
       final api = appState.api;
-      await expectLater(appState.updatePassword('still wrong'),
-          throwsA(isA<SubsonicException>()));
+      await expectLater(
+        appState.updatePassword('still wrong'),
+        throwsA(isA<SubsonicException>()),
+      );
       expect(appState.isConfigured, isTrue);
       expect(appState.api, same(api));
       expect(appState.credentialsRejected, isTrue);
@@ -189,13 +211,15 @@ void main() {
             'type': 'submission',
             'playedAt': playedAt.millisecondsSinceEpoch,
             'queuedAt': DateTime.now().millisecondsSinceEpoch,
-          }
+          },
         ]),
       });
       final appState = await loggedIn();
       // The queue tries to send the play on startup, which is refused
-      await _until(() => appState.credentialsRejected,
-          'rejected (requests: ${server.requests.map((r) => r.endpoint)})');
+      await _until(
+        () => appState.credentialsRejected,
+        'rejected (requests: ${server.requests.map((r) => r.endpoint)})',
+      );
       expect(appState.pendingScrobbles, 1);
       expect(server.scrobbles, isEmpty);
 

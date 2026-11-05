@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+
 import 'replaygain/ape.dart';
 import 'replaygain/header_size.dart' as header_size;
 import 'replaygain/id3v2.dart';
@@ -30,14 +32,16 @@ class ReplayGainReader {
   /// from [fallbackUrl] instead. Playback waits for this, so after [timeout]
   /// (for both) it gives up and returns no data (the fallback gain applies)
   /// rather than hold it up on a stalled connection.
-  static Future<ReplayGainData> readFromUrl(String url,
-      {required http.Client client,
-      String? fallbackUrl,
-      Duration timeout = defaultUrlTimeout}) async {
+  static Future<ReplayGainData> readFromUrl(
+    String url, {
+    required http.Client client,
+    String? fallbackUrl,
+    Duration timeout = defaultUrlTimeout,
+  }) async {
     UrlHead? head;
     var timedOut = false;
     Future<ReplayGainData> read() async {
-      for (final candidate in [url, if (fallbackUrl != null) fallbackUrl]) {
+      for (final candidate in [url, ?fallbackUrl]) {
         if (timedOut) break;
         readerLog(() => 'Reading ReplayGain metadata from: $candidate');
         final current = head = UrlHead(client, candidate);
@@ -89,20 +93,27 @@ class ReplayGainReader {
   /// given number of bytes from the start of the audio (null if unavailable).
   /// Reads more if the tags extend past the first 256 KB.
   static Future<ReplayGainData> readFromHead(
-      Future<Uint8List?> Function(int length) readHead) async {
+    Future<Uint8List?> Function(int length) readHead,
+  ) async {
     try {
       final head = await readHead(_maxHeaderSize);
       if (head == null || head.isEmpty) return const ReplayGainData();
       var bytes = head;
-      readerLog(() => 'Received ${bytes.length} bytes, first 16 bytes: '
-          '${bytes.take(16).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      readerLog(
+        () =>
+            'Received ${bytes.length} bytes, first 16 bytes: '
+            '${bytes.take(16).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}',
+      );
       // FLAC blocks and MP4 atoms reveal the next one's position only once
       // they are read, so this can take several steps
-      for (var required = requiredHeaderSize(bytes);
-          required > bytes.length;
-          required = requiredHeaderSize(bytes)) {
+      for (
+        var required = requiredHeaderSize(bytes);
+        required > bytes.length;
+        required = requiredHeaderSize(bytes)
+      ) {
         readerLog(
-            () => 'Metadata extends to $required bytes, reading the rest');
+          () => 'Metadata extends to $required bytes, reading the rest',
+        );
         final more = await readHead(required);
         if (more == null || more.length <= bytes.length) break;
         bytes = more;
@@ -131,8 +142,9 @@ class ReplayGainReader {
   /// an open file).
   static Future<ReplayGainData> _parseInBackground(Uint8List bytes) async {
     final logging = replayGainLogging;
-    final (data, lines) =
-        await Isolate.run(() => collectReaderLog(logging, () => _parse(bytes)));
+    final (data, lines) = await Isolate.run(
+      () => collectReaderLog(logging, () => _parse(bytes)),
+    );
     for (final line in lines ?? const <String>[]) {
       logReplayGain(() => line);
     }
@@ -168,8 +180,10 @@ class ReplayGainReader {
       readerLog(() => '✗ No ReplayGain data in $name');
     }
 
-    readerLog(() =>
-        '⚠ WARNING: No ReplayGain metadata found after all parsing attempts!');
+    readerLog(
+      () =>
+          '⚠ WARNING: No ReplayGain metadata found after all parsing attempts!',
+    );
     readerLog(() => '=== ReplayGain Parsing Ended (NO DATA FOUND) ===');
     return const ReplayGainData();
   }

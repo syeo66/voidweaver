@@ -54,16 +54,18 @@ void main() {
       expect(saved!.currentPosition, const Duration(seconds: 3));
     });
 
-    test('explicit save is not overwritten by a pending position save',
-        () async {
-      persistence.schedulePositionSave(stateAt(0, 42));
-      await persistence.savePlaybackState(stateAt(1, 0));
-      await Future.delayed(interval * 2);
+    test(
+      'explicit save is not overwritten by a pending position save',
+      () async {
+        persistence.schedulePositionSave(stateAt(0, 42));
+        await persistence.savePlaybackState(stateAt(1, 0));
+        await Future.delayed(interval * 2);
 
-      final saved = await persistence.loadPlaybackState();
-      expect(saved!.currentIndex, 1);
-      expect(saved.currentPosition, Duration.zero);
-    });
+        final saved = await persistence.loadPlaybackState();
+        expect(saved!.currentIndex, 1);
+        expect(saved.currentPosition, Duration.zero);
+      },
+    );
 
     test('dispose writes a pending position save', () async {
       persistence.schedulePositionSave(stateAt(0, 42));
@@ -83,21 +85,25 @@ void main() {
       await Future.delayed(interval * 2);
 
       expect(prefs.getString('playbackQueue'), isNull);
-      expect(jsonDecode(prefs.getString('playbackPosition')!),
-          containsPair('currentIndex', 1));
+      expect(
+        jsonDecode(prefs.getString('playbackPosition')!),
+        containsPair('currentIndex', 1),
+      );
     });
 
     test('saves the queue again once it was replaced', () async {
       await persistence.savePlaybackState(stateAt(0, 0));
-      await persistence.savePlaybackState(PersistedPlaybackState(
-        playlist: [songs[1]],
-        currentIndex: 0,
-        currentPosition: Duration.zero,
-        isPlaying: true,
-        lastUpdated: DateTime.now(),
-        playlistSource: 'song',
-        sourceId: 'song2',
-      ));
+      await persistence.savePlaybackState(
+        PersistedPlaybackState(
+          playlist: [songs[1]],
+          currentIndex: 0,
+          currentPosition: Duration.zero,
+          isPlaying: true,
+          lastUpdated: DateTime.now(),
+          playlistSource: 'song',
+          sourceId: 'song2',
+        ),
+      );
 
       final saved = await persistence.loadPlaybackState();
       expect(saved!.playlist, [songs[1]]);
@@ -107,12 +113,12 @@ void main() {
     test('saves the queue again once a song in it changed', () async {
       final playlist = List.of(songs);
       PersistedPlaybackState state(int seconds) => PersistedPlaybackState(
-            playlist: playlist,
-            currentIndex: 0,
-            currentPosition: Duration(seconds: seconds),
-            isPlaying: true,
-            lastUpdated: DateTime.now(),
-          );
+        playlist: playlist,
+        currentIndex: 0,
+        currentPosition: Duration(seconds: seconds),
+        isPlaying: true,
+        lastUpdated: DateTime.now(),
+      );
       await persistence.savePlaybackState(state(0));
 
       // As AudioPlayerService stores ReplayGain read from the file

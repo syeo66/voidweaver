@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import 'services/app_state.dart';
 import 'services/error_handler.dart';
 import 'services/settings_service.dart';
@@ -12,31 +14,33 @@ import 'utils/test_ca.dart';
 
 void main() async {
   // Run the app in a zone to catch async errors
-  unawaited(runZonedGuarded(
-    () async {
-      WidgetsFlutterBinding.ensureInitialized();
-      setUpLogging();
-      // Only in the build of tool/emulator_check.sh --fake-server
-      trustTestCa();
+  unawaited(
+    runZonedGuarded(
+      () async {
+        WidgetsFlutterBinding.ensureInitialized();
+        setUpLogging();
+        // Only in the build of tool/emulator_check.sh --fake-server
+        trustTestCa();
 
-      // Initialize global error handling
-      ErrorHandler.instance.initialize();
-      // Build errors also show the nearest ErrorBoundary's fallback
-      ErrorBoundary.install();
+        // Initialize global error handling
+        ErrorHandler.instance.initialize();
+        // Build errors also show the nearest ErrorBoundary's fallback
+        ErrorBoundary.install();
 
-      // Add error reporters
-      ErrorHandler.instance.addReporter(ConsoleErrorReporter());
+        // Add error reporters
+        ErrorHandler.instance.addReporter(ConsoleErrorReporter());
 
-      runApp(const MyApp());
-    },
-    (error, stackTrace) {
-      ErrorHandler.instance.reportError(
-        error,
-        stackTrace,
-        context: 'Main zone error',
-      );
-    },
-  ));
+        runApp(const MyApp());
+      },
+      (error, stackTrace) {
+        ErrorHandler.instance.reportError(
+          error,
+          stackTrace,
+          context: 'Main zone error',
+        );
+      },
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -55,8 +59,7 @@ class MyApp extends StatelessWidget {
         child: Selector<AppState, SettingsService?>(
           selector: (context, appState) => appState.settingsService,
           builder: (context, settingsService, child) => ListenableBuilder(
-            listenable: Listenable.merge(
-                [if (settingsService != null) settingsService]),
+            listenable: Listenable.merge([?settingsService]),
             builder: (context, child) => MaterialApp(
               title: 'Voidweaver',
               theme: ThemeData(
@@ -97,8 +100,9 @@ class _AppRouterState extends State<AppRouter> {
     // return from detached straight to resumed, which calls no onShow
     _lifecycleListener = AppLifecycleListener(
       onStateChange: (state) => context.read<AppState>().setVisible(
-          state == AppLifecycleState.resumed ||
-              state == AppLifecycleState.inactive),
+        state == AppLifecycleState.resumed ||
+            state == AppLifecycleState.inactive,
+      ),
     );
     unawaited(_initializeApp());
   }
@@ -121,9 +125,7 @@ class _AppRouterState extends State<AppRouter> {
   @override
   Widget build(BuildContext context) {
     if (!_initialized) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Consumer<AppState>(

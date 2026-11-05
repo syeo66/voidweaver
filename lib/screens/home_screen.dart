@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../services/app_state.dart';
 import '../widgets/credentials_banner.dart';
 import '../widgets/album_list.dart';
@@ -77,8 +79,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       if (mounted) {
                         messenger.showSnackBar(
                           SnackBar(
-                            content: Text(NetworkErrorHelper.getErrorMessage(e,
-                                context: 'Failed to play random songs')),
+                            content: Text(
+                              NetworkErrorHelper.getErrorMessage(
+                                e,
+                                context: 'Failed to play random songs',
+                              ),
+                            ),
                             backgroundColor: errorColor,
                           ),
                         );
@@ -104,8 +110,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         ? const Icon(Icons.bedtime, color: Colors.orange)
                         : const Icon(Icons.bedtime_outlined),
                     tooltip: 'Sleep timer',
-                    onPressed: () => unawaited(showSleepTimerDialog(
-                        context, appState.audioPlayerService!)),
+                    onPressed: () => unawaited(
+                      showSleepTimerDialog(
+                        context,
+                        appState.audioPlayerService!,
+                      ),
+                    ),
                   );
                 },
               );
@@ -119,7 +129,8 @@ class _HomeScreenState extends State<HomeScreen> {
               } else if (value == 'settings') {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                      builder: (context) => const SettingsScreen()),
+                    builder: (context) => const SettingsScreen(),
+                  ),
                 );
               }
             },
@@ -200,10 +211,7 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.library_music),
             label: 'Albums',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Artists',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Artists'),
           BottomNavigationBarItem(
             icon: Icon(Icons.music_note),
             label: 'Now Playing',
@@ -222,13 +230,15 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Log out?'),
-        content: Text([
-          'You will have to log in again. Settings are kept.',
-          if (pending == 1)
-            '1 play hasn\'t been sent to the server yet and will be lost.'
-          else if (pending > 1)
-            '$pending plays haven\'t been sent to the server yet and will be lost.',
-        ].join('\n\n')),
+        content: Text(
+          [
+            'You will have to log in again. Settings are kept.',
+            if (pending == 1)
+              '1 play hasn\'t been sent to the server yet and will be lost.'
+            else if (pending > 1)
+              '$pending plays haven\'t been sent to the server yet and will be lost.',
+          ].join('\n\n'),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),

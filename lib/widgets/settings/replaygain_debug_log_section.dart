@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../services/replaygain_debug_logger.dart';
 import '../../utils/format.dart';
 
@@ -35,8 +36,9 @@ class ReplayGainDebugLogSectionState extends State<ReplayGainDebugLogSection> {
         ? renderBox.localToGlobal(Offset.zero) & renderBox.size
         : null;
 
-    final success =
-        await _logger.exportLog(sharePositionOrigin: sharePositionOrigin);
+    final success = await _logger.exportLog(
+      sharePositionOrigin: sharePositionOrigin,
+    );
     if (!mounted) return;
     if (!success) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -54,7 +56,8 @@ class ReplayGainDebugLogSectionState extends State<ReplayGainDebugLogSection> {
       builder: (context) => AlertDialog(
         title: const Text('Clear Debug Log?'),
         content: const Text(
-            'This permanently deletes the stored ReplayGain debug log. This cannot be undone.'),
+          'This permanently deletes the stored ReplayGain debug log. This cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -103,8 +106,8 @@ class ReplayGainDebugLogSectionState extends State<ReplayGainDebugLogSection> {
               'settings, and the resulting volume adjustment. Export the '
               'log and share it to help track down the issue.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 8),
             Container(
@@ -117,8 +120,11 @@ class ReplayGainDebugLogSectionState extends State<ReplayGainDebugLogSection> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.privacy_tip_outlined,
-                      color: Colors.orange, size: 20),
+                  const Icon(
+                    Icons.privacy_tip_outlined,
+                    color: Colors.orange,
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -126,8 +132,9 @@ class ReplayGainDebugLogSectionState extends State<ReplayGainDebugLogSection> {
                       'Login credentials are redacted before saving, but only '
                       'export and share this file with people you trust.',
                       style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context).colorScheme.onSurface),
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                     ),
                   ),
                 ],
@@ -141,7 +148,8 @@ class ReplayGainDebugLogSectionState extends State<ReplayGainDebugLogSection> {
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Enable Debug Logging'),
                   subtitle: const Text(
-                      'Record ReplayGain diagnostics to a log file on this device'),
+                    'Record ReplayGain diagnostics to a log file on this device',
+                  ),
                   value: _logger.enabled,
                   onChanged: (value) async {
                     await _logger.setEnabled(value);
@@ -158,8 +166,8 @@ class ReplayGainDebugLogSectionState extends State<ReplayGainDebugLogSection> {
                 return Text(
                   'Log size: ${formatBytes(size)}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 );
               },
             ),

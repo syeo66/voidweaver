@@ -26,7 +26,8 @@ ReplayGainData parseMp4(Uint8List bytes) {
   int offset = 0;
 
   while (offset + 8 < bytes.length) {
-    final atomSize = (bytes[offset] << 24) |
+    final atomSize =
+        (bytes[offset] << 24) |
         (bytes[offset + 1] << 16) |
         (bytes[offset + 2] << 8) |
         bytes[offset + 3];
@@ -35,8 +36,9 @@ ReplayGainData parseMp4(Uint8List bytes) {
       break;
     }
 
-    final atomType =
-        String.fromCharCodes(bytes.sublist(offset + 4, offset + 8));
+    final atomType = String.fromCharCodes(
+      bytes.sublist(offset + 4, offset + 8),
+    );
     readerLog(() => 'Found MP4 atom: $atomType, size: $atomSize');
 
     // Look for metadata atoms
@@ -64,36 +66,36 @@ ReplayGainData parseMp4(Uint8List bytes) {
 
   // Look for common ReplayGain tag formats in M4A
   final trackGainMatch = RegExp(
-          r'----:com\.apple\.iTunes:replaygain_track_gain[^\d-]*(-?\d+\.?\d*)',
-          caseSensitive: false)
-      .firstMatch(textData);
+    r'----:com\.apple\.iTunes:replaygain_track_gain[^\d-]*(-?\d+\.?\d*)',
+    caseSensitive: false,
+  ).firstMatch(textData);
   if (trackGainMatch != null) {
     trackGain = double.tryParse(trackGainMatch.group(1)!);
     readerLog(() => 'Found iTunes ReplayGain track gain: $trackGain');
   }
 
   final albumGainMatch = RegExp(
-          r'----:com\.apple\.iTunes:replaygain_album_gain[^\d-]*(-?\d+\.?\d*)',
-          caseSensitive: false)
-      .firstMatch(textData);
+    r'----:com\.apple\.iTunes:replaygain_album_gain[^\d-]*(-?\d+\.?\d*)',
+    caseSensitive: false,
+  ).firstMatch(textData);
   if (albumGainMatch != null) {
     albumGain = double.tryParse(albumGainMatch.group(1)!);
     readerLog(() => 'Found iTunes ReplayGain album gain: $albumGain');
   }
 
   final trackPeakMatch = RegExp(
-          r'----:com\.apple\.iTunes:replaygain_track_peak[^\d]*(\d+\.?\d*)',
-          caseSensitive: false)
-      .firstMatch(textData);
+    r'----:com\.apple\.iTunes:replaygain_track_peak[^\d]*(\d+\.?\d*)',
+    caseSensitive: false,
+  ).firstMatch(textData);
   if (trackPeakMatch != null) {
     trackPeak = double.tryParse(trackPeakMatch.group(1)!);
     readerLog(() => 'Found iTunes ReplayGain track peak: $trackPeak');
   }
 
   final albumPeakMatch = RegExp(
-          r'----:com\.apple\.iTunes:replaygain_album_peak[^\d]*(\d+\.?\d*)',
-          caseSensitive: false)
-      .firstMatch(textData);
+    r'----:com\.apple\.iTunes:replaygain_album_peak[^\d]*(\d+\.?\d*)',
+    caseSensitive: false,
+  ).firstMatch(textData);
   if (albumPeakMatch != null) {
     albumPeak = double.tryParse(albumPeakMatch.group(1)!);
     readerLog(() => 'Found iTunes ReplayGain album peak: $albumPeak');
@@ -102,9 +104,9 @@ ReplayGainData parseMp4(Uint8List bytes) {
   // Also look for standard ReplayGain fields without iTunes prefix
   if (trackGain == null) {
     final stdTrackGainMatch = RegExp(
-            r'replaygain_track_gain[^\d-]*(-?\d+\.?\d*)',
-            caseSensitive: false)
-        .firstMatch(textData);
+      r'replaygain_track_gain[^\d-]*(-?\d+\.?\d*)',
+      caseSensitive: false,
+    ).firstMatch(textData);
     if (stdTrackGainMatch != null) {
       trackGain = double.tryParse(stdTrackGainMatch.group(1)!);
       readerLog(() => 'Found standard ReplayGain track gain: $trackGain');
@@ -113,9 +115,9 @@ ReplayGainData parseMp4(Uint8List bytes) {
 
   if (albumGain == null) {
     final stdAlbumGainMatch = RegExp(
-            r'replaygain_album_gain[^\d-]*(-?\d+\.?\d*)',
-            caseSensitive: false)
-        .firstMatch(textData);
+      r'replaygain_album_gain[^\d-]*(-?\d+\.?\d*)',
+      caseSensitive: false,
+    ).firstMatch(textData);
     if (stdAlbumGainMatch != null) {
       albumGain = double.tryParse(stdAlbumGainMatch.group(1)!);
       readerLog(() => 'Found standard ReplayGain album gain: $albumGain');
@@ -123,9 +125,10 @@ ReplayGainData parseMp4(Uint8List bytes) {
   }
 
   if (trackPeak == null) {
-    final stdTrackPeakMatch =
-        RegExp(r'replaygain_track_peak[^\d]*(\d+\.?\d*)', caseSensitive: false)
-            .firstMatch(textData);
+    final stdTrackPeakMatch = RegExp(
+      r'replaygain_track_peak[^\d]*(\d+\.?\d*)',
+      caseSensitive: false,
+    ).firstMatch(textData);
     if (stdTrackPeakMatch != null) {
       trackPeak = double.tryParse(stdTrackPeakMatch.group(1)!);
       readerLog(() => 'Found standard ReplayGain track peak: $trackPeak');
@@ -133,9 +136,10 @@ ReplayGainData parseMp4(Uint8List bytes) {
   }
 
   if (albumPeak == null) {
-    final stdAlbumPeakMatch =
-        RegExp(r'replaygain_album_peak[^\d]*(\d+\.?\d*)', caseSensitive: false)
-            .firstMatch(textData);
+    final stdAlbumPeakMatch = RegExp(
+      r'replaygain_album_peak[^\d]*(\d+\.?\d*)',
+      caseSensitive: false,
+    ).firstMatch(textData);
     if (stdAlbumPeakMatch != null) {
       albumPeak = double.tryParse(stdAlbumPeakMatch.group(1)!);
       readerLog(() => 'Found standard ReplayGain album peak: $albumPeak');
@@ -156,7 +160,8 @@ ReplayGainData _searchMp4Metadata(Uint8List bytes) {
   int offset = 0;
 
   while (offset + 8 < bytes.length) {
-    final atomSize = (bytes[offset] << 24) |
+    final atomSize =
+        (bytes[offset] << 24) |
         (bytes[offset + 1] << 16) |
         (bytes[offset + 2] << 8) |
         bytes[offset + 3];
@@ -165,8 +170,9 @@ ReplayGainData _searchMp4Metadata(Uint8List bytes) {
       break;
     }
 
-    final atomType =
-        String.fromCharCodes(bytes.sublist(offset + 4, offset + 8));
+    final atomType = String.fromCharCodes(
+      bytes.sublist(offset + 4, offset + 8),
+    );
 
     if (atomType == 'ilst') {
       readerLog(() => 'Found nested iTunes metadata atom');
@@ -185,8 +191,10 @@ ReplayGainData _parseItunesMetadata(Uint8List bytes) {
 
   // Convert to string and search for ReplayGain fields
   final textData = String.fromCharCodes(bytes);
-  readerLog(() =>
-      'iTunes metadata text sample: ${textData.substring(0, math.min(200, textData.length))}');
+  readerLog(
+    () =>
+        'iTunes metadata text sample: ${textData.substring(0, math.min(200, textData.length))}',
+  );
 
   double? trackGain;
   double? albumGain;
@@ -206,8 +214,10 @@ ReplayGainData _parseItunesMetadata(Uint8List bytes) {
   ];
 
   for (final pattern in patterns) {
-    final regex =
-        RegExp('$pattern[^\\d-]*(-?\\d+\\.?\\d*)', caseSensitive: false);
+    final regex = RegExp(
+      '$pattern[^\\d-]*(-?\\d+\\.?\\d*)',
+      caseSensitive: false,
+    );
     final match = regex.firstMatch(textData);
     if (match != null) {
       final value = double.tryParse(match.group(1)!);

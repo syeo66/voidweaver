@@ -30,13 +30,13 @@ void main() {
 
   // Each song's track gain maps to a distinct volume, see setUp
   Song song(String id, {double gain = -6.0}) => Song(
-        id: id,
-        title: 'Title $id',
-        artist: 'Artist',
-        album: 'Album',
-        duration: 180,
-        replayGainTrackGain: gain,
-      );
+    id: id,
+    title: 'Title $id',
+    artist: 'Artist',
+    album: 'Album',
+    duration: 180,
+    replayGainTrackGain: gain,
+  );
 
   Album album(List<Song> songs) =>
       Album(id: 'album1', name: 'Album', artist: 'Artist', songs: songs);
@@ -71,26 +71,32 @@ void main() {
     when(mockSettings.replayGainPreventClipping).thenReturn(true);
     when(mockSettings.scrobbleMinPlayTimeMinutes).thenReturn(4.0);
     when(mockSettings.scrobbleThresholdPercent).thenReturn(50.0);
-    when(mockSettings.calculateVolumeAdjustment(
-      trackGain: anyNamed('trackGain'),
-      albumGain: anyNamed('albumGain'),
-      trackPeak: anyNamed('trackPeak'),
-      albumPeak: anyNamed('albumPeak'),
-      fromAlbum: anyNamed('fromAlbum'),
-    )).thenAnswer((invocation) {
+    when(
+      mockSettings.calculateVolumeAdjustment(
+        trackGain: anyNamed('trackGain'),
+        albumGain: anyNamed('albumGain'),
+        trackPeak: anyNamed('trackPeak'),
+        albumPeak: anyNamed('albumPeak'),
+        fromAlbum: anyNamed('fromAlbum'),
+      ),
+    ).thenAnswer((invocation) {
       final gain = invocation.namedArguments[#trackGain] as double?;
       return gain == -6.0 ? 0.5 : 0.7;
     });
 
     when(mockApi.getStreamUrl(any)).thenAnswer(
-        (invocation) => urlFor(invocation.positionalArguments.first as String));
+      (invocation) => urlFor(invocation.positionalArguments.first as String),
+    );
     when(mockApi.readReplayGain(any))
         .thenAnswer((_) async => const ReplayGainData());
 
-    service = AudioPlayerService(mockApi, mockSettings,
-        audioPlayer: player,
-        audioCache: cache,
-        downloadRetryDelay: const Duration(milliseconds: 5));
+    service = AudioPlayerService(
+      mockApi,
+      mockSettings,
+      audioPlayer: player,
+      audioCache: cache,
+      downloadRetryDelay: const Duration(milliseconds: 5),
+    );
   });
 
   tearDown(() async {
@@ -104,8 +110,11 @@ void main() {
 
       await service.playAlbum(albumOf(3));
 
-      expect(
-          player.sequenceSources, [urlFor('s1'), urlFor('s2'), urlFor('s3')]);
+      expect(player.sequenceSources, [
+        urlFor('s1'),
+        urlFor('s2'),
+        urlFor('s3'),
+      ]);
       expect(player.currentIndex, 0);
       expect(player.loadedSources, [urlFor('s1')]);
     });
@@ -114,8 +123,10 @@ void main() {
       cache.reachable = false;
       await service.playAlbum(albumOf(2));
 
-      expect([for (final s in player.sequence) s.cacheKey],
-          ['server|s1', 'server|s2']);
+      expect(
+        [for (final s in player.sequence) s.cacheKey],
+        ['server|s1', 'server|s2'],
+      );
     });
 
     test('downloads the next three tracks, nearest first', () async {
@@ -167,8 +178,10 @@ void main() {
   group('starting a queue that can\'t be fetched', () {
     Future<void> playing(Album playingAlbum) async {
       await service.playAlbum(playingAlbum);
-      await until(() => service.playbackState == PlaybackState.playing,
-          'the album plays');
+      await until(
+        () => service.playbackState == PlaybackState.playing,
+        'the album plays',
+      );
     }
 
     test('keeps the album playing when random songs fail', () async {
@@ -178,14 +191,19 @@ void main() {
           .thenThrow(const SocketException('offline'));
 
       await expectLater(
-          service.playRandomSongs(), throwsA(isA<SocketException>()));
+        service.playRandomSongs(),
+        throwsA(isA<SocketException>()),
+      );
 
       expect(service.playbackState, PlaybackState.playing);
       expect(player.playing, isTrue);
       expect(service.playlist.map((s) => s.id), ['s1', 's2', 's3']);
       expect(service.currentSong?.id, 's1');
-      expect(
-          player.sequenceSources, [urlFor('s1'), urlFor('s2'), urlFor('s3')]);
+      expect(player.sequenceSources, [
+        urlFor('s1'),
+        urlFor('s2'),
+        urlFor('s3'),
+      ]);
     });
 
     test('keeps the album playing when another album fails', () async {
@@ -194,9 +212,11 @@ void main() {
           .thenThrow(const SocketException('offline'));
 
       await expectLater(
-          service.playAlbum(
-              Album(id: 'other', name: 'Other', artist: 'Artist', songs: [])),
-          throwsA(isA<SocketException>()));
+        service.playAlbum(
+          Album(id: 'other', name: 'Other', artist: 'Artist', songs: []),
+        ),
+        throwsA(isA<SocketException>()),
+      );
 
       expect(service.playbackState, PlaybackState.playing);
       expect(player.playing, isTrue);
@@ -207,11 +227,15 @@ void main() {
       await playing(albumOf(2));
       await service.pause();
       await until(
-          () => service.playbackState == PlaybackState.paused, 'the pause');
+        () => service.playbackState == PlaybackState.paused,
+        'the pause',
+      );
       when(mockApi.getRandomSongs(any)).thenAnswer((_) async => <Song>[]);
 
       await expectLater(
-          service.playRandomSongs(), throwsA(isA<UserFacingException>()));
+        service.playRandomSongs(),
+        throwsA(isA<UserFacingException>()),
+      );
 
       expect(service.playbackState, PlaybackState.paused);
       expect(player.playing, isFalse);
@@ -239,7 +263,9 @@ void main() {
       // Paused from the notification while the request runs
       await service.pause();
       await until(
-          () => service.playbackState == PlaybackState.paused, 'the pause');
+        () => service.playbackState == PlaybackState.paused,
+        'the pause',
+      );
 
       songs.completeError(const SocketException('offline'));
       await expectLater(start, throwsA(isA<SocketException>()));
@@ -283,41 +309,55 @@ void main() {
     });
 
     test('a gain read from a downloaded track applies to it', () async {
-      final untagged =
-          Song(id: 's2', title: 'Title s2', artist: 'Artist', album: 'Album');
+      final untagged = Song(
+        id: 's2',
+        title: 'Title s2',
+        artist: 'Artist',
+        album: 'Album',
+      );
       cache.tags['s2'] = const ReplayGainData(trackGain: -6.0);
       await service.playAlbum(album([song('s1', gain: -3.0), untagged]));
       expect(player.gainOfSource(urlFor('s2')), 0.7);
 
-      await until(() => player.gainOfSource(urlFor('s2')) == 0.5,
-          'the gain is read from the cache');
+      await until(
+        () => player.gainOfSource(urlFor('s2')) == 0.5,
+        'the gain is read from the cache',
+      );
       expect(player.gainOfSource(urlFor('s1')), 0.7);
     });
 
-    test('the start track gets a gain read from its file before it plays',
-        () async {
-      cache.reachable = false;
-      final untagged =
-          Song(id: 's1', title: 'Title s1', artist: 'Artist', album: 'Album');
-      when(mockApi.readReplayGain('s1'))
-          .thenAnswer((_) async => const ReplayGainData(trackGain: -6.0));
+    test(
+      'the start track gets a gain read from its file before it plays',
+      () async {
+        cache.reachable = false;
+        final untagged = Song(
+          id: 's1',
+          title: 'Title s1',
+          artist: 'Artist',
+          album: 'Album',
+        );
+        when(mockApi.readReplayGain('s1'))
+            .thenAnswer((_) async => const ReplayGainData(trackGain: -6.0));
 
-      await service.playAlbum(album([untagged]));
+        await service.playAlbum(album([untagged]));
 
-      expect(player.gainOfSource(urlFor('s1')), 0.5);
-      verify(mockApi.readReplayGain('s1')).called(1);
-    });
+        expect(player.gainOfSource(urlFor('s1')), 0.5);
+        verify(mockApi.readReplayGain('s1')).called(1);
+      },
+    );
 
     test('changed settings apply to every track', () async {
       cache.reachable = false;
       await service.playAlbum(albumOf(3));
-      when(mockSettings.calculateVolumeAdjustment(
-        trackGain: anyNamed('trackGain'),
-        albumGain: anyNamed('albumGain'),
-        trackPeak: anyNamed('trackPeak'),
-        albumPeak: anyNamed('albumPeak'),
-        fromAlbum: anyNamed('fromAlbum'),
-      )).thenReturn(1.4);
+      when(
+        mockSettings.calculateVolumeAdjustment(
+          trackGain: anyNamed('trackGain'),
+          albumGain: anyNamed('albumGain'),
+          trackPeak: anyNamed('trackPeak'),
+          albumPeak: anyNamed('albumPeak'),
+          fromAlbum: anyNamed('fromAlbum'),
+        ),
+      ).thenReturn(1.4);
 
       await service.refreshReplayGainVolume();
 
@@ -328,14 +368,18 @@ void main() {
 
     test('tells the settings whether the queue is an album', () async {
       cache.reachable = false;
-      when(mockSettings.calculateVolumeAdjustment(
-        trackGain: anyNamed('trackGain'),
-        albumGain: anyNamed('albumGain'),
-        trackPeak: anyNamed('trackPeak'),
-        albumPeak: anyNamed('albumPeak'),
-        fromAlbum: anyNamed('fromAlbum'),
-      )).thenAnswer((invocation) =>
-          invocation.namedArguments[#fromAlbum] == true ? 0.3 : 0.9);
+      when(
+        mockSettings.calculateVolumeAdjustment(
+          trackGain: anyNamed('trackGain'),
+          albumGain: anyNamed('albumGain'),
+          trackPeak: anyNamed('trackPeak'),
+          albumPeak: anyNamed('albumPeak'),
+          fromAlbum: anyNamed('fromAlbum'),
+        ),
+      ).thenAnswer(
+        (invocation) =>
+            invocation.namedArguments[#fromAlbum] == true ? 0.3 : 0.9,
+      );
 
       await service.playAlbum(albumOf(2));
       expect(player.gainOfSource(urlFor('s1')), 0.3);
@@ -436,7 +480,8 @@ void main() {
       await service.playAlbum(albumOf(3));
 
       player.simulatePositionChange(
-          const Duration(minutes: 2, seconds: 59, milliseconds: 800));
+        const Duration(minutes: 2, seconds: 59, milliseconds: 800),
+      );
       await Future.delayed(const Duration(milliseconds: 20));
 
       expect(service.currentIndex, 0);
@@ -459,51 +504,67 @@ void main() {
       expect(player.loadedSources, [urlFor('s1')]);
     });
 
-    test('continues at the next downloaded track when the next one fails',
-        () async {
-      cache.cached.add('s3');
-      cache.reachable = false;
-      await service.playAlbum(albumOf(3));
-      player.failingUrls.add(urlFor('s2'));
+    test(
+      'continues at the next downloaded track when the next one fails',
+      () async {
+        cache.cached.add('s3');
+        cache.reachable = false;
+        await service.playAlbum(albumOf(3));
+        player.failingUrls.add(urlFor('s2'));
 
-      player.simulateTrackTransition();
-      await until(() => service.currentIndex == 2, 'playback continues at s3');
+        player.simulateTrackTransition();
+        await until(
+          () => service.currentIndex == 2,
+          'playback continues at s3',
+        );
 
-      expect(player.loadedSources.last, urlFor('s3'));
-      expect(service.playbackState, PlaybackState.playing);
-    });
+        expect(player.loadedSources.last, urlFor('s3'));
+        expect(service.playbackState, PlaybackState.playing);
+      },
+    );
 
-    test('continues at the next downloaded track when a stream breaks off',
-        () async {
-      cache.cached.add('s3');
-      cache.reachable = false;
-      await service.playAlbum(albumOf(3));
+    test(
+      'continues at the next downloaded track when a stream breaks off',
+      () async {
+        cache.cached.add('s3');
+        cache.reachable = false;
+        await service.playAlbum(albumOf(3));
 
-      player.simulateLoadError();
-      await until(() => service.currentIndex == 2, 'playback continues at s3');
+        player.simulateLoadError();
+        await until(
+          () => service.currentIndex == 2,
+          'playback continues at s3',
+        );
 
-      expect(player.loadedSources.last, urlFor('s3'));
-    });
+        expect(player.loadedSources.last, urlFor('s3'));
+      },
+    );
 
-    test('stops when nothing ahead is downloaded, and play() tries again',
-        () async {
-      cache.reachable = false;
-      await service.playAlbum(albumOf(2));
-      player.failingUrls.add(urlFor('s2'));
+    test(
+      'stops when nothing ahead is downloaded, and play() tries again',
+      () async {
+        cache.reachable = false;
+        await service.playAlbum(albumOf(2));
+        player.failingUrls.add(urlFor('s2'));
 
-      player.simulateTrackTransition();
-      await until(() => service.playbackState == PlaybackState.stopped,
-          'playback stops');
-      expect(service.currentSong?.id, 's2');
+        player.simulateTrackTransition();
+        await until(
+          () => service.playbackState == PlaybackState.stopped,
+          'playback stops',
+        );
+        expect(service.currentSong?.id, 's2');
 
-      player.failingUrls.clear();
-      await service.play();
-      await until(() => service.playbackState == PlaybackState.playing,
-          'playback resumes');
+        player.failingUrls.clear();
+        await service.play();
+        await until(
+          () => service.playbackState == PlaybackState.playing,
+          'playback resumes',
+        );
 
-      expect(player.loadedSources.last, urlFor('s2'));
-      expect(service.currentIndex, 1);
-    });
+        expect(player.loadedSources.last, urlFor('s2'));
+        expect(service.currentIndex, 1);
+      },
+    );
   });
 
   group('password changed', () {
@@ -513,15 +574,19 @@ void main() {
 
     setUp(() {
       password = 'old';
-      when(mockApi.getStreamUrl(any)).thenAnswer((invocation) =>
-          urlWithPassword(invocation.positionalArguments.first as String));
+      when(mockApi.getStreamUrl(any)).thenAnswer(
+        (invocation) =>
+            urlWithPassword(invocation.positionalArguments.first as String),
+      );
     });
 
     test('keeps playing, and loads an item with the old URL again', () async {
       cache.reachable = false;
       await service.playAlbum(albumOf(3));
-      await until(() => service.playbackState == PlaybackState.playing,
-          'playback starts');
+      await until(
+        () => service.playbackState == PlaybackState.playing,
+        'playback starts',
+      );
       final loads = player.loadedSources.length;
 
       // The server takes only the new password from now on
@@ -532,10 +597,14 @@ void main() {
       expect(player.loadedSources, hasLength(loads));
 
       player.simulateTrackTransition();
-      await until(() => player.loadedSources.last == urlWithPassword('s2'),
-          'the queue is loaded again with the new URL');
-      await until(() => service.playbackState == PlaybackState.playing,
-          'playback goes on');
+      await until(
+        () => player.loadedSources.last == urlWithPassword('s2'),
+        'the queue is loaded again with the new URL',
+      );
+      await until(
+        () => service.playbackState == PlaybackState.playing,
+        'playback goes on',
+      );
       expect(service.currentIndex, 1);
       expect(player.sequenceSources.last, urlWithPassword('s3'));
     });
@@ -551,8 +620,10 @@ void main() {
       service.credentialsChanged();
       await until(() => cache.downloaded.length == 2, 'the downloads');
       expect(cache.downloaded, ['s2', 's3']);
-      expect(cache.urls.reversed.take(2),
-          [urlWithPassword('s3'), urlWithPassword('s2')]);
+      expect(cache.urls.reversed.take(2), [
+        urlWithPassword('s3'),
+        urlWithPassword('s2'),
+      ]);
     });
   });
 
@@ -562,8 +633,10 @@ void main() {
       cache.reachable = false;
       await service.playAlbum(albumOf(2));
       player.simulateBuffering();
-      await until(() => service.playbackState == PlaybackState.loading,
-          'the service shows the buffering');
+      await until(
+        () => service.playbackState == PlaybackState.loading,
+        'the service shows the buffering',
+      );
       expect(service.playWhenReady, isTrue);
 
       await service.pause();
@@ -596,30 +669,36 @@ void main() {
       expect(cache.downloaded, isEmpty);
 
       await service.play();
-      await until(() => service.playbackState == PlaybackState.playing,
-          'playback starts');
+      await until(
+        () => service.playbackState == PlaybackState.playing,
+        'playback starts',
+      );
       await until(() => cache.downloaded.isNotEmpty, 'downloads start');
       expect(player.loadedSources, [urlFor('s1')]);
     });
 
-    test('play after pause during a load starts the track once loaded',
-        () async {
-      cache.reachable = false;
-      player.loadGate = Completer();
-      final loading = service.playAlbum(albumOf(2));
-      await until(() => player.loadedSources.isNotEmpty, 'the load starts');
+    test(
+      'play after pause during a load starts the track once loaded',
+      () async {
+        cache.reachable = false;
+        player.loadGate = Completer();
+        final loading = service.playAlbum(albumOf(2));
+        await until(() => player.loadedSources.isNotEmpty, 'the load starts');
 
-      await service.pause();
-      await service.play();
-      expect(service.playWhenReady, isTrue);
-      player.loadGate!.complete();
-      player.loadGate = null;
-      await loading;
+        await service.pause();
+        await service.play();
+        expect(service.playWhenReady, isTrue);
+        player.loadGate!.complete();
+        player.loadGate = null;
+        await loading;
 
-      await until(() => service.playbackState == PlaybackState.playing,
-          'playback starts');
-      expect(player.loadedSources, [urlFor('s1')]);
-    });
+        await until(
+          () => service.playbackState == PlaybackState.playing,
+          'playback starts',
+        );
+        expect(player.loadedSources, [urlFor('s1')]);
+      },
+    );
 
     test('pause during a skip stays paused on the new track', () async {
       cache.reachable = false;
@@ -648,8 +727,10 @@ void main() {
       await service.pause();
 
       player.simulateLoadError();
-      await until(() => service.playbackState == PlaybackState.stopped,
-          'playback stops');
+      await until(
+        () => service.playbackState == PlaybackState.stopped,
+        'playback stops',
+      );
       await pumpEventQueue();
 
       expect(service.currentIndex, 0);
@@ -690,12 +771,16 @@ void main() {
       await service.playAlbum(albumOf(2));
 
       player.simulateSystemCommand(SystemCommandType.pause);
-      await until(() => service.playbackState == PlaybackState.paused,
-          'playback pauses');
+      await until(
+        () => service.playbackState == PlaybackState.paused,
+        'playback pauses',
+      );
 
       player.simulateSystemCommand(SystemCommandType.play);
-      await until(() => service.playbackState == PlaybackState.playing,
-          'playback resumes');
+      await until(
+        () => service.playbackState == PlaybackState.playing,
+        'playback resumes',
+      );
     });
 
     test('next skips within the queue', () async {
@@ -713,9 +798,13 @@ void main() {
       await service.playAlbum(albumOf(2));
 
       player.simulateSystemCommand(
-          SystemCommandType.seek, const Duration(seconds: 42));
-      await until(() => service.currentPosition == const Duration(seconds: 42),
-          'the playhead moves');
+        SystemCommandType.seek,
+        const Duration(seconds: 42),
+      );
+      await until(
+        () => service.currentPosition == const Duration(seconds: 42),
+        'the playhead moves',
+      );
     });
 
     test('play after a load error loads the track again', () async {
@@ -723,13 +812,17 @@ void main() {
       await service.playAlbum(albumOf(2));
       player.failingUrls.add(urlFor('s2'));
       player.simulateTrackTransition();
-      await until(() => service.playbackState == PlaybackState.stopped,
-          'playback stops');
+      await until(
+        () => service.playbackState == PlaybackState.stopped,
+        'playback stops',
+      );
 
       player.failingUrls.clear();
       player.simulateSystemCommand(SystemCommandType.play);
-      await until(() => service.playbackState == PlaybackState.playing,
-          'playback resumes');
+      await until(
+        () => service.playbackState == PlaybackState.playing,
+        'playback resumes',
+      );
 
       expect(player.loadedSources.last, urlFor('s2'));
     });
@@ -738,8 +831,10 @@ void main() {
       await service.playAlbum(albumOf(2));
 
       player.simulateSystemCommand(SystemCommandType.stop);
-      await until(() => service.playbackState == PlaybackState.stopped,
-          'playback stops');
+      await until(
+        () => service.playbackState == PlaybackState.stopped,
+        'playback stops',
+      );
 
       expect(player.processingState, ProcessingState.idle);
     });

@@ -1,7 +1,9 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:logging/logging.dart';
+
 import '../services/audio_player_service.dart';
 import '../utils/format.dart';
 
@@ -49,9 +51,7 @@ class PlayerControls extends StatelessWidget {
           padding: EdgeInsets.all(16.0),
           child: Row(
             children: [
-              Expanded(
-                child: _SongInfo(),
-              ),
+              Expanded(child: _SongInfo()),
               _ControlButtons(),
             ],
           ),
@@ -73,10 +73,7 @@ class PlayerControls extends StatelessWidget {
                 flex: 2,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _SongInfo(),
-                    _SleepTimerIndicator(),
-                  ],
+                  children: [_SongInfo(), _SleepTimerIndicator()],
                 ),
               ),
               SizedBox(width: 16),
@@ -97,16 +94,19 @@ class PlayerControls extends StatelessWidget {
 /// from its other state, and the track's duration
 class _ProgressBuilder extends StatelessWidget {
   final Widget Function(
-          BuildContext context, ({Duration current, Duration total}) progress)
-      builder;
+    BuildContext context,
+    ({Duration current, Duration total}) progress,
+  )
+  builder;
 
   const _ProgressBuilder({required this.builder});
 
   @override
   Widget build(BuildContext context) {
     final service = context.read<AudioPlayerService>();
-    final total =
-        context.select<AudioPlayerService, Duration>((s) => s.totalDuration);
+    final total = context.select<AudioPlayerService, Duration>(
+      (s) => s.totalDuration,
+    );
     return ValueListenableBuilder<Duration>(
       valueListenable: service.position,
       builder: (context, current, child) =>
@@ -167,22 +167,25 @@ class _ProgressSectionState extends State<_ProgressSection> {
               child: SliderTheme(
                 data: SliderTheme.of(context).copyWith(
                   trackHeight: 4,
-                  thumbShape:
-                      const RoundSliderThumbShape(enabledThumbRadius: 6),
-                  overlayShape:
-                      const RoundSliderOverlayShape(overlayRadius: 12),
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 6,
+                  ),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 12,
+                  ),
                 ),
                 child: Slider(
                   value: value.clamp(0.0, 1.0),
                   onChangeStart: canSeek
                       ? (value) => setState(() {
-                            _drag++;
-                            _dragPosition = _positionAt(value, total);
-                          })
+                          _drag++;
+                          _dragPosition = _positionAt(value, total);
+                        })
                       : null,
                   onChanged: canSeek
                       ? (value) => setState(
-                          () => _dragPosition = _positionAt(value, total))
+                          () => _dragPosition = _positionAt(value, total),
+                        )
                       : null,
                   onChangeEnd: canSeek
                       ? (value) => unawaited(_seek(_positionAt(value, total)))
@@ -236,11 +239,7 @@ class _SleepTimerIndicator extends StatelessWidget {
           child: const Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.bedtime,
-                size: 16,
-                color: Colors.orange,
-              ),
+              Icon(Icons.bedtime, size: 16, color: Colors.orange),
               SizedBox(width: 8),
               _SleepTimerCountdown(),
             ],
@@ -318,7 +317,8 @@ class _SongInfo extends StatelessWidget {
             Text(
               songInfo.artist,
               style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ],
@@ -334,13 +334,9 @@ class _ControlButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Selector<
-        AudioPlayerService,
-        ({
-          PlaybackState state,
-          bool playWhenReady,
-          bool hasSong,
-          bool hasNext,
-        })>(
+      AudioPlayerService,
+      ({PlaybackState state, bool playWhenReady, bool hasSong, bool hasNext})
+    >(
       selector: (context, service) => (
         state: service.playbackState,
         playWhenReady: service.playWhenReady,
@@ -416,7 +412,9 @@ class _ControlButtons extends StatelessWidget {
               width: 40,
               height: 40,
               child: CircularProgressIndicator(
-                  strokeWidth: 2, semanticsLabel: 'Loading'),
+                strokeWidth: 2,
+                semanticsLabel: 'Loading',
+              ),
             ),
             button,
           ],

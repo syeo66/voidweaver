@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../services/app_state.dart';
 import '../models/album_list_type.dart';
 import 'album_tile.dart';
@@ -31,8 +32,11 @@ class AlbumList extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.error_outline,
-                    size: 64, color: Theme.of(context).colorScheme.error),
+                Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.error,
+                ),
                 const SizedBox(height: 16),
                 Text(appState.albumError!),
                 const SizedBox(height: 16),
@@ -52,12 +56,15 @@ class AlbumList extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.library_music,
-                    size: 64,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+                Icon(
+                  Icons.library_music,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
                 const SizedBox(height: 16),
                 Text(
-                    nothingPlayed ? 'No albums played yet' : 'No albums found'),
+                  nothingPlayed ? 'No albums played yet' : 'No albums found',
+                ),
                 const SizedBox(height: 16),
                 if (nothingPlayed)
                   ElevatedButton(
@@ -83,9 +90,9 @@ class AlbumList extends StatelessWidget {
             await appState.loadAlbums(forceRefresh: true);
             final error = appState.albumError;
             if (error != null && context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Refresh failed: $error')),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('Refresh failed: $error')));
             }
           },
           child: isLandscape

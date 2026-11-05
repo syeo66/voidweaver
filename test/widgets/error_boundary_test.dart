@@ -5,24 +5,22 @@ import 'package:voidweaver/widgets/error_boundary.dart';
 
 void main() {
   group('ErrorBoundary Tests', () {
-    testWidgets('should display child widget when no error occurs',
-        (WidgetTester tester) async {
+    testWidgets('should display child widget when no error occurs', (
+      WidgetTester tester,
+    ) async {
       const testText = 'Test Child Widget';
 
       await tester.pumpWidget(
-        const MaterialApp(
-          home: ErrorBoundary(
-            child: Text(testText),
-          ),
-        ),
+        const MaterialApp(home: ErrorBoundary(child: Text(testText))),
       );
 
       expect(find.text(testText), findsOneWidget);
       expect(find.byType(ErrorDisplay), findsNothing);
     });
 
-    testWidgets('should show error UI when provided',
-        (WidgetTester tester) async {
+    testWidgets('should show error UI when provided', (
+      WidgetTester tester,
+    ) async {
       // Test the ErrorDisplay widget directly instead of triggering errors
       final errorDetails = FlutterErrorDetails(
         exception: Exception('Test error'),
@@ -71,34 +69,46 @@ void main() {
 
     testWidgets('shows its fallback when a widget in it fails', (tester) async {
       await withBoundaries(() async {
-        await tester.pumpWidget(const MaterialApp(
-          home: Scaffold(
-            body: ErrorBoundary(
-              errorMessage: 'Albums failed',
-              child: _Thrower(),
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(
+              body: ErrorBoundary(
+                errorMessage: 'Albums failed',
+                child: _Thrower(),
+              ),
             ),
           ),
-        ));
+        );
         await pumpError(tester);
 
         expect(find.text('Albums failed'), findsOneWidget);
       });
     });
 
-    testWidgets('leaves the rest of the app and FlutterError.onError alone',
-        (tester) async {
+    testWidgets('leaves the rest of the app and FlutterError.onError alone', (
+      tester,
+    ) async {
       await withBoundaries(() async {
         final onError = FlutterError.onError;
-        await tester.pumpWidget(const MaterialApp(
-          home: Scaffold(
-            body: Column(children: [
-              ErrorBoundary(errorMessage: 'First failed', child: _Thrower()),
-              ErrorBoundary(
-                  errorMessage: 'Second failed', child: Text('Second')),
-              Text('Outside'),
-            ]),
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(
+              body: Column(
+                children: [
+                  ErrorBoundary(
+                    errorMessage: 'First failed',
+                    child: _Thrower(),
+                  ),
+                  ErrorBoundary(
+                    errorMessage: 'Second failed',
+                    child: Text('Second'),
+                  ),
+                  Text('Outside'),
+                ],
+              ),
+            ),
           ),
-        ));
+        );
         await pumpError(tester);
 
         expect(find.text('First failed'), findsOneWidget);
@@ -111,17 +121,19 @@ void main() {
 
     testWidgets('the innermost boundary takes the error', (tester) async {
       await withBoundaries(() async {
-        await tester.pumpWidget(const MaterialApp(
-          home: Scaffold(
-            body: ErrorBoundary(
-              errorMessage: 'Outer failed',
-              child: ErrorBoundary(
-                errorMessage: 'Inner failed',
-                child: _Thrower(),
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(
+              body: ErrorBoundary(
+                errorMessage: 'Outer failed',
+                child: ErrorBoundary(
+                  errorMessage: 'Inner failed',
+                  child: _Thrower(),
+                ),
               ),
             ),
           ),
-        ));
+        );
         await pumpError(tester);
 
         expect(find.text('Inner failed'), findsOneWidget);
@@ -129,17 +141,20 @@ void main() {
       });
     });
 
-    testWidgets('reports the error once and uses the fallback builder',
-        (tester) async {
+    testWidgets('reports the error once and uses the fallback builder', (
+      tester,
+    ) async {
       await withBoundaries(() async {
         final reported = <FlutterErrorDetails>[];
-        await tester.pumpWidget(MaterialApp(
-          home: ErrorBoundary(
-            onError: reported.add,
-            fallbackBuilder: (error) => Text('Fallback: ${error.exception}'),
-            child: const _Thrower(),
+        await tester.pumpWidget(
+          MaterialApp(
+            home: ErrorBoundary(
+              onError: reported.add,
+              fallbackBuilder: (error) => Text('Fallback: ${error.exception}'),
+              child: const _Thrower(),
+            ),
           ),
-        ));
+        );
         await pumpError(tester);
 
         expect(reported, hasLength(1));
@@ -151,9 +166,11 @@ void main() {
       await withBoundaries(() async {
         _Thrower.broken = true;
         addTearDown(() => _Thrower.broken = true);
-        await tester.pumpWidget(const MaterialApp(
-          home: Scaffold(body: ErrorBoundary(child: _Thrower())),
-        ));
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(body: ErrorBoundary(child: _Thrower())),
+          ),
+        );
         await pumpError(tester);
 
         _Thrower.broken = false;
@@ -167,8 +184,9 @@ void main() {
   });
 
   group('ErrorDisplay Tests', () {
-    testWidgets('should display error information correctly',
-        (WidgetTester tester) async {
+    testWidgets('should display error information correctly', (
+      WidgetTester tester,
+    ) async {
       const errorMessage = 'Test error message';
       final errorDetails = FlutterErrorDetails(
         exception: Exception('Test exception'),
@@ -180,10 +198,7 @@ void main() {
         MaterialApp(
           theme: ThemeData(useMaterial3: false),
           home: Scaffold(
-            body: ErrorDisplay(
-              error: errorDetails,
-              message: errorMessage,
-            ),
+            body: ErrorDisplay(error: errorDetails, message: errorMessage),
           ),
         ),
       );
@@ -193,8 +208,9 @@ void main() {
       expect(find.byIcon(Icons.error_outline), findsOneWidget);
     });
 
-    testWidgets('should show retry button when onRetry is provided',
-        (WidgetTester tester) async {
+    testWidgets('should show retry button when onRetry is provided', (
+      WidgetTester tester,
+    ) async {
       bool retryPressed = false;
       final errorDetails = FlutterErrorDetails(
         exception: Exception('Test exception'),
@@ -222,49 +238,47 @@ void main() {
     });
 
     testWidgets(
-        'should show error details in debug mode when showDetails is true',
-        (WidgetTester tester) async {
-      final errorDetails = FlutterErrorDetails(
-        exception: Exception('Detailed test exception'),
-        library: 'test',
-      );
+      'should show error details in debug mode when showDetails is true',
+      (WidgetTester tester) async {
+        final errorDetails = FlutterErrorDetails(
+          exception: Exception('Detailed test exception'),
+          library: 'test',
+        );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData(useMaterial3: false),
-          home: Scaffold(
-            body: ErrorDisplay(
-              error: errorDetails,
-              showDetails: true,
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(useMaterial3: false),
+            home: Scaffold(
+              body: ErrorDisplay(error: errorDetails, showDetails: true),
             ),
           ),
-        ),
-      );
+        );
 
-      if (kDebugMode) {
-        expect(find.text('Error Details'), findsOneWidget);
+        if (kDebugMode) {
+          expect(find.text('Error Details'), findsOneWidget);
 
-        // Tap to expand details
-        await tester.tap(find.text('Error Details'));
-        await tester.pumpAndSettle();
+          // Tap to expand details
+          await tester.tap(find.text('Error Details'));
+          await tester.pumpAndSettle();
 
-        // Look for the error text in any form
-        expect(find.textContaining('Exception'), findsOneWidget);
-      } else {
-        // In release mode, error details should not be shown
-        expect(find.text('Error Details'), findsNothing);
-      }
-    });
+          // Look for the error text in any form
+          expect(find.textContaining('Exception'), findsOneWidget);
+        } else {
+          // In release mode, error details should not be shown
+          expect(find.text('Error Details'), findsNothing);
+        }
+      },
+    );
   });
 
   group('ErrorBoundary Extension Tests', () {
-    testWidgets('withErrorBoundary extension should wrap widget',
-        (WidgetTester tester) async {
+    testWidgets('withErrorBoundary extension should wrap widget', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
-          home: const Text('Test Widget').withErrorBoundary(
-            errorMessage: 'Extension error message',
-          ),
+          home: const Text('Test Widget')
+              .withErrorBoundary(errorMessage: 'Extension error message'),
         ),
       );
 

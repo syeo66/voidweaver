@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/app_state.dart';
 
 import '../test_helpers/saved_credentials.dart';
+
 import 'package:voidweaver/services/network_config.dart';
 
 void main() {
@@ -17,45 +18,51 @@ void main() {
     playerCalls = [];
     timeoutCalls = [];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(const MethodChannel('voidweaver_player'),
-            (call) async {
-      playerCalls.add(call.method);
-      if (call.method == 'network.setTimeouts') {
-        timeoutCalls.add(call.arguments);
-      }
-      return null;
-    });
+        .setMockMethodCallHandler(const MethodChannel('voidweaver_player'), (
+          call,
+        ) async {
+          playerCalls.add(call.method);
+          if (call.method == 'network.setTimeouts') {
+            timeoutCalls.add(call.arguments);
+          }
+          return null;
+        });
     SharedPreferences.setMockInitialValues({});
   });
 
-  test('a login whose credentials cannot be saved releases its services',
-      () async {
-    // The fake storage writes into this map, so every write throws
-    FlutterSecureStorage.setMockInitialValues(const {});
+  test(
+    'a login whose credentials cannot be saved releases its services',
+    () async {
+      // The fake storage writes into this map, so every write throws
+      FlutterSecureStorage.setMockInitialValues(const {});
 
-    final appState = AppState();
-    addTearDown(appState.dispose);
-    await appState.initialize();
-    expect(appState.isConfigured, isFalse);
+      final appState = AppState();
+      addTearDown(appState.dispose);
+      await appState.initialize();
+      expect(appState.isConfigured, isFalse);
 
-    await expectLater(
-      appState.configure('https://127.0.0.1:1', 'alice', 'secret'),
-      throwsA(isA<UnsupportedError>()),
-    );
+      await expectLater(
+        appState.configure('https://127.0.0.1:1', 'alice', 'secret'),
+        throwsA(isA<UnsupportedError>()),
+      );
 
-    expect(appState.isConfigured, isFalse);
-    expect(appState.configurationLoadingState, LoadingState.error);
-    expect(appState.api, isNull);
-    expect(appState.audioPlayerService, isNull);
-    // The player, and with it the media session, was released
-    await pumpEventQueue();
-    expect(playerCalls, contains('dispose'));
-  });
+      expect(appState.isConfigured, isFalse);
+      expect(appState.configurationLoadingState, LoadingState.error);
+      expect(appState.api, isNull);
+      expect(appState.audioPlayerService, isNull);
+      // The player, and with it the media session, was released
+      await pumpEventQueue();
+      expect(playerCalls, contains('dispose'));
+    },
+  );
 
   test('starting with saved credentials does not write them again', () async {
     // Every write throws, as above: one would fail the start and log out
-    FlutterSecureStorage.setMockInitialValues(Map.unmodifiable(
-        savedCredentials('https://127.0.0.1:1', 'alice', 'secret')));
+    FlutterSecureStorage.setMockInitialValues(
+      Map.unmodifiable(
+        savedCredentials('https://127.0.0.1:1', 'alice', 'secret'),
+      ),
+    );
 
     final appState = AppState();
     addTearDown(appState.dispose);
@@ -83,7 +90,7 @@ void main() {
     await pumpEventQueue();
 
     expect(timeoutCalls, [
-      {'connect': 15000, 'read': 60000}
+      {'connect': 15000, 'read': 60000},
     ]);
 
     // Another setting: nothing new to send

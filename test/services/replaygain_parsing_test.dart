@@ -103,10 +103,7 @@ void main() {
         'artist': 'Test Artist',
         'album': 'Test Album',
         'duration': 150,
-        'replayGain': {
-          'trackGain': -11.0,
-          'albumGain': -11.5,
-        },
+        'replayGain': {'trackGain': -11.0, 'albumGain': -11.5},
         'replayGainTrackGain': -5.0, // Should be ignored
         'replayGainAlbumGain': -5.5, // Should be ignored
       };

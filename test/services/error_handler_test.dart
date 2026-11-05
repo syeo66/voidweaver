@@ -77,12 +77,16 @@ void main() {
     handler.reportError(Exception('x'), null);
 
     expect(
-        reporter.errors.single.context.toString(), 'Manually reported error');
+      reporter.errors.single.context.toString(),
+      'Manually reported error',
+    );
   });
 
   test('works before initialize()', () {
     expect(
-        () => handler.reportError(Exception('early'), null), returnsNormally);
+      () => handler.reportError(Exception('early'), null),
+      returnsNormally,
+    );
     expect(reporter.errors, hasLength(1));
   });
 
@@ -169,15 +173,18 @@ void main() {
       final error = Exception('console');
       final stack = StackTrace.current;
 
-      ConsoleErrorReporter().reportError(FlutterErrorDetails(
-        exception: error,
-        stack: stack,
-        context: ErrorDescription('Playing a song'),
-      ));
+      ConsoleErrorReporter().reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stack,
+          context: ErrorDescription('Playing a song'),
+        ),
+      );
       await Future<void>.delayed(Duration.zero);
 
-      final record =
-          records.singleWhere((r) => r.loggerName == 'error_handler');
+      final record = records.singleWhere(
+        (r) => r.loggerName == 'error_handler',
+      );
       expect(record.level, Level.SEVERE);
       expect(record.message, 'Playing a song');
       expect(record.error, same(error));
@@ -189,13 +196,15 @@ void main() {
       final sub = Logger.root.onRecord.listen(records.add);
       addTearDown(sub.cancel);
 
-      ConsoleErrorReporter()
-          .reportError(FlutterErrorDetails(exception: Exception('x')));
+      ConsoleErrorReporter().reportError(
+        FlutterErrorDetails(exception: Exception('x')),
+      );
       await Future<void>.delayed(Duration.zero);
 
       expect(
-          records.singleWhere((r) => r.loggerName == 'error_handler').message,
-          'Uncaught error');
+        records.singleWhere((r) => r.loggerName == 'error_handler').message,
+        'Uncaught error',
+      );
     });
   });
 }

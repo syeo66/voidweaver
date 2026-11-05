@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../services/settings_service.dart';
 import '../services/app_state.dart';
 import '../widgets/app_version.dart';

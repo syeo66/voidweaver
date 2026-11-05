@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
+
 import '../services/settings_service.dart';
 import '../services/network_config.dart';
 
@@ -110,8 +111,9 @@ class _AdvancedNetworkSettingsDialogState
               const SizedBox(height: 16),
               SwitchListTile(
                 title: const Text('Retry on Timeout'),
-                subtitle:
-                    const Text('Automatically retry requests that time out'),
+                subtitle: const Text(
+                  'Automatically retry requests that time out',
+                ),
                 value: _enableRetryOnTimeout,
                 onChanged: (value) {
                   setState(() {
@@ -142,23 +144,20 @@ class _AdvancedNetworkSettingsDialogState
           onPressed: _resetToDefaults,
           child: const Text('Reset to Defaults'),
         ),
-        ElevatedButton(
-          onPressed: _saveSettings,
-          child: const Text('Save'),
-        ),
+        ElevatedButton(onPressed: _saveSettings, child: const Text('Save')),
       ],
     );
   }
 
   Widget _buildTimeoutField(
-      String label, TextEditingController controller, String hint) {
+    String label,
+    TextEditingController controller,
+    String hint,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.titleSmall,
-        ),
+        Text(label, style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 4),
         TextField(
           controller: controller,
@@ -177,14 +176,18 @@ class _AdvancedNetworkSettingsDialogState
     const defaultConfig = NetworkConfig.defaultConfig;
     setState(() {
       _baseConfig = defaultConfig;
-      _connectionTimeoutController.text =
-          defaultConfig.connectionTimeout.inSeconds.toString();
-      _requestTimeoutController.text =
-          defaultConfig.requestTimeout.inSeconds.toString();
-      _metadataTimeoutController.text =
-          defaultConfig.metadataTimeout.inSeconds.toString();
-      _streamingTimeoutController.text =
-          defaultConfig.streamingTimeout.inSeconds.toString();
+      _connectionTimeoutController.text = defaultConfig
+          .connectionTimeout
+          .inSeconds
+          .toString();
+      _requestTimeoutController.text = defaultConfig.requestTimeout.inSeconds
+          .toString();
+      _metadataTimeoutController.text = defaultConfig.metadataTimeout.inSeconds
+          .toString();
+      _streamingTimeoutController.text = defaultConfig
+          .streamingTimeout
+          .inSeconds
+          .toString();
       _maxRetriesController.text = defaultConfig.maxRetryAttempts.toString();
       _enableRetryOnTimeout = defaultConfig.enableRetryOnTimeout;
       _enableRetryOnConnectionError =

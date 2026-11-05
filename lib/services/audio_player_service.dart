@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:voidweaver_player/voidweaver_player.dart';
 import 'package:logging/logging.dart';
+
 import 'subsonic_api.dart';
 import 'settings_service.dart';
 import 'replaygain_reader.dart';
@@ -17,12 +19,7 @@ import 'sleep_timer.dart';
 final _log = Logger('audio_player');
 final _rgLogger = Logger('replaygain');
 
-enum PlaybackState {
-  stopped,
-  playing,
-  paused,
-  loading,
-}
+enum PlaybackState { stopped, playing, paused, loading }
 
 /// What the queue was started from. Saved with the queue by its [name].
 enum QueueSource { album, random, song }
@@ -131,11 +128,16 @@ class AudioPlayerService extends ChangeNotifier {
 
   // The current play of the current song: how long it has been heard, and
   // whether it has been scrobbled
-  late final ListeningTracker _listening =
-      ListeningTracker(_settingsService, clock: _clock);
+  late final ListeningTracker _listening = ListeningTracker(
+    _settingsService,
+    clock: _clock,
+  );
 
   late final SleepTimer _sleepTimer = SleepTimer(
-      setVolume: _setVolume, onExpired: _onSleepTimerExpired, clock: _clock);
+    setVolume: _setVolume,
+    onExpired: _onSleepTimerExpired,
+    clock: _clock,
+  );
 
   StreamSubscription<Duration>? _positionSubscription;
   StreamSubscription<Duration?>? _durationSubscription;
@@ -151,20 +153,18 @@ class AudioPlayerService extends ChangeNotifier {
   // Async work (preloads, ReplayGain reads) can finish after dispose()
   bool _disposed = false;
 
-  AudioPlayerService(this._api, this._settingsService,
-      {VoidweaverPlayer? audioPlayer,
-      PlaybackPersistenceService? persistence,
-      ScrobbleQueue? scrobbleQueue,
-      AudioCache? audioCache,
-      @visibleForTesting
-      Duration downloadRetryDelay = const Duration(seconds: 5),
-      @visibleForTesting DateTime Function() clock = DateTime.now})
-      : _audioPlayer = audioPlayer ?? VoidweaverPlayer(),
-        _downloadRetryDelay = downloadRetryDelay,
-        _clock = clock,
-        _persistence = persistence,
-        _scrobbleQueue = scrobbleQueue ?? ScrobbleQueue(_api),
-        _audioCache = audioCache ?? AudioCache() {
+  AudioPlayerService(
+    this._api,
+    this._settingsService, {
+    VoidweaverPlayer? audioPlayer,
+    this._persistence,
+    ScrobbleQueue? scrobbleQueue,
+    AudioCache? audioCache,
+    @visibleForTesting this._downloadRetryDelay = const Duration(seconds: 5),
+    @visibleForTesting this._clock = DateTime.now,
+  }) : _audioPlayer = audioPlayer ?? VoidweaverPlayer(),
+       _scrobbleQueue = scrobbleQueue ?? ScrobbleQueue(_api),
+       _audioCache = audioCache ?? AudioCache() {
     _initializePlayer();
     unawaited(_scrobbleQueue.initialize());
   }
@@ -203,8 +203,10 @@ class AudioPlayerService extends ChangeNotifier {
   void _initializePlayer() {
     _positionSubscription = _audioPlayer.positionStream.listen((position) {
       _currentPosition = position;
-      _listening.onPosition(position,
-          playing: _playbackState == PlaybackState.playing);
+      _listening.onPosition(
+        position,
+        playing: _playbackState == PlaybackState.playing,
+      );
       if (_playbackState == PlaybackState.playing) {
         _scrobbleCurrentSongIfEligible();
         _schedulePositionSave();
@@ -216,8 +218,9 @@ class AudioPlayerService extends ChangeNotifier {
       notifyListeners();
     });
 
-    _currentIndexSubscription =
-        _audioPlayer.currentIndexStream.listen((_) => _followPlayer());
+    _currentIndexSubscription = _audioPlayer.currentIndexStream.listen(
+      (_) => _followPlayer(),
+    );
 
     _errorSubscription = _audioPlayer.errorStream.listen(_onPlayerError);
 
@@ -240,8 +243,9 @@ class AudioPlayerService extends ChangeNotifier {
         case ProcessingState.ready:
           // The player keeps `playing` true while buffering and on
           // completion, so ready + not playing is always a pause
-          _playbackState =
-              state.playing ? PlaybackState.playing : PlaybackState.paused;
+          _playbackState = state.playing
+              ? PlaybackState.playing
+              : PlaybackState.paused;
           break;
       }
       notifyListeners();
@@ -260,9 +264,11 @@ class AudioPlayerService extends ChangeNotifier {
       SystemCommandType.previous => previous(),
       SystemCommandType.seek => seekTo(command.position ?? Duration.zero),
     };
-    unawaited(result.catchError((Object e) {
-      _log.warning('[native_controls] $command failed', e);
-    }));
+    unawaited(
+      result.catchError((Object e) {
+        _log.warning('[native_controls] $command failed', e);
+      }),
+    );
   }
 
   // Persistence methods
@@ -273,7 +279,7 @@ class AudioPlayerService extends ChangeNotifier {
     }
 
     try {
-      final savedState = await _persistence!.loadPlaybackState();
+      final savedState = await _persistence.loadPlaybackState();
       if (savedState == null || savedState.isEmpty) {
         _log.fine('No saved playback state to restore');
         return false;
@@ -283,18 +289,22 @@ class AudioPlayerService extends ChangeNotifier {
       if (_playlist.isNotEmpty) return false;
 
       _log.fine(
-          'Attempting to restore playlist with ${savedState.playlist.length} songs');
+        'Attempting to restore playlist with ${savedState.playlist.length} songs',
+      );
 
       _playlist = savedState.playlist;
-      _playlistSource =
-          QueueSource.values.asNameMap()[savedState.playlistSource];
+      _playlistSource = QueueSource.values
+          .asNameMap()[savedState.playlistSource];
       _sourceId = savedState.sourceId;
       final resumeAt = savedState.currentPosition;
 
       // Load the queue but don't auto-play. If that fails (e.g. the server
       // is unreachable) keep the restored queue and retry on play().
-      final loading =
-          _loadQueue(savedState.currentIndex, position: resumeAt, play: false);
+      final loading = _loadQueue(
+        savedState.currentIndex,
+        position: resumeAt,
+        play: false,
+      );
       final generation = _generation;
       try {
         await loading;
@@ -311,13 +321,14 @@ class AudioPlayerService extends ChangeNotifier {
       _playbackState = PlaybackState.paused; // User must manually resume
 
       _log.info(
-          'Successfully restored playback state: ${_currentSong?.title} at $resumeAt');
+        'Successfully restored playback state: ${_currentSong?.title} at $resumeAt',
+      );
       notifyListeners();
       return true;
     } catch (e) {
       _log.warning('Failed to restore playback state', e);
       // Clear invalid saved state
-      await _persistence?.clearPlaybackState();
+      await _persistence.clearPlaybackState();
     }
 
     return false;
@@ -334,23 +345,23 @@ class AudioPlayerService extends ChangeNotifier {
   }
 
   PersistedPlaybackState _persistedState() => PersistedPlaybackState(
-        playlist: _playlist,
-        currentIndex: _currentIndex,
-        currentPosition: _currentPosition,
-        isPlaying: _playbackState == PlaybackState.playing,
-        lastUpdated: _clock(),
-        playlistSource: _playlistSource?.name,
-        sourceId: _sourceId,
-      );
+    playlist: _playlist,
+    currentIndex: _currentIndex,
+    currentPosition: _currentPosition,
+    isPlaying: _playbackState == PlaybackState.playing,
+    lastUpdated: _clock(),
+    playlistSource: _playlistSource?.name,
+    sourceId: _sourceId,
+  );
 
   Future<void> _saveCurrentState() async {
     if (_persistence == null || _playlist.isEmpty) return;
-    await _persistence!.savePlaybackState(_persistedState());
+    await _persistence.savePlaybackState(_persistedState());
   }
 
   void _schedulePositionSave() {
     if (_persistence == null || _playlist.isEmpty) return;
-    _persistence!.schedulePositionSave(_persistedState());
+    _persistence.schedulePositionSave(_persistedState());
   }
 
   Future<void> playAlbum(Album album) =>
@@ -358,7 +369,8 @@ class AudioPlayerService extends ChangeNotifier {
         var songs = album.songs;
         if (songs.isEmpty) {
           _log.fine(
-              'Album ${album.name} has no songs, trying to fetch from API...');
+            'Album ${album.name} has no songs, trying to fetch from API...',
+          );
           songs = (await _api.getAlbum(album.id)).songs;
         }
         if (songs.isEmpty) {
@@ -367,22 +379,29 @@ class AudioPlayerService extends ChangeNotifier {
         return songs;
       });
 
-  Future<void> playRandomSongs([int count = 50]) =>
-      _startQueue('random songs', QueueSource.random, count.toString(),
-          () async {
-        final songs = await _api.getRandomSongs(count);
-        if (songs.isEmpty) {
-          throw const UserFacingException('No random songs available');
-        }
-        return songs;
-      });
+  Future<void> playRandomSongs([int count = 50]) => _startQueue(
+    'random songs',
+    QueueSource.random,
+    count.toString(),
+    () async {
+      final songs = await _api.getRandomSongs(count);
+      if (songs.isEmpty) {
+        throw const UserFacingException('No random songs available');
+      }
+      return songs;
+    },
+  );
 
   /// Replaces the queue with the songs [fetch] returns and plays it from the
   /// start. Shows loading meanwhile. If [fetch] fails (e.g. offline), the
   /// current queue keeps playing, or stays paused, as if nothing happened.
   /// Only the last of several starts in a row takes over.
-  Future<void> _startQueue(String description, QueueSource source,
-      String sourceId, Future<List<Song>> Function() fetch) async {
+  Future<void> _startQueue(
+    String description,
+    QueueSource source,
+    String sourceId,
+    Future<List<Song>> Function() fetch,
+  ) async {
     final request = ++_queueRequests;
     final previousState = _playbackState;
     _playbackState = PlaybackState.loading;
@@ -444,9 +463,11 @@ class AudioPlayerService extends ChangeNotifier {
 
   /// Starts playback; errors show up on the player's error stream.
   void _startPlayback() {
-    unawaited(_audioPlayer.play().catchError((Object e) {
-      _log.warning('Playback error', e);
-    }));
+    unawaited(
+      _audioPlayer.play().catchError((Object e) {
+        _log.warning('Playback error', e);
+      }),
+    );
   }
 
   /// Runs [change] to the player's index or sequence after earlier changes
@@ -477,14 +498,16 @@ class AudioPlayerService extends ChangeNotifier {
     final artUri = song.coverArt != null
         ? Uri.parse(_api.getCoverArtUrl(song.coverArt!))
         : null;
-    return AudioSource.uri(Uri.parse(_api.getStreamUrl(song.id)),
-        tag: tag,
-        gain: gain,
-        cacheKey: _audioCache.keyFor(song),
-        title: song.title,
-        artist: song.artist,
-        album: song.album,
-        artUri: artUri);
+    return AudioSource.uri(
+      Uri.parse(_api.getStreamUrl(song.id)),
+      tag: tag,
+      gain: gain,
+      cacheKey: _audioCache.keyFor(song),
+      title: song.title,
+      artist: song.artist,
+      album: song.album,
+      artUri: artUri,
+    );
   }
 
   /// Hands the whole playlist to the player, starting at [startIndex] and
@@ -492,8 +515,11 @@ class AudioPlayerService extends ChangeNotifier {
   /// the rest. If the start track can't be loaded and [play] is set,
   /// continues from the next cached track. A pause() meanwhile cancels [play]:
   /// the track stays loaded, paused.
-  Future<void> _loadQueue(int startIndex,
-      {Duration position = Duration.zero, bool play = true}) async {
+  Future<void> _loadQueue(
+    int startIndex, {
+    Duration position = Duration.zero,
+    bool play = true,
+  }) async {
     final generation = ++_generation;
     _awaitedIndex = null;
     _preparingLoad = generation;
@@ -509,7 +535,7 @@ class AudioPlayerService extends ChangeNotifier {
       if (generation != _generation) return;
 
       final sources = [
-        for (var i = 0; i < _playlist.length; i++) _sourceFor(generation, i)
+        for (var i = 0; i < _playlist.length; i++) _sourceFor(generation, i),
       ];
       _sourcesStale = false;
 
@@ -522,8 +548,11 @@ class AudioPlayerService extends ChangeNotifier {
           _seekBeforeLoad = null;
           _settingSources = true;
           try {
-            await _audioPlayer.setAudioSources(sources,
-                initialIndex: startIndex, initialPosition: start);
+            await _audioPlayer.setAudioSources(
+              sources,
+              initialIndex: startIndex,
+              initialPosition: start,
+            );
           } finally {
             _settingSources = false;
           }
@@ -537,7 +566,8 @@ class AudioPlayerService extends ChangeNotifier {
         if (generation != _generation) return;
         if (next == null) rethrow;
         _log.warning(
-            '[offline] Could not load index $startIndex, continuing at cached index $next');
+          '[offline] Could not load index $startIndex, continuing at cached index $next',
+        );
         return await _loadQueue(next, play: _playPending);
       }
       if (generation != _generation) return;
@@ -615,8 +645,10 @@ class AudioPlayerService extends ChangeNotifier {
         .where((state) => state == ProcessingState.idle)
         .listen(fail);
     try {
-      await Future.any(
-          [_audioPlayer.seek(Duration.zero, index: index), failed.future]);
+      await Future.any([
+        _audioPlayer.seek(Duration.zero, index: index),
+        failed.future,
+      ]);
     } finally {
       await errors.cancel();
       await idle.cancel();
@@ -653,15 +685,20 @@ class AudioPlayerService extends ChangeNotifier {
     return tag;
   }
 
-  void _setCurrentTrack(int index,
-      {Duration position = Duration.zero, required bool playing}) {
+  void _setCurrentTrack(
+    int index, {
+    Duration position = Duration.zero,
+    required bool playing,
+  }) {
     _currentIndex = index;
     _currentSong = _playlist[index];
     _currentPosition = position;
     // A restored song starts once it's resumed, see play()
     _listening.startPlay(
-        position, Duration(seconds: _currentSong!.duration ?? 0),
-        playing: playing);
+      position,
+      Duration(seconds: _currentSong!.duration ?? 0),
+      playing: playing,
+    );
     notifyListeners();
   }
 
@@ -684,12 +721,14 @@ class AudioPlayerService extends ChangeNotifier {
     _setCurrentTrack(_currentIndex, playing: false);
     _playbackState = PlaybackState.paused;
     notifyListeners();
-    unawaited(_playerOp(() async {
-      await _audioPlayer.pause();
-      await _audioPlayer.seek(Duration.zero);
-    }).catchError((Object e) {
-      _log.warning('Could not rewind after the last track', e);
-    }));
+    unawaited(
+      _playerOp(() async {
+        await _audioPlayer.pause();
+        await _audioPlayer.seek(Duration.zero);
+      }).catchError((Object e) {
+        _log.warning('Could not rewind after the last track', e);
+      }),
+    );
   }
 
   void _onPlayerError(PlayerException error) {
@@ -710,12 +749,19 @@ class AudioPlayerService extends ChangeNotifier {
       // Most likely the old password in the item's URL: load the queue
       // again, with new URLs, where it failed. If that fails too, it's
       // handled like any load error.
-      final position =
-          failedIndex == _currentIndex ? _currentPosition : Duration.zero;
-      _log.info('Loading the queue again at index $failedIndex '
-          'with the new credentials');
-      unawaited(_loadQueue(failedIndex, position: position)
-          .catchError((Object e) => _onLoadFailed('Failed to play song: $e')));
+      final position = failedIndex == _currentIndex
+          ? _currentPosition
+          : Duration.zero;
+      _log.info(
+        'Loading the queue again at index $failedIndex '
+        'with the new credentials',
+      );
+      unawaited(
+        _loadQueue(
+          failedIndex,
+          position: position,
+        ).catchError((Object e) => _onLoadFailed('Failed to play song: $e')),
+      );
       return;
     }
     unawaited(_continueAfterError(failedIndex, error, resume: playWhenReady));
@@ -734,8 +780,11 @@ class AudioPlayerService extends ChangeNotifier {
 
   /// Continues at the next cached track after [failedIndex] if [resume] is
   /// set (it isn't when the track failed while paused), or stops on it.
-  Future<void> _continueAfterError(int failedIndex, PlayerException error,
-      {required bool resume}) async {
+  Future<void> _continueAfterError(
+    int failedIndex,
+    PlayerException error, {
+    required bool resume,
+  }) async {
     final generation = _generation;
     final next = resume ? await _nextCachedIndex(failedIndex) : null;
     // The queue was replaced, or a skip took over, while looking
@@ -766,8 +815,10 @@ class AudioPlayerService extends ChangeNotifier {
     try {
       final cached = await _audioCache.firstCached(playlist.sublist(index + 1));
       if (cached == null || !identical(playlist, _playlist)) return null;
-      final next =
-          playlist.indexWhere((song) => song.id == cached.id, index + 1);
+      final next = playlist.indexWhere(
+        (song) => song.id == cached.id,
+        index + 1,
+      );
       return next < 0 ? null : next;
     } catch (e) {
       _log.warning('[audio_cache] Could not check the cache', e);
@@ -777,7 +828,8 @@ class AudioPlayerService extends ChangeNotifier {
 
   Future<void> play() async {
     _log.fine(
-        'Play requested - currentSong: ${_currentSong?.title}, state: $_playbackState');
+      'Play requested - currentSong: ${_currentSong?.title}, state: $_playbackState',
+    );
     if (_playlist.isEmpty) return;
 
     if (_startsInProgress > 0) {
@@ -841,11 +893,11 @@ class AudioPlayerService extends ChangeNotifier {
   /// Restarts the current track once it has played for a few seconds, and
   /// the first track; otherwise goes back a track.
   Future<void> previous() => _skip('previous', (from) {
-        // Not during a skip: that's a press to go back further
-        final restart =
-            !_skipOperationInProgress && _currentPosition > _restartThreshold;
-        return restart ? from : max(from - 1, 0);
-      });
+    // Not during a skip: that's a press to go back further
+    final restart =
+        !_skipOperationInProgress && _currentPosition > _restartThreshold;
+    return restart ? from : max(from - 1, 0);
+  });
 
   /// Skips to the index [targetFrom] returns for the current one or, while a
   /// skip is in progress, for its target. A press during a skip doesn't start
@@ -930,25 +982,34 @@ class AudioPlayerService extends ChangeNotifier {
   Future<void> _loadReplayGain(int index) async {
     final playlist = _playlist;
     final song = playlist[index];
-    logReplayGain(() =>
-        '[ReplayGain] Processing song: "${song.title}" by "${song.artist}" '
-        '(id=${song.id}, album="${song.album}", format=${song.suffix}/${song.contentType})');
+    logReplayGain(
+      () =>
+          '[ReplayGain] Processing song: "${song.title}" by "${song.artist}" '
+          '(id=${song.id}, album="${song.album}", format=${song.suffix}/${song.contentType})',
+    );
 
     if (song.replayGainTrackGain == null && song.replayGainAlbumGain == null) {
-      logReplayGain(() =>
-          '[ReplayGain] No ReplayGain in API response, reading from file...');
+      logReplayGain(
+        () =>
+            '[ReplayGain] No ReplayGain in API response, reading from file...',
+      );
       try {
-        final data = await _audioCache.readReplayGain(song) ??
+        final data =
+            await _audioCache.readReplayGain(song) ??
             await _api.readReplayGain(song.id);
-        logReplayGain(() => '[ReplayGain] File reading complete: '
-            'TrackGain=${data.trackGain?.toStringAsFixed(2) ?? "null"}, '
-            'AlbumGain=${data.albumGain?.toStringAsFixed(2) ?? "null"}, '
-            'TrackPeak=${data.trackPeak?.toStringAsFixed(4) ?? "null"}, '
-            'AlbumPeak=${data.albumPeak?.toStringAsFixed(4) ?? "null"}');
+        logReplayGain(
+          () =>
+              '[ReplayGain] File reading complete: '
+              'TrackGain=${data.trackGain?.toStringAsFixed(2) ?? "null"}, '
+              'AlbumGain=${data.albumGain?.toStringAsFixed(2) ?? "null"}, '
+              'TrackPeak=${data.trackPeak?.toStringAsFixed(4) ?? "null"}, '
+              'AlbumPeak=${data.albumPeak?.toStringAsFixed(4) ?? "null"}',
+        );
         _storeReplayGain(playlist, index, data);
       } catch (e, stackTrace) {
         logReplayGain(
-            () => '[ReplayGain] ERROR reading ReplayGain metadata: $e');
+          () => '[ReplayGain] ERROR reading ReplayGain metadata: $e',
+        );
         logReplayGain(() => '[ReplayGain] Stack trace: $stackTrace');
       }
     }
@@ -984,12 +1045,12 @@ class AudioPlayerService extends ChangeNotifier {
   /// The linear gain [song] plays at, from its ReplayGain data and the
   /// settings. Smart mode uses the album gain when the queue is an album.
   double _gainFor(Song song) => _settingsService.calculateVolumeAdjustment(
-        trackGain: song.replayGainTrackGain,
-        albumGain: song.replayGainAlbumGain,
-        trackPeak: song.replayGainTrackPeak,
-        albumPeak: song.replayGainAlbumPeak,
-        fromAlbum: _playlistSource == QueueSource.album,
-      );
+    trackGain: song.replayGainTrackGain,
+    albumGain: song.replayGainAlbumGain,
+    trackPeak: song.replayGainTrackPeak,
+    albumPeak: song.replayGainAlbumPeak,
+    fromAlbum: _playlistSource == QueueSource.album,
+  );
 
   /// Sets the gain of the items in the player's sequence (only those for
   /// playlist position [onlyIndex], if given) from their songs. Each item
@@ -1001,19 +1062,25 @@ class AudioPlayerService extends ChangeNotifier {
       if (tag is! _QueueEntry || tag.generation != _generation) continue;
       if (onlyIndex != null && tag.index != onlyIndex) continue;
       if (tag.index >= _playlist.length) continue;
-      unawaited(_audioPlayer
-          .setGain(source, _gainFor(_playlist[tag.index]))
-          .catchError((Object e) {
-        _rgLogger.warning('Could not set gain', e);
-      }));
+      unawaited(
+        _audioPlayer.setGain(source, _gainFor(_playlist[tag.index])).catchError(
+          (Object e) {
+            _rgLogger.warning('Could not set gain', e);
+          },
+        ),
+      );
     }
   }
 
   void _logReplayGain() {
     final song = _currentSong;
     if (song == null || !replayGainLogging) return;
-    for (final line in trackGainReport(song, _settingsService,
-        gain: _gainFor(song), queue: _playlistSource?.name ?? 'none')) {
+    for (final line in trackGainReport(
+      song,
+      _settingsService,
+      gain: _gainFor(song),
+      queue: _playlistSource?.name ?? 'none',
+    )) {
       logReplayGain(() => line);
     }
   }
@@ -1071,8 +1138,10 @@ class AudioPlayerService extends ChangeNotifier {
     }
     final data = await _audioCache.readReplayGain(song);
     if (data == null) return true;
-    logReplayGain(() =>
-        '[ReplayGain] Preload read "${song.title}": Track=${data.trackGain}, Album=${data.albumGain}');
+    logReplayGain(
+      () =>
+          '[ReplayGain] Preload read "${song.title}": Track=${data.trackGain}, Album=${data.albumGain}',
+    );
     _storeReplayGain(playlist, index, data);
     return true;
   }
@@ -1101,15 +1170,19 @@ class AudioPlayerService extends ChangeNotifier {
 
   void _setVolume(double volume) {
     if (_disposed) return;
-    unawaited(_audioPlayer.setVolume(volume).catchError((Object e) {
-      _log.warning('Could not set the volume', e);
-    }));
+    unawaited(
+      _audioPlayer.setVolume(volume).catchError((Object e) {
+        _log.warning('Could not set the volume', e);
+      }),
+    );
   }
 
   void _onSleepTimerExpired() {
-    unawaited(pause().catchError((Object e) {
-      _log.warning('Sleep timer could not pause playback', e);
-    }));
+    unawaited(
+      pause().catchError((Object e) {
+        _log.warning('Sleep timer could not pause playback', e);
+      }),
+    );
     notifyListeners();
   }
 
@@ -1131,9 +1204,11 @@ class AudioPlayerService extends ChangeNotifier {
     // Not disposed here: AppState owns it and keeps it across logins
     _persistence?.flushPendingPositionSave();
     _scrobbleQueue.dispose();
-    unawaited(_audioPlayer.dispose().catchError((Object e) {
-      _log.warning('Could not release the player', e);
-    }));
+    unawaited(
+      _audioPlayer.dispose().catchError((Object e) {
+        _log.warning('Could not release the player', e);
+      }),
+    );
     _position.dispose();
     super.dispose();
   }

@@ -4,9 +4,7 @@ import 'package:xml/xml.dart';
 
 void main() {
   group('Subsonic ReplayGain XML Parsing', () {
-    test(
-        'parses nested replayGain element with namespace (OpenSubsonic/Navidrome format)',
-        () {
+    test('parses nested replayGain element with namespace (OpenSubsonic/Navidrome format)', () {
       // This is the actual format from Navidrome (a Navidrome server)
       final xml = '''
         <song 

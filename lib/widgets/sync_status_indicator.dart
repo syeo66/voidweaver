@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../services/app_state.dart';
 
 class SyncStatusIndicator extends StatelessWidget {
@@ -26,7 +27,8 @@ class SyncStatusIndicator extends StatelessWidget {
               child: CircularProgressIndicator(
                 strokeWidth: 2,
                 valueColor: AlwaysStoppedAnimation<Color>(
-                    Theme.of(context).colorScheme.primary),
+                  Theme.of(context).colorScheme.primary,
+                ),
               ),
             );
             color = Theme.of(context).colorScheme.primary;

@@ -36,30 +36,34 @@ ReplayGainData _parseApeTagItems(Uint8List bytes, int tagOffset) {
   final remainingBytes = bytes.sublist(tagOffset);
   final text = String.fromCharCodes(remainingBytes);
 
-  final trackGainMatch =
-      RegExp(r'REPLAYGAIN_TRACK_GAIN[^\d-]*(-?\d+\.?\d*)', caseSensitive: false)
-          .firstMatch(text);
+  final trackGainMatch = RegExp(
+    r'REPLAYGAIN_TRACK_GAIN[^\d-]*(-?\d+\.?\d*)',
+    caseSensitive: false,
+  ).firstMatch(text);
   if (trackGainMatch != null) {
     trackGain = double.tryParse(trackGainMatch.group(1)!);
   }
 
-  final albumGainMatch =
-      RegExp(r'REPLAYGAIN_ALBUM_GAIN[^\d-]*(-?\d+\.?\d*)', caseSensitive: false)
-          .firstMatch(text);
+  final albumGainMatch = RegExp(
+    r'REPLAYGAIN_ALBUM_GAIN[^\d-]*(-?\d+\.?\d*)',
+    caseSensitive: false,
+  ).firstMatch(text);
   if (albumGainMatch != null) {
     albumGain = double.tryParse(albumGainMatch.group(1)!);
   }
 
-  final trackPeakMatch =
-      RegExp(r'REPLAYGAIN_TRACK_PEAK[^\d]*(\d+\.?\d*)', caseSensitive: false)
-          .firstMatch(text);
+  final trackPeakMatch = RegExp(
+    r'REPLAYGAIN_TRACK_PEAK[^\d]*(\d+\.?\d*)',
+    caseSensitive: false,
+  ).firstMatch(text);
   if (trackPeakMatch != null) {
     trackPeak = double.tryParse(trackPeakMatch.group(1)!);
   }
 
-  final albumPeakMatch =
-      RegExp(r'REPLAYGAIN_ALBUM_PEAK[^\d]*(\d+\.?\d*)', caseSensitive: false)
-          .firstMatch(text);
+  final albumPeakMatch = RegExp(
+    r'REPLAYGAIN_ALBUM_PEAK[^\d]*(\d+\.?\d*)',
+    caseSensitive: false,
+  ).firstMatch(text);
   if (albumPeakMatch != null) {
     albumPeak = double.tryParse(albumPeakMatch.group(1)!);
   }

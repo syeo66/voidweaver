@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../services/app_state.dart';
 import '../services/network_errors.dart';
 import '../services/subsonic_api.dart';
@@ -50,8 +52,10 @@ class _ArtistAlbumsViewState extends State<ArtistAlbumsView> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _errorMessage = NetworkErrorHelper.getErrorMessage(e,
-            context: 'Failed to load albums for ${widget.artist.name}');
+        _errorMessage = NetworkErrorHelper.getErrorMessage(
+          e,
+          context: 'Failed to load albums for ${widget.artist.name}',
+        );
       });
     }
   }
@@ -73,10 +77,7 @@ class _ArtistAlbumsViewState extends State<ArtistAlbumsView> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _load,
-              child: const Text('Retry'),
-            ),
+            ElevatedButton(onPressed: _load, child: const Text('Retry')),
           ],
         ),
       );

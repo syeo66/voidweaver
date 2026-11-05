@@ -42,8 +42,11 @@ class UrlHead {
           break;
         }
         if (start == 0 && _isSubsonicResponse(response)) {
-          readerLog(() => 'Got a Subsonic response instead of audio: '
-              '${response.headers['content-type']}');
+          readerLog(
+            () =>
+                'Got a Subsonic response instead of audio: '
+                '${response.headers['content-type']}',
+          );
           await response.stream.listen(null).cancel();
           refused = true;
           _ended = true;
@@ -66,8 +69,10 @@ class UrlHead {
           _ended = true;
           break;
         }
-        readerLog(() =>
-            'Server ignored the Range header, reading the start of the file');
+        readerLog(
+          () =>
+              'Server ignored the Range header, reading the start of the file',
+        );
         body = _body = StreamIterator(response.stream);
       }
       if (await body.moveNext()) {

@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../services/app_state.dart';
 import '../services/image_cache_manager.dart';
 import '../services/subsonic_api.dart';
@@ -47,8 +49,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
       if (!mounted) return;
       setState(() {
         _isLoadingArtists = false;
-        _errorMessage = NetworkErrorHelper.getErrorMessage(e,
-            context: 'Failed to load artists');
+        _errorMessage = NetworkErrorHelper.getErrorMessage(
+          e,
+          context: 'Failed to load artists',
+        );
       });
     }
   }
@@ -95,10 +99,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _loadArtists,
-              child: const Text('Retry'),
-            ),
+            ElevatedButton(onPressed: _loadArtists, child: const Text('Retry')),
           ],
         ),
       );
@@ -126,9 +127,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.person_outline,
-                size: 64,
-                color: Theme.of(context).colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.person_outline,
+              size: 64,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(height: 16),
             const Text('No artists found'),
             const SizedBox(height: 16),
@@ -173,8 +176,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
     if (artist.coverArt != null && api != null) {
       return CircleAvatar(
         backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-        backgroundImage:
-            ImageCacheManager.coverArtProvider(api, artist.coverArt!),
+        backgroundImage: ImageCacheManager.coverArtProvider(
+          api,
+          artist.coverArt!,
+        ),
       );
     }
 

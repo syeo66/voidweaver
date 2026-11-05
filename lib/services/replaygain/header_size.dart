@@ -37,13 +37,15 @@ int requiredHeaderSize(Uint8List bytes) {
     // mdat, which is the case for files optimised for streaming)
     int offset = 0;
     while (offset + 8 <= bytes.length) {
-      final atomSize = (bytes[offset] << 24) |
+      final atomSize =
+          (bytes[offset] << 24) |
           (bytes[offset + 1] << 16) |
           (bytes[offset + 2] << 8) |
           bytes[offset + 3];
       if (atomSize < 8) break;
-      final atomType =
-          String.fromCharCodes(bytes.sublist(offset + 4, offset + 8));
+      final atomType = String.fromCharCodes(
+        bytes.sublist(offset + 4, offset + 8),
+      );
       if (atomType == 'moov') {
         required = offset + atomSize;
         break;
@@ -77,7 +79,8 @@ int? _flacMetadataEnd(Uint8List bytes, int start) {
   while (offset + 4 <= bytes.length) {
     final isLast = (bytes[offset] & 0x80) != 0;
     final type = bytes[offset] & 0x7f;
-    final end = offset +
+    final end =
+        offset +
         4 +
         ((bytes[offset + 1] << 16) |
             (bytes[offset + 2] << 8) |

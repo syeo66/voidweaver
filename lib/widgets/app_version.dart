@@ -24,9 +24,8 @@ class _AppVersionState extends State<AppVersion> {
         return Text(
           'Voidweaver ${info.version} (${info.buildNumber})',
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         );
       },
     );

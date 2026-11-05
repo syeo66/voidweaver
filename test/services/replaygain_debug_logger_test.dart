@@ -22,8 +22,9 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-            const MethodChannel('plugins.flutter.io/path_provider'),
-            (_) async => temp.path);
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (_) async => temp.path,
+        );
     await ReplayGainDebugLogger.instance.clear();
   });
 
@@ -33,10 +34,14 @@ void main() {
     await logger.setEnabled(true);
     addTearDown(() => logger.setEnabled(false));
 
-    logger.log('Stream URL: https://music.example/rest/stream'
-        '?u=alice&t=0123abcd&s=salty&v=1.16.1&id=42');
-    logger.log('Error: ClientException: Connection reset, '
-        'uri=https://music.example/rest/stream?u=alice&t=0123abcd&s=salty');
+    logger.log(
+      'Stream URL: https://music.example/rest/stream'
+      '?u=alice&t=0123abcd&s=salty&v=1.16.1&id=42',
+    );
+    logger.log(
+      'Error: ClientException: Connection reset, '
+      'uri=https://music.example/rest/stream?u=alice&t=0123abcd&s=salty',
+    );
     await logger.flush();
 
     final text = await File('${temp.path}/replaygain_debug.log').readAsString();

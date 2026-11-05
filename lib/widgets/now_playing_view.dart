@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../services/app_state.dart';
 import '../services/audio_player_service.dart';
 import '../services/image_cache_manager.dart';
@@ -32,14 +33,19 @@ class NowPlayingView extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.music_off,
-                    size: 64,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+                Icon(
+                  Icons.music_off,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
                 SizedBox(height: 16),
-                Text('No song playing',
-                    style: TextStyle(
-                        fontSize: 18,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                Text(
+                  'No song playing',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
               ],
             ),
           );
@@ -63,8 +69,9 @@ class NowPlayingView extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               _StaticAlbumArt(
-                  playerService: appState.audioPlayerService!,
-                  api: appState.api!),
+                playerService: appState.audioPlayerService!,
+                api: appState.api!,
+              ),
               const SizedBox(height: 24),
               const _StaticSongInfo(),
             ],
@@ -129,10 +136,7 @@ class _StaticAlbumArt extends StatefulWidget {
   final AudioPlayerService playerService;
   final SubsonicApi api;
 
-  const _StaticAlbumArt({
-    required this.playerService,
-    required this.api,
-  });
+  const _StaticAlbumArt({required this.playerService, required this.api});
 
   @override
   State<_StaticAlbumArt> createState() => _StaticAlbumArtState();
@@ -189,8 +193,11 @@ class _StaticAlbumArtState extends State<_StaticAlbumArt> {
           borderRadius: BorderRadius.circular(12),
           color: Theme.of(context).colorScheme.surfaceContainerHighest,
         ),
-        child: Icon(Icons.music_note,
-            size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
+        child: Icon(
+          Icons.music_note,
+          size: 64,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
       );
     }
 
@@ -203,8 +210,11 @@ class _StaticAlbumArtState extends State<_StaticAlbumArt> {
       ),
       child: _currentCoverArt != null
           ? _buildCachedImage()
-          : Icon(Icons.music_note,
-              size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
+          : Icon(
+              Icons.music_note,
+              size: 64,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
     );
   }
 
@@ -222,14 +232,13 @@ class _StaticAlbumArtState extends State<_StaticAlbumArt> {
         fit: BoxFit.cover,
         placeholder: (context, url) => Container(
           color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: const Center(
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-            ),
-          ),
+          child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
         ),
-        errorWidget: (context, url, error) => Icon(Icons.music_note,
-            size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
+        errorWidget: (context, url, error) => Icon(
+          Icons.music_note,
+          size: 64,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
       ),
     );
 
@@ -261,16 +270,18 @@ class _StaticSongInfo extends StatelessWidget {
             Text(
               currentSong.artist,
               style: TextStyle(
-                  fontSize: 16,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+                fontSize: 16,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 4),
             Text(
               currentSong.album,
               style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+                fontSize: 14,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
           ],

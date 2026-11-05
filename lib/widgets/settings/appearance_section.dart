@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import '../../services/settings_service.dart';
 
 /// Theme mode.
@@ -23,10 +25,7 @@ class AppearanceSection extends StatelessWidget {
             const SizedBox(height: 16),
 
             // Theme Mode
-            Text(
-              'Theme',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text('Theme', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             RadioGroup<ThemeMode>(
               groupValue: settingsService.themeMode,

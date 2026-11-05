@@ -50,34 +50,47 @@ void main() {
     // Released at the end, which ends the media session
     addTearDown(() => tester.pumpWidget(const SizedBox()));
     await _pumpUntil(
-        tester, () => find.text('Connect').evaluate().isNotEmpty, 'login');
+      tester,
+      () => find.text('Connect').evaluate().isNotEmpty,
+      'login',
+    );
 
     await tester.enterText(
-        find.widgetWithText(TextFormField, 'Server URL (HTTPS required)'),
-        server.url);
+      find.widgetWithText(TextFormField, 'Server URL (HTTPS required)'),
+      server.url,
+    );
     await tester.enterText(
-        find.widgetWithText(TextFormField, 'Username'), server.username);
+      find.widgetWithText(TextFormField, 'Username'),
+      server.username,
+    );
     await tester.enterText(
-        find.widgetWithText(TextFormField, 'Password'), server.password);
+      find.widgetWithText(TextFormField, 'Password'),
+      server.password,
+    );
     await tester.tap(find.text('Connect'));
-    await _pumpUntil(tester,
-        () => find.text('First Light').evaluate().isNotEmpty, 'the album list');
+    await _pumpUntil(
+      tester,
+      () => find.text('First Light').evaluate().isNotEmpty,
+      'the album list',
+    );
     return tester.element(find.byType(HomeScreen)).read<AppState>();
   }
 
   AudioPlayerService playerOf(AppState appState) =>
       appState.audioPlayerService!;
 
-  testWidgets('plays an album to its end and scrobbles each track',
-      (tester) async {
+  testWidgets('plays an album to its end and scrobbles each track', (
+    tester,
+  ) async {
     final appState = await startAndLogIn(tester);
     final player = playerOf(appState);
 
     await tester.tap(find.text('First Light'));
     await _pumpUntil(
-        tester,
-        () => player.playbackState == PlaybackState.playing,
-        'playback to start');
+      tester,
+      () => player.playbackState == PlaybackState.playing,
+      'playback to start',
+    );
     expect(player.playlist.map((s) => s.title), ['Dawn', 'Noon', 'Dusk']);
     expect(player.currentIndex, 0);
 
@@ -87,107 +100,133 @@ void main() {
 
     // At the end it stops on the last track, paused at its start
     await _pumpUntil(
-        tester,
-        () =>
-            player.playbackState == PlaybackState.paused &&
-            player.currentPosition == Duration.zero,
-        'the end of the album');
+      tester,
+      () =>
+          player.playbackState == PlaybackState.paused &&
+          player.currentPosition == Duration.zero,
+      'the end of the album',
+    );
     expect(player.currentIndex, 2);
 
     List<String> plays() => [
-          for (final s in server.scrobbles)
-            if (s.submission) s.songId
-        ];
+      for (final s in server.scrobbles)
+        if (s.submission) s.songId,
+    ];
     await _pumpUntil(tester, () => plays().length == 3, 'three plays');
     expect(plays(), ['s-1', 's-2', 's-3']);
     // Each track was announced as playing once
-    expect(server.scrobbles.where((s) => !s.submission).map((s) => s.songId),
-        containsAllInOrder(['s-1', 's-2', 's-3']));
+    expect(
+      server.scrobbles.where((s) => !s.submission).map((s) => s.songId),
+      containsAllInOrder(['s-1', 's-2', 's-3']),
+    );
   });
 
-  testWidgets('plays random songs and pauses from the player controls',
-      (tester) async {
+  testWidgets('plays random songs and pauses from the player controls', (
+    tester,
+  ) async {
     final appState = await startAndLogIn(tester);
     final player = playerOf(appState);
 
     await tester.tap(find.byTooltip('Play random songs'));
     await _pumpUntil(
-        tester,
-        () => player.playbackState == PlaybackState.playing,
-        'playback to start');
+      tester,
+      () => player.playbackState == PlaybackState.playing,
+      'playback to start',
+    );
     // All songs the server has, fewer than asked for
     expect(player.playlist, hasLength(7));
     expect(server.requestsTo('getRandomSongs').single.params['size'], '50');
 
     await tester.tap(find.byTooltip('Pause'));
-    await _pumpUntil(tester, () => player.playbackState == PlaybackState.paused,
-        'the pause');
+    await _pumpUntil(
+      tester,
+      () => player.playbackState == PlaybackState.paused,
+      'the pause',
+    );
     // The position may still settle by a few hundred ms after the pause is
     // reported (on slow CI emulators ExoPlayer's playback thread catches up
     // later), but it doesn't keep advancing.
     final position = player.currentPosition;
     await tester.pump(const Duration(seconds: 2));
-    expect(player.currentPosition - position,
-        lessThan(const Duration(milliseconds: 500)));
+    expect(
+      player.currentPosition - position,
+      lessThan(const Duration(milliseconds: 500)),
+    );
 
     await tester.tap(find.byTooltip('Play'));
     await _pumpUntil(
-        tester,
-        () => player.playbackState == PlaybackState.playing,
-        'playback to continue');
+      tester,
+      () => player.playbackState == PlaybackState.playing,
+      'playback to continue',
+    );
   });
 
-  testWidgets('asks for the new password after it changed on the server',
-      (tester) async {
+  testWidgets('asks for the new password after it changed on the server', (
+    tester,
+  ) async {
     final appState = await startAndLogIn(tester);
     expect(find.text('Update password'), findsNothing);
 
     server.password = 'changed on the server';
     await appState.loadAlbums(forceRefresh: true);
-    await _pumpUntil(tester,
-        () => find.text('Update password').evaluate().isNotEmpty, 'the banner');
+    await _pumpUntil(
+      tester,
+      () => find.text('Update password').evaluate().isNotEmpty,
+      'the banner',
+    );
 
     await tester.tap(find.text('Update password'));
     await tester.pumpAndSettle();
     final field = find.descendant(
-        of: find.byType(AlertDialog), matching: find.byType(TextFormField));
+      of: find.byType(AlertDialog),
+      matching: find.byType(TextFormField),
+    );
     await tester.enterText(field, 'a wrong one');
     await tester.tap(find.text('Update'));
     await _pumpUntil(
-        tester,
-        () => find.text('Wrong username or password.').evaluate().isNotEmpty,
-        'the error');
+      tester,
+      () => find.text('Wrong username or password.').evaluate().isNotEmpty,
+      'the error',
+    );
 
     await tester.enterText(field, 'changed on the server');
     await tester.tap(find.text('Update'));
-    await _pumpUntil(tester, () => find.byType(AlertDialog).evaluate().isEmpty,
-        'the dialog to close');
     await _pumpUntil(
-        tester,
-        () => find.text('Update password').evaluate().isEmpty,
-        'the banner to go');
+      tester,
+      () => find.byType(AlertDialog).evaluate().isEmpty,
+      'the dialog to close',
+    );
+    await _pumpUntil(
+      tester,
+      () => find.text('Update password').evaluate().isEmpty,
+      'the banner to go',
+    );
     expect(appState.isConfigured, isTrue);
 
     // Streams with the new password
     final player = playerOf(appState);
     await tester.tap(find.text('Second Wind'));
     await _pumpUntil(
-        tester,
-        () => player.playbackState == PlaybackState.playing,
-        'playback to start');
+      tester,
+      () => player.playbackState == PlaybackState.playing,
+      'playback to start',
+    );
     expect(player.currentSong?.title, 'Gust');
   });
 }
 
 /// Pumps frames until [condition] holds, failing after [timeout]
 Future<void> _pumpUntil(
-    WidgetTester tester, bool Function() condition, String what,
-    {Duration timeout = const Duration(seconds: 30)}) async {
+  WidgetTester tester,
+  bool Function() condition,
+  String what, {
+  Duration timeout = const Duration(seconds: 30),
+}) async {
   final deadline = DateTime.now().add(timeout);
   while (!condition()) {
     if (DateTime.now().isAfter(deadline)) {
       final texts = [
-        for (final e in find.byType(Text).evaluate()) (e.widget as Text).data
+        for (final e in find.byType(Text).evaluate()) (e.widget as Text).data,
       ];
       fail('Timed out waiting for $what. On screen: $texts');
     }

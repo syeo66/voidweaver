@@ -1,15 +1,18 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import '../services/audio_player_service.dart';
 import '../utils/format.dart';
 
 /// Shows the [SleepTimerDialog] for [playerService].
 Future<void> showSleepTimerDialog(
-        BuildContext context, AudioPlayerService playerService) =>
-    showDialog<void>(
-      context: context,
-      builder: (context) => SleepTimerDialog(playerService: playerService),
-    );
+  BuildContext context,
+  AudioPlayerService playerService,
+) => showDialog<void>(
+  context: context,
+  builder: (context) => SleepTimerDialog(playerService: playerService),
+);
 
 /// Starts a sleep timer from presets, or shows the running one's remaining
 /// time with buttons to extend or cancel it.
@@ -77,11 +80,13 @@ class SleepTimerDialogState2 extends State<SleepTimerDialog> {
                   Text(
                     'Time remaining:',
                     style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                   Text(
-                    formatClock(widget.playerService.sleepTimerRemaining ??
-                        Duration.zero),
+                    formatClock(
+                      widget.playerService.sleepTimerRemaining ?? Duration.zero,
+                    ),
                     style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -99,8 +104,9 @@ class SleepTimerDialogState2 extends State<SleepTimerDialog> {
                   icon: const Icon(Icons.add),
                   label: const Text('+15m'),
                   onPressed: () {
-                    widget.playerService
-                        .extendSleepTimer(const Duration(minutes: 15));
+                    widget.playerService.extendSleepTimer(
+                      const Duration(minutes: 15),
+                    );
                   },
                 ),
                 ElevatedButton.icon(

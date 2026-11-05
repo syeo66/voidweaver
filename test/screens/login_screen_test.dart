@@ -25,8 +25,12 @@ class _FakeAppState extends AppState {
   String? get configurationError => _error;
 
   @override
-  Future<void> configure(String serverUrl, String username, String password,
-      {bool verifyCredentials = false}) async {
+  Future<void> configure(
+    String serverUrl,
+    String username,
+    String password, {
+    bool verifyCredentials = false,
+  }) async {
     configuredWith = [serverUrl, username, password];
     verified = verifyCredentials;
     _state = LoadingState.loading;
@@ -60,19 +64,23 @@ void main() {
   setUp(() => appState = _FakeAppState());
 
   Future<void> pumpLogin(WidgetTester tester) async {
-    await tester.pumpWidget(ChangeNotifierProvider<AppState>.value(
-      value: appState,
-      child: const MaterialApp(home: LoginScreen()),
-    ));
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppState>.value(
+        value: appState,
+        child: const MaterialApp(home: LoginScreen()),
+      ),
+    );
   }
 
   Finder field(String label) =>
       find.widgetWithText(TextFormField, label, skipOffstage: false);
 
-  Future<void> fillIn(WidgetTester tester,
-      {String url = 'https://music.example.com',
-      String username = 'alice',
-      String password = 'secret'}) async {
+  Future<void> fillIn(
+    WidgetTester tester, {
+    String url = 'https://music.example.com',
+    String username = 'alice',
+    String password = 'secret',
+  }) async {
     await tester.enterText(field('Server URL (HTTPS required)'), url);
     await tester.enterText(field('Username'), username);
     await tester.enterText(field('Password'), password);
@@ -114,21 +122,29 @@ void main() {
     await tapConnect(tester);
 
     expect(
-        find.text('URL must use HTTPS protocol for security'), findsOneWidget);
+      find.text('URL must use HTTPS protocol for security'),
+      findsOneWidget,
+    );
     expect(appState.configuredWith, isNull);
   });
 
-  testWidgets('verifies the credentials, trimming all but the password',
-      (tester) async {
+  testWidgets('verifies the credentials, trimming all but the password', (
+    tester,
+  ) async {
     await pumpLogin(tester);
-    await fillIn(tester,
-        url: ' https://music.example.com ',
-        username: ' alice ',
-        password: ' secret ');
+    await fillIn(
+      tester,
+      url: ' https://music.example.com ',
+      username: ' alice ',
+      password: ' secret ',
+    );
     await tapConnect(tester);
 
-    expect(appState.configuredWith,
-        ['https://music.example.com', 'alice', ' secret ']);
+    expect(appState.configuredWith, [
+      'https://music.example.com',
+      'alice',
+      ' secret ',
+    ]);
     expect(appState.verified, isTrue);
   });
 
@@ -147,8 +163,11 @@ void main() {
       'Username',
       'Password',
     ]) {
-      expect(tester.widget<TextFormField>(field(label)).enabled, isFalse,
-          reason: label);
+      expect(
+        tester.widget<TextFormField>(field(label)).enabled,
+        isFalse,
+        reason: label,
+      );
     }
 
     appState.pending!.complete();
@@ -156,8 +175,9 @@ void main() {
     expect(find.text('Connect'), findsOneWidget);
   });
 
-  testWidgets('shows a failed login as a message, not the exception',
-      (tester) async {
+  testWidgets('shows a failed login as a message, not the exception', (
+    tester,
+  ) async {
     appState.failWith = const SubsonicException(40, 'Wrong username or pw');
     await pumpLogin(tester);
     await fillIn(tester);
@@ -166,8 +186,10 @@ void main() {
 
     // In the form and in the snackbar
     expect(find.text('Wrong username or password.'), findsOneWidget);
-    expect(find.text('Connection failed: Wrong username or password.'),
-        findsOneWidget);
+    expect(
+      find.text('Connection failed: Wrong username or password.'),
+      findsOneWidget,
+    );
     expect(find.textContaining('Exception'), findsNothing);
     // The form can be sent again
     expect(find.widgetWithText(ElevatedButton, 'Connect'), findsOneWidget);
