@@ -380,6 +380,42 @@ void main() {
       });
     });
 
+    test('network events reach every listener through one platform '
+        'listener', () async {
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      const channel = EventChannel('voidweaver_player/network');
+      var platformListens = 0;
+      MockStreamHandlerEventSink? sink;
+      messenger.setMockStreamHandler(
+        channel,
+        MockStreamHandler.inline(
+          onListen: (_, events) {
+            platformListens++;
+            sink = events;
+          },
+          onCancel: (_) => sink = null,
+        ),
+      );
+      addTearDown(() => messenger.setMockStreamHandler(channel, null));
+
+      var first = 0;
+      var second = 0;
+      final a = cache.networkAvailable.listen((_) => first++);
+      final b = const MediaCache().networkAvailable.listen((_) => second++);
+      await pumpEventQueue();
+      sink!.success(null);
+      await pumpEventQueue();
+
+      expect(platformListens, 1);
+      expect((first, second), (1, 1));
+
+      await a.cancel();
+      await b.cancel();
+      await pumpEventQueue();
+      expect(sink, isNull);
+    });
+
     test('returns the head of a cached item', () async {
       platform.onPluginCall = (call) => Uint8List.fromList([1, 2, 3]);
 

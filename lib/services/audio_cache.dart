@@ -82,6 +82,10 @@ class AudioCache {
     return available ? data : null;
   }
 
+  /// Fires when the device has a working internet connection again, so
+  /// failed downloads can be retried, see [MediaCache.networkAvailable].
+  Stream<void> get networkAvailable => _cache.networkAvailable;
+
   /// Size of cached audio in bytes (of all servers).
   Future<int> sizeInBytes() => _cache.sizeInBytes();
 

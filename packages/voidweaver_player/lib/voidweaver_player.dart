@@ -355,7 +355,19 @@ class VoidweaverPlayer {
 class MediaCache {
   static const _channel = MethodChannel('voidweaver_player');
 
+  // One stream for all listeners: the platform side keeps a single listener
+  static final Stream<void> _networkAvailable = const EventChannel(
+    'voidweaver_player/network',
+  ).receiveBroadcastStream().map((_) {});
+
   const MediaCache();
+
+  /// Fires whenever the device's default network has a working internet
+  /// connection: when one connects, when the default changes (Wi-Fi to mobile
+  /// data), and when one that had lost its connection has it again. Also
+  /// once on listening, if there is one then. For retrying downloads
+  /// ([prefetch]) that failed while offline.
+  Stream<void> get networkAvailable => _networkAvailable;
 
   /// Timeouts of the HTTP connections that playback and [prefetch] open
   /// from now on, for all players: [connect] for connecting, [read] for

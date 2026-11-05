@@ -35,7 +35,7 @@ cd packages/voidweaver_player && flutter test        # Dart API over a mocked me
 cd android && ./gradlew :voidweaver_player:testDebugUnitTest   # Java, on the JVM with Robolectric
 ```
 
-The Java tests (`packages/voidweaver_player/android/src/test/`) cover `GainAudioProcessor` (gain per item, switched at the item boundary, clipping), `SessionPlayer` (commands forwarded to Dart, the offered commands, idle after an error shown as paused) and `MediaCache.ErrorDocumentGuard`. `FakePlayer` stands in for the ExoPlayer. They need `JAVA_HOME` set (see [docs/ANDROID.md](../docs/ANDROID.md#environment)) but no device; they don't replace testing in the emulator.
+The Java tests (`packages/voidweaver_player/android/src/test/`) cover `GainAudioProcessor` (gain per item, switched at the item boundary, clipping), `SessionPlayer` (commands forwarded to Dart, the offered commands, idle after an error shown as paused), `MediaCache.ErrorDocumentGuard` and `NetworkMonitor` (one event per validated network). `FakePlayer` stands in for the ExoPlayer. They need `JAVA_HOME` set (see [docs/ANDROID.md](../docs/ANDROID.md#environment)) but no device; they don't replace testing in the emulator.
 
 ## Layout
 
@@ -60,6 +60,6 @@ final service = AudioPlayerService(
 
 - `test_helpers/mocks.dart`: the single `@GenerateMocks([...])` list (`MockSubsonicApi`, `MockSettingsService`). Tests import the generated `test_helpers/mocks.mocks.dart`; add new mocks to that list instead of annotating a test, then run `dart run build_runner build --delete-conflicting-outputs`. Create a `MockSubsonicApi` with `newMockApi()` (`test_helpers/mock_api.dart`), which stubs `hasRejectedCredentials` to false: the player and the scrobble queue ask for it before their own requests, and the mocks are strict.
 - `test_helpers/fake_subsonic_server.dart`: see above.
-- `test_helpers/fake_audio_cache.dart`: `FakeAudioCache`, an in-memory `AudioCache` (`cached`, `reachable`, `gate`, `downloaded`, `tags`). Pass `cache.isCachedKey` to `MockAudioPlayer(isCached: ...)` so cached items play although their URL fails, like with the real cache.
+- `test_helpers/fake_audio_cache.dart`: `FakeAudioCache`, an in-memory `AudioCache` (`cached`, `reachable`, `gate`, `downloaded`, `tags`, `simulateNetworkAvailable()`). Pass one to every `AudioPlayerService` that isn't meant to reach the plugin: the real `AudioCache` listens to the plugin's network events. Pass `cache.isCachedKey` to `MockAudioPlayer(isCached: ...)` so cached items play although their URL fails, like with the real cache.
 - Scrobble queue and playback restore tests use `SharedPreferences.setMockInitialValues`.
 - Dispose services in `tearDown`.

@@ -36,7 +36,7 @@ Endpoints used: `ping` (checks the credentials on login), `getAlbumList2` (`type
 | `lib/services/audio_player_service.dart` | Hands the playlist to the player and follows it; skips, load errors, applying ReplayGain gains, scrobbling |
 | `lib/services/upcoming_downloads.dart`, `replaygain_resolver.dart` | The player service's downloads of the next tracks with their retries (see [CACHING.md](CACHING.md)), and where a song's ReplayGain data comes from and the gain it plays at (see [REPLAYGAIN.md](REPLAYGAIN.md)) |
 | `lib/services/listening_tracker.dart`, `sleep_timer.dart` | The player service's listening time and scrobble decision per play, and the sleep timer with its fade, see [PLAYBACK.md](PLAYBACK.md) |
-| `packages/voidweaver_player/` | Local plugin: playlist player on Media3 ExoPlayer with a gain stage per item, and the Media3 media session for notification, lock screen and Bluetooth controls (Java on the Android side) |
+| `packages/voidweaver_player/` | Local plugin: playlist player on Media3 ExoPlayer with a gain stage per item, the Media3 media session for notification, lock screen and Bluetooth controls, the audio cache, and events when the network is back (Java on the Android side) |
 | `lib/services/api_cache.dart`, `audio_cache.dart`, `image_cache_manager.dart` | Caching, see [CACHING.md](CACHING.md) |
 | `lib/services/scrobble_queue.dart` | Persistent scrobble queue with retries |
 | `lib/services/replaygain_reader.dart`, `lib/services/replaygain/` | ReplayGain tag reading: `ReplayGainReader` fetches the start of the file and parses it on a background isolate; one parser per tag format (`id3v2.dart`, `ape.dart`, `vorbis.dart`, `mp4.dart`), see [REPLAYGAIN.md](REPLAYGAIN.md) |

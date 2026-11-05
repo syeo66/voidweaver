@@ -14,14 +14,19 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late AppState appState;
+  // The calls on the player plugin's channel, by method
+  late List<String> pluginCalls;
 
   setUp(() async {
+    pluginCalls = [];
     // The player AppState creates once it's configured
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(
-          const MethodChannel('voidweaver_player'),
-          (_) async => null,
-        );
+        .setMockMethodCallHandler(const MethodChannel('voidweaver_player'), (
+          call,
+        ) async {
+          pluginCalls.add(call.method);
+          return null;
+        });
     // Nothing listens there, so loading the albums fails after its retries
     FlutterSecureStorage.setMockInitialValues(
       savedCredentials('https://127.0.0.1:1', 'alice', 'secret'),
@@ -66,6 +71,23 @@ void main() {
     await Future<void>.delayed(const Duration(seconds: 3));
     expect(notified, isFalse);
     expect(appState.albumError, isNull);
+  });
+
+  test('a logout removes the downloaded audio, after releasing the '
+      'player', () async {
+    final temp = await Directory.systemTemp.createTemp();
+    addTearDown(() => temp.delete(recursive: true));
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (_) async => temp.path,
+        );
+
+    await appState.clearConfiguration();
+
+    final released = pluginCalls.indexOf('dispose');
+    expect(released, isNot(-1));
+    expect(pluginCalls.indexOf('cache.clear'), greaterThan(released));
   });
 
   test(

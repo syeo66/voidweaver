@@ -40,7 +40,15 @@ class FakeAudioCache implements AudioCache {
   /// ReplayGain tags of cached songs, by song id.
   final Map<String, ReplayGainData> tags = {};
 
+  final _networkAvailable = StreamController<void>.broadcast(sync: true);
+
   FakeAudioCache({this.namespace = 'server'});
+
+  /// Reports the network as available again, see [networkAvailable].
+  void simulateNetworkAvailable() => _networkAvailable.add(null);
+
+  @override
+  Stream<void> get networkAvailable => _networkAvailable.stream;
 
   /// Whether the content for an item's [cacheKey] is cached, see
   /// [MockAudioPlayer]'s `isCached`.

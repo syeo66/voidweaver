@@ -160,6 +160,24 @@ void main() {
       expect(cache.attempts['s2'], 6);
     });
 
+    test('downloads again when the network is back after the retries '
+        'gave up', () async {
+      cache.reachable = false;
+      await service.playAlbum(albumOf(3));
+      await until(
+        () => (cache.attempts['s3'] ?? 0) == 6,
+        'all retries of both tracks',
+      );
+      await Future.delayed(const Duration(milliseconds: 100));
+      expect(cache.downloaded, isEmpty);
+
+      cache.reachable = true;
+      cache.simulateNetworkAvailable();
+      await until(() => cache.downloaded.length == 2, 'both downloads');
+
+      expect(cache.downloaded, ['s2', 's3']);
+    });
+
     test('stops retrying once another track starts', () async {
       cache.failing.add('s3');
       await service.playAlbum(albumOf(5));

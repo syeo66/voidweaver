@@ -44,6 +44,9 @@ class FakeMediaCache implements MediaCache {
   Future<void> clear() async => content.clear();
 
   @override
+  Stream<void> get networkAvailable => const Stream.empty();
+
+  @override
   Future<void> setTimeouts({
     required Duration connect,
     required Duration read,

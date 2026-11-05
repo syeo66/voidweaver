@@ -6,6 +6,7 @@ import android.os.Looper;
 import androidx.annotation.NonNull;
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.plugin.common.BinaryMessenger;
+import io.flutter.plugin.common.EventChannel;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import java.util.HashMap;
@@ -26,6 +27,9 @@ public class VoidweaverPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
   private ExecutorService downloads;
   private ExecutorService reads;
   private MethodChannel channel;
+  // Tells Dart when the network is back, see NetworkMonitor
+  private EventChannel networkChannel;
+  private NetworkMonitor networkMonitor;
   private Context context;
   private BinaryMessenger messenger;
 
@@ -37,6 +41,9 @@ public class VoidweaverPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
     reads = Executors.newSingleThreadExecutor();
     channel = new MethodChannel(messenger, "voidweaver_player");
     channel.setMethodCallHandler(this);
+    networkChannel = new EventChannel(messenger, "voidweaver_player/network");
+    networkMonitor = new NetworkMonitor(context);
+    networkChannel.setStreamHandler(networkMonitor);
   }
 
   @Override
@@ -143,5 +150,7 @@ public class VoidweaverPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
     downloads.shutdownNow();
     reads.shutdownNow();
     channel.setMethodCallHandler(null);
+    networkChannel.setStreamHandler(null);
+    networkMonitor.onCancel(null);
   }
 }

@@ -5,6 +5,7 @@ import 'package:voidweaver/services/audio_player_service.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 import 'package:voidweaver/services/settings_service.dart';
 
+import '../test_helpers/fake_audio_cache.dart';
 import '../test_helpers/mock_audio_player.dart';
 
 // Create mock classes for testing without SharedPreferences
@@ -43,6 +44,7 @@ void main() {
         mockApi,
         mockSettingsService,
         audioPlayer: mockAudioPlayer,
+        audioCache: FakeAudioCache(),
       );
 
       // Verify service is properly initialized
@@ -81,6 +83,7 @@ void main() {
         mockApi,
         mockSettingsService,
         audioPlayer: mockAudioPlayer,
+        audioCache: FakeAudioCache(),
       );
 
       expect(() => audioPlayerService.dispose(), returnsNormally);
@@ -95,6 +98,7 @@ void main() {
         mockApi,
         mockSettingsService,
         audioPlayer: mockAudioPlayer,
+        audioCache: FakeAudioCache(),
       );
 
       // Start a sleep timer
@@ -117,6 +121,7 @@ void main() {
         mockApi,
         mockSettingsService,
         audioPlayer: mockAudioPlayer,
+        audioCache: FakeAudioCache(),
       );
 
       // Dispose the service
@@ -135,6 +140,7 @@ void main() {
         mockApi,
         mockSettingsService,
         audioPlayer: mockAudioPlayer,
+        audioCache: FakeAudioCache(),
       );
 
       // Dispose the service
@@ -153,6 +159,7 @@ void main() {
         mockApi,
         mockSettingsService,
         audioPlayer: mockAudioPlayer,
+        audioCache: FakeAudioCache(),
       );
 
       // Dispose should handle cases where some resources might be null

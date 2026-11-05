@@ -461,11 +461,13 @@ class AppState extends ChangeNotifier {
   }
 
   /// Logs out: releases the services and removes the credentials and the
-  /// data that belongs to the server (library cache, cover art, pending
-  /// scrobbles, saved queue). Settings are kept.
+  /// data that belongs to the server (library cache, cover art, downloaded
+  /// audio, pending scrobbles, saved queue). Settings are kept.
   Future<void> clearConfiguration() async {
     final api = _api;
     final scrobbleQueue = _scrobbleQueue;
+    final audioCache = _audioCache;
+    final player = _audioPlayerService;
     // Dispose first, so nothing writes the server's data again afterwards
     _disposeServices();
 
@@ -487,6 +489,13 @@ class AppState extends ChangeNotifier {
       if (_persistenceService != null)
         clear('the saved queue', _persistenceService!.clearPlaybackState),
       clear('the cover art', ImageCacheManager.clearCache),
+      if (audioCache != null)
+        clear('the downloaded audio', () async {
+          // Once the player no longer streams into the cache. Its downloads
+          // ahead were cancelled when it was disposed.
+          await player?.released;
+          await audioCache.clear();
+        }),
     ]);
 
     _albums = [];

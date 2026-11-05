@@ -89,6 +89,91 @@ void main() {
     expect(cache.downloaded, ['s2']);
   });
 
+  group('when the network is back', () {
+    test('starts a run again that gave up', () async {
+      cache.reachable = false;
+      await downloads.start(songs(5), 1, isCurrent: always);
+      expect(cache.downloaded, isEmpty);
+
+      cache.reachable = true;
+      downloads.networkAvailable();
+      await untilAttempted('s3', 1);
+      await pumpEventQueue();
+
+      expect(cache.downloaded, ['s1', 's2', 's3']);
+    });
+
+    test('retries right away instead of waiting for the next retry', () async {
+      downloads = UpcomingDownloads(
+        audioCache: cache,
+        api: api,
+        // Longer than the test may take
+        retryDelay: const Duration(hours: 1),
+        onReplayGain: (playlist, index, data) {},
+      );
+      cache.failing.add('s1');
+      unawaited(downloads.start(songs(5), 1, isCurrent: always));
+      await untilAttempted('s1', 1);
+
+      cache.failing.clear();
+      downloads.networkAvailable();
+      await untilAttempted('s3', 1);
+      await pumpEventQueue();
+
+      expect(cache.downloaded, ['s1', 's2', 's3']);
+      downloads.cancel();
+    });
+
+    test('keeps what the run got and goes on from there', () async {
+      cache.failing.add('s2');
+      await downloads.start(songs(5), 1, isCurrent: always);
+      expect(cache.downloaded, ['s1', 's3']);
+
+      cache.failing.clear();
+      downloads.networkAvailable();
+      await untilAttempted('s2', UpcomingDownloads.maxRetries + 2);
+      await pumpEventQueue();
+
+      expect(cache.downloaded, ['s1', 's3', 's2']);
+      expect(cache.attempts['s1'], 1);
+    });
+
+    test('does nothing after a run that got everything', () async {
+      await downloads.start(songs(5), 1, isCurrent: always);
+      downloads.networkAvailable();
+      await pumpEventQueue();
+
+      expect(cache.attempts.values, everyElement(1));
+    });
+
+    test('does nothing once the run is no longer current', () async {
+      var current = true;
+      cache.reachable = false;
+      await downloads.start(songs(5), 1, isCurrent: () => current);
+      final attempts = cache.attempts['s1'];
+
+      current = false;
+      cache.reachable = true;
+      downloads.networkAvailable();
+      await pumpEventQueue();
+
+      expect(cache.attempts['s1'], attempts);
+      expect(cache.downloaded, isEmpty);
+    });
+
+    test('does nothing after cancel', () async {
+      cache.reachable = false;
+      await downloads.start(songs(5), 1, isCurrent: always);
+      downloads.cancel();
+
+      cache.reachable = true;
+      downloads.networkAvailable();
+      await pumpEventQueue();
+
+      expect(cache.downloaded, isEmpty);
+    });
+  });
+
   test('a newer run replaces the one in progress', () async {
     cache.failing.add('s1');
     final first = downloads.start(songs(5), 1, isCurrent: always);

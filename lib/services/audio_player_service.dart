@@ -148,9 +148,11 @@ class AudioPlayerService extends ChangeNotifier {
   StreamSubscription<int?>? _currentIndexSubscription;
   StreamSubscription<PlayerException>? _errorSubscription;
   StreamSubscription<SystemCommand>? _commandSubscription;
+  StreamSubscription<void>? _networkSubscription;
 
   // Async work (preloads, ReplayGain reads) can finish after dispose()
   bool _disposed = false;
+  Future<void>? _released;
 
   AudioPlayerService(
     this._api,
@@ -169,6 +171,13 @@ class AudioPlayerService extends ChangeNotifier {
       api: _api,
       retryDelay: downloadRetryDelay,
       onReplayGain: _storeReplayGain,
+    );
+    // Downloads that failed while offline start again
+    _networkSubscription = _audioCache.networkAvailable.listen(
+      (_) => _downloads.networkAvailable(),
+      onError: (Object e) {
+        _log.warning('[audio_cache] Network events failed', e);
+      },
     );
     _initializePlayer();
     unawaited(_scrobbleQueue.initialize());
@@ -1109,6 +1118,10 @@ class AudioPlayerService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Completes once the player released after [dispose] has stopped
+  /// reading and writing the audio cache. Null before [dispose].
+  Future<void>? get released => _released;
+
   @override
   void notifyListeners() {
     if (!_disposed) super.notifyListeners();
@@ -1124,15 +1137,14 @@ class AudioPlayerService extends ChangeNotifier {
     unawaited(_currentIndexSubscription?.cancel());
     unawaited(_errorSubscription?.cancel());
     unawaited(_commandSubscription?.cancel());
+    unawaited(_networkSubscription?.cancel());
     _sleepTimer.dispose();
     // Not disposed here: AppState owns it and keeps it across logins
     _persistence?.flushPendingPositionSave();
     _scrobbleQueue.dispose();
-    unawaited(
-      _audioPlayer.dispose().catchError((Object e) {
-        _log.warning('Could not release the player', e);
-      }),
-    );
+    _released = _audioPlayer.dispose().catchError((Object e) {
+      _log.warning('Could not release the player', e);
+    });
     _position.dispose();
     super.dispose();
   }

@@ -15,9 +15,10 @@ final _log = Logger('upcoming_downloads');
 ///
 /// Downloads run one at a time, nearest track first, so the next song is
 /// ready as early as possible. A failed download (e.g. the network dropped
-/// for a moment) is tried again a few times. Otherwise the player would have
-/// to stream the track when it gets there, and a network drop at that moment
-/// stops playback.
+/// for a moment) is tried again a few times, and the run starts again when
+/// the network comes back ([networkAvailable]). Otherwise the player would
+/// have to stream the track when it gets there, and a network drop at that
+/// moment stops playback.
 class UpcomingDownloads {
   /// Upcoming tracks downloaded while playing
   static const int maxTracks = 3;
@@ -37,6 +38,10 @@ class UpcomingDownloads {
 
   // The download in progress, see _cancelUnwanted()
   _Download? _inFlight;
+
+  // The current run, once one of its downloads failed: it's waiting to try
+  // again, or gave up. networkAvailable() starts it again.
+  _Run? _failedRun;
 
   /// [onReplayGain] gets the ReplayGain data read from a downloaded file of
   /// a song the server sent none for.
@@ -63,6 +68,7 @@ class UpcomingDownloads {
     required bool Function() isCurrent,
   }) async {
     final run = ++_run;
+    _failedRun = null;
     final end = (firstIndex + maxTracks).clamp(0, playlist.length);
     _cancelUnwanted(playlist, firstIndex, end);
     if (firstIndex >= end) return;
@@ -73,18 +79,37 @@ class UpcomingDownloads {
     for (var index = firstIndex; index < end; index++) {
       var delay = _retryDelay;
       for (var attempt = 0; current(); attempt++) {
-        if (await _download(playlist, index) || attempt == maxRetries) break;
+        if (await _download(playlist, index)) break;
+        if (run == _run) {
+          _failedRun = _Run(playlist, firstIndex, isCurrent);
+        }
+        if (attempt == maxRetries) break;
         _log.fine(() => 'Retrying "${playlist[index].title}" in $delay');
-        await Future.delayed(delay);
+        await Future<void>.delayed(delay);
         delay *= 2;
       }
       if (!current()) break;
     }
   }
 
+  /// The network is back (see [AudioCache.networkAvailable]). Starts the
+  /// current run again if one of its downloads failed, rather than waiting
+  /// for its next retry, or for the next track if it gave up: a drop longer
+  /// than the retries would otherwise leave the next tracks uncached while
+  /// the network is up again. Tracks it got stay cached and are skipped.
+  void networkAvailable() {
+    final failed = _failedRun;
+    if (failed == null || !failed.isCurrent()) return;
+    _log.info('Network available, downloading the next tracks again');
+    unawaited(
+      start(failed.playlist, failed.firstIndex, isCurrent: failed.isCurrent),
+    );
+  }
+
   /// Stops the run in progress, and cancels its download.
   void cancel() {
     _run++;
+    _failedRun = null;
     _cancelUnwanted(const [], 0, 0);
   }
 
@@ -131,6 +156,15 @@ class UpcomingDownloads {
     _onReplayGain(playlist, index, data);
     return true;
   }
+}
+
+/// The arguments of a [UpcomingDownloads.start] call.
+class _Run {
+  final List<Song> playlist;
+  final int firstIndex;
+  final bool Function() isCurrent;
+
+  _Run(this.playlist, this.firstIndex, this.isCurrent);
 }
 
 /// A download of the song at [index] in [playlist].
