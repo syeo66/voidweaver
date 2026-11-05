@@ -229,6 +229,34 @@ void main() {
       expect(server.scrobbles.single.time, playedAt);
       await _until(() => appState.pendingScrobbles == 0, 'an empty queue');
     });
+
+    test('syncs in the background only once the password is fixed', () async {
+      // Refused from the start, so no load succeeded and a sync is due
+      server.password = 'changed';
+      final appState = await loggedIn();
+      await _until(
+        () => appState.credentialsRejected && !appState.isLoading,
+        'the album list to be refused',
+      );
+      expect(appState.lastSyncTime, isNull);
+      final albumLists = server.requestsTo('getAlbumList2').length;
+
+      // Shown again after a while: a sync is due, but would be refused
+      appState.setVisible(false);
+      appState.setVisible(true);
+      expect(appState.syncStatus, SyncStatus.idle);
+      expect(server.requestsTo('getAlbumList2'), hasLength(albumLists));
+
+      await appState.updatePassword('changed');
+      appState.setVisible(false);
+      appState.setVisible(true);
+      expect(appState.syncStatus, SyncStatus.syncing);
+      await _until(
+        () => appState.syncStatus != SyncStatus.syncing,
+        'the sync to finish',
+      );
+      expect(appState.syncStatus, SyncStatus.success);
+    });
   });
 }
 

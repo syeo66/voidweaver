@@ -13,6 +13,7 @@ import 'package:voidweaver/services/replaygain_reader.dart';
 
 import '../test_helpers/fake_audio_cache.dart';
 import '../test_helpers/mock_audio_player.dart';
+import '../test_helpers/mock_api.dart';
 import '../test_helpers/mocks.mocks.dart';
 
 /// An [AppState] that is logged in with the given API and player, without
@@ -80,7 +81,7 @@ void main() {
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
-    mockApi = MockSubsonicApi();
+    mockApi = newMockApi();
     when(mockApi.getArtists()).thenAnswer((_) async => []);
     when(mockApi.getStreamUrl(any)).thenAnswer(
       (invocation) =>

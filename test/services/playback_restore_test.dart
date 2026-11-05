@@ -10,6 +10,7 @@ import 'package:voidweaver/services/subsonic_api.dart';
 import 'package:voidweaver/services/replaygain_reader.dart';
 
 import '../test_helpers/fake_audio_cache.dart';
+import '../test_helpers/mock_api.dart';
 import '../test_helpers/mocks.mocks.dart';
 import '../test_helpers/mock_audio_player.dart';
 
@@ -33,7 +34,7 @@ void main() {
     });
 
     setUp(() {
-      mockApi = MockSubsonicApi();
+      mockApi = newMockApi();
       mockSettingsService = MockSettingsService();
       mockAudioPlayer = MockAudioPlayer();
 

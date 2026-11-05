@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -139,9 +140,10 @@ final class MediaCache {
   }
 
   /**
-   * Fails requests that the server answers with an XML or JSON document instead of audio. Subsonic
-   * reports errors (e.g. an unknown song) that way, with status 200; without this, the error
-   * document would be cached as the song.
+   * Fails requests that the server answers with a document instead of audio: XML or JSON, as
+   * Subsonic reports errors (e.g. an unknown song) with status 200, and any text, such as a login
+   * or maintenance page of a reverse proxy. Without this, the document would be cached as the
+   * complete song, and count as playable offline until evicted.
    */
   static final class ErrorDocumentGuard implements DataSource {
     static final class Factory implements DataSource.Factory {
@@ -176,14 +178,22 @@ final class MediaCache {
       for (Map.Entry<String, List<String>> header : upstream.getResponseHeaders().entrySet()) {
         if (header.getKey() == null || !header.getKey().equalsIgnoreCase("Content-Type")) continue;
         for (String value : header.getValue()) {
-          String type = value.toLowerCase();
-          if (type.contains("xml") || type.contains("json")) {
+          if (isDocument(value)) {
             upstream.close();
-            throw new IOException("Server returned an error document instead of audio");
+            throw new IOException("Server returned a document (" + value + ") instead of audio");
           }
         }
       }
       return length;
+    }
+
+    /**
+     * Whether [contentType] is a document rather than audio. Not a list of audio types, which would
+     * fail audio a server reports under a type nobody thought of (application/octet-stream, ...).
+     */
+    static boolean isDocument(String contentType) {
+      String type = contentType.trim().toLowerCase(Locale.ROOT);
+      return type.startsWith("text/") || type.contains("xml") || type.contains("json");
     }
 
     @Override

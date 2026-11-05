@@ -12,6 +12,7 @@ import 'package:voidweaver/services/replaygain_reader.dart';
 
 import '../test_helpers/fake_audio_cache.dart';
 import '../test_helpers/mock_audio_player.dart';
+import '../test_helpers/mock_api.dart';
 import '../test_helpers/mocks.mocks.dart';
 
 void main() {
@@ -56,7 +57,7 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
 
-    mockApi = MockSubsonicApi();
+    mockApi = newMockApi();
     mockSettings = MockSettingsService();
     cache = FakeAudioCache()..reachable = false;
     player = MockAudioPlayer(isCached: cache.isCachedKey);

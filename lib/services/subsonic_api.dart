@@ -62,6 +62,15 @@ class SubsonicApi {
   /// the server leave it as it is.
   final ValueNotifier<bool> credentialsRejected = ValueNotifier(false);
 
+  /// The value of [credentialsRejected]. Requests made on their own
+  /// (scrobble retries, background sync, downloads ahead) aren't sent while
+  /// it's set: each would fail the same way, and a steady stream of failed
+  /// logins can get the device banned (e.g. by fail2ban in front of the
+  /// server), which would then refuse the new password too. Requests the
+  /// user starts still go out, so a password changed back on the server
+  /// clears it.
+  bool get hasRejectedCredentials => credentialsRejected.value;
+
   SubsonicApi({
     required this.serverUrl,
     required this.username,

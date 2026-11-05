@@ -92,4 +92,26 @@ public final class ErrorDocumentGuardTest {
       assertFalse("closed after " + type, upstream.open);
     }
   }
+
+  @Test
+  public void failsOnATextPage() {
+    // E.g. a reverse proxy's login or maintenance page, answered with 200
+    for (String type : new String[] {"text/html; charset=utf-8", "Text/HTML", "text/plain"}) {
+      FakeHttpSource upstream = new FakeHttpSource("Content-Type", type);
+
+      assertThrows(
+          type, IOException.class, () -> new MediaCache.ErrorDocumentGuard(upstream).open(SPEC));
+      assertFalse("closed after " + type, upstream.open);
+    }
+  }
+
+  @Test
+  public void passesOtherAudioTypesThrough() throws IOException {
+    for (String type :
+        new String[] {"audio/flac", "audio/mp4", "application/octet-stream", "video/mp4"}) {
+      FakeHttpSource upstream = new FakeHttpSource("Content-Type", type);
+
+      assertEquals(type, 1234, new MediaCache.ErrorDocumentGuard(upstream).open(SPEC));
+    }
+  }
 }

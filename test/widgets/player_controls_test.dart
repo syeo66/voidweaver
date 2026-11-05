@@ -11,6 +11,7 @@ import 'package:voidweaver/widgets/player_controls.dart';
 
 import '../test_helpers/fake_audio_cache.dart';
 import '../test_helpers/mock_audio_player.dart';
+import '../test_helpers/mock_api.dart';
 import '../test_helpers/mocks.mocks.dart';
 
 void main() {
@@ -38,7 +39,7 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
-    mockApi = MockSubsonicApi();
+    mockApi = newMockApi();
     mockSettings = MockSettingsService();
     player = MockAudioPlayer();
 

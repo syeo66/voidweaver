@@ -316,6 +316,9 @@ class AppState extends ChangeNotifier {
   Future<void> _backgroundSync() async {
     final api = _api;
     if (api == null || _syncStatus == SyncStatus.syncing) return;
+    // The server would refuse it, see SubsonicApi.hasRejectedCredentials.
+    // The banner shows what's wrong; a refresh by the user still goes out.
+    if (api.hasRejectedCredentials) return;
 
     _syncStatus = SyncStatus.syncing;
     notifyListeners();

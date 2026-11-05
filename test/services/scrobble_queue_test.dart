@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/scrobble_queue.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 
+import '../test_helpers/mock_api.dart';
 import '../test_helpers/mocks.mocks.dart';
 
 void main() {
@@ -17,7 +18,7 @@ void main() {
     late ScrobbleQueue scrobbleQueue;
 
     setUp(() async {
-      mockApi = MockSubsonicApi();
+      mockApi = newMockApi();
       SharedPreferences.setMockInitialValues({});
       scrobbleQueue = ScrobbleQueue(mockApi);
     });
@@ -580,6 +581,39 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       final stored = prefs.getString('scrobble_queue');
       expect(stored == null || (jsonDecode(stored) as List).isEmpty, isTrue);
+    });
+
+    test('sends nothing while the server rejects the credentials', () async {
+      when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {});
+      when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
+          .thenAnswer((_) async {});
+      when(mockApi.hasRejectedCredentials).thenReturn(true);
+      await scrobbleQueue.initialize();
+
+      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
+      await scrobbleQueue.queueNowPlaying('song2');
+      for (var i = 0; i < 3; i++) {
+        await scrobbleQueue.processQueue();
+      }
+
+      verifyNever(mockApi.scrobbleNowPlaying(any));
+      verifyNever(
+        mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')),
+      );
+      // The play is kept, also in storage; the "now playing" is stale
+      expect(scrobbleQueue.queueSize, 1);
+      expect(scrobbleQueue.pendingSubmissions, 1);
+      final prefs = await SharedPreferences.getInstance();
+      expect(jsonDecode(prefs.getString('scrobble_queue')!), hasLength(1));
+
+      // A new password
+      when(mockApi.hasRejectedCredentials).thenReturn(false);
+      await scrobbleQueue.processQueue();
+      verify(
+        mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
+      ).called(1);
+      verifyNever(mockApi.scrobbleNowPlaying(any));
+      expect(scrobbleQueue.queueSize, 0);
     });
   });
 }

@@ -103,6 +103,12 @@ class MockSubsonicApi extends _i1.Mock implements _i6.SubsonicApi {
   ) as _i2.ValueNotifier<bool>);
 
   @override
+  bool get hasRejectedCredentials => (super.noSuchMethod(
+    Invocation.getter(#hasRejectedCredentials),
+    returnValue: false,
+  ) as bool);
+
+  @override
   String get password => (super.noSuchMethod(
     Invocation.getter(#password),
     returnValue: _i7.dummyValue<String>(this, Invocation.getter(#password)),

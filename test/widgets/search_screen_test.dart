@@ -8,6 +8,7 @@ import 'package:voidweaver/screens/search_screen.dart';
 import 'package:voidweaver/services/app_state.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 
+import '../test_helpers/mock_api.dart';
 import '../test_helpers/mocks.mocks.dart';
 
 /// An [AppState] that hands out the given API without logging in.
@@ -37,7 +38,7 @@ void main() {
   );
 
   setUp(() {
-    mockApi = MockSubsonicApi();
+    mockApi = newMockApi();
   });
 
   testWidgets('searches once typing pauses', (tester) async {

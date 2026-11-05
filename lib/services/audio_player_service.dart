@@ -1107,9 +1107,14 @@ class AudioPlayerService extends ChangeNotifier {
     if (start >= end) return;
 
     // Stop once the playlist is replaced or another track started (which
-    // starts its own downloads)
+    // starts its own downloads), or the server refused the credentials
+    // (see SubsonicApi.hasRejectedCredentials): credentialsChanged() starts
+    // the downloads again with the new password
     bool current() =>
-        !_disposed && run == _preloadRun && identical(playlist, _playlist);
+        !_disposed &&
+        run == _preloadRun &&
+        identical(playlist, _playlist) &&
+        !_api.hasRejectedCredentials;
 
     for (var index = start; index < end; index++) {
       var delay = _downloadRetryDelay;

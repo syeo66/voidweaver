@@ -58,7 +58,7 @@ final service = AudioPlayerService(
 );
 ```
 
-- `test_helpers/mocks.dart`: the single `@GenerateMocks([...])` list (`MockSubsonicApi`, `MockSettingsService`). Tests import the generated `test_helpers/mocks.mocks.dart`; add new mocks to that list instead of annotating a test, then run `dart run build_runner build --delete-conflicting-outputs`.
+- `test_helpers/mocks.dart`: the single `@GenerateMocks([...])` list (`MockSubsonicApi`, `MockSettingsService`). Tests import the generated `test_helpers/mocks.mocks.dart`; add new mocks to that list instead of annotating a test, then run `dart run build_runner build --delete-conflicting-outputs`. Create a `MockSubsonicApi` with `newMockApi()` (`test_helpers/mock_api.dart`), which stubs `hasRejectedCredentials` to false: the player and the scrobble queue ask for it before their own requests, and the mocks are strict.
 - `test_helpers/fake_subsonic_server.dart`: see above.
 - `test_helpers/fake_audio_cache.dart`: `FakeAudioCache`, an in-memory `AudioCache` (`cached`, `reachable`, `gate`, `downloaded`, `tags`). Pass `cache.isCachedKey` to `MockAudioPlayer(isCached: ...)` so cached items play although their URL fails, like with the real cache.
 - Scrobble queue and playback restore tests use `SharedPreferences.setMockInitialValues`.

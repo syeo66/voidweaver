@@ -14,6 +14,7 @@ import 'package:voidweaver/services/subsonic_api.dart';
 
 import '../test_helpers/fake_audio_cache.dart';
 import '../test_helpers/mock_audio_player.dart';
+import '../test_helpers/mock_api.dart';
 import '../test_helpers/mocks.mocks.dart';
 
 void main() {
@@ -60,7 +61,7 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
 
-    mockApi = MockSubsonicApi();
+    mockApi = newMockApi();
     mockSettings = MockSettingsService();
     cache = FakeAudioCache();
     player = MockAudioPlayer(isCached: cache.isCachedKey);
@@ -172,6 +173,27 @@ void main() {
 
       // Only the new track's downloads try s3: a first attempt, five retries
       expect(cache.attempts['s3'], before + 6);
+    });
+
+    test('stops retrying while the server rejects the credentials', () async {
+      cache.reachable = false;
+      await service.playAlbum(albumOf(3));
+      await until(() => (cache.attempts['s2'] ?? 0) >= 1, 'a first attempt');
+
+      // E.g. the "now playing" of the track was refused
+      when(mockApi.hasRejectedCredentials).thenReturn(true);
+      final before = cache.attempts['s2']!;
+      await Future.delayed(const Duration(milliseconds: 200));
+      // At most the attempt that was already under way
+      expect(cache.attempts['s2'], lessThanOrEqualTo(before + 1));
+      expect(cache.attempts['s3'], isNull);
+
+      // The new password restarts them
+      when(mockApi.hasRejectedCredentials).thenReturn(false);
+      cache.reachable = true;
+      service.credentialsChanged();
+      await until(() => cache.downloaded.length == 2, 'both downloads');
+      expect(cache.downloaded, ['s2', 's3']);
     });
   });
 

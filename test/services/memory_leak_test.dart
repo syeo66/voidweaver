@@ -24,6 +24,9 @@ class MockSettingsService extends Mock implements SettingsService {
 
 class MockSubsonicApi extends Mock implements SubsonicApi {
   @override
+  bool get hasRejectedCredentials => false;
+
+  @override
   void dispose() {
     // Mock implementation
   }

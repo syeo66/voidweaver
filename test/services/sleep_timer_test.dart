@@ -4,6 +4,7 @@ import 'package:voidweaver/services/audio_player_service.dart';
 import 'package:voidweaver/services/sleep_timer.dart';
 import 'package:voidweaver_player/voidweaver_player.dart';
 
+import '../test_helpers/mock_api.dart';
 import '../test_helpers/mocks.mocks.dart';
 import '../test_helpers/mock_audio_player.dart';
 
@@ -19,7 +20,7 @@ void main() {
     });
 
     setUp(() {
-      mockApi = MockSubsonicApi();
+      mockApi = newMockApi();
       mockSettingsService = MockSettingsService();
       mockAudioPlayer = MockAudioPlayer();
       audioPlayerService = AudioPlayerService(

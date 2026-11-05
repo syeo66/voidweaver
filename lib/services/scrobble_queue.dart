@@ -131,6 +131,20 @@ class ScrobbleQueue {
     try {
       // Requests queued meanwhile are sent in the same pass
       while (_queue.isNotEmpty && !_disposed) {
+        if (_api.hasRejectedCredentials) {
+          // Not sent: the server would refuse them (see
+          // SubsonicApi.hasRejectedCredentials). As if they had been: the
+          // "now playing" requests are dropped, the submissions wait for a
+          // new password (AppState.updatePassword() processes the queue) or
+          // the next timer tick after the flag cleared.
+          _queue.removeWhere((r) => r.type == ScrobbleType.nowPlaying);
+          _log.fine(
+            'Credentials rejected, holding ${_queue.length} submissions',
+          );
+          blocked = true;
+          break;
+        }
+
         final request = _queue.first;
 
         if (DateTime.now().difference(request.queuedAt) > _maxAge) {
