@@ -607,6 +607,74 @@ void main() {
     );
   });
 
+  group('playback errors', () {
+    late List<String> errors;
+
+    setUp(() {
+      errors = [];
+      service.playbackErrors.listen(errors.add);
+      cache.reachable = false;
+    });
+
+    test(
+      'reports a track that fails with nothing downloaded after it',
+      () async {
+        await service.playAlbum(albumOf(2));
+        player.failingUrls.add(urlFor('s2'));
+
+        player.simulateTrackTransition();
+        await until(() => errors.isNotEmpty, 'the failure is reported');
+
+        expect(errors, [startsWith('Could not play "Title s2"')]);
+      },
+    );
+
+    test('reports a play that fails', () async {
+      await service.playAlbum(albumOf(2));
+      player.failingUrls.add(urlFor('s2'));
+      player.simulateTrackTransition();
+      await until(() => errors.length == 1, 'the failure is reported');
+
+      await service.play();
+      await pumpEventQueue();
+
+      expect(errors, hasLength(2));
+      expect(errors.last, startsWith('Could not play "Title s2"'));
+      expect(service.playbackState, PlaybackState.stopped);
+    });
+
+    test('reports a skip to a track that fails', () async {
+      await service.playAlbum(albumOf(2));
+      player.failingUrls.add(urlFor('s2'));
+
+      await service.next();
+      await until(() => errors.isNotEmpty, 'the failure is reported');
+
+      expect(errors, [startsWith('Could not play "Title s2"')]);
+    });
+
+    test('does not report continuing at a downloaded track', () async {
+      cache.cached.add('s3');
+      await service.playAlbum(albumOf(3));
+      player.failingUrls.add(urlFor('s2'));
+
+      player.simulateTrackTransition();
+      await until(() => service.currentIndex == 2, 'playback continues');
+      await pumpEventQueue();
+
+      expect(errors, isEmpty);
+    });
+
+    test('leaves a failed start to its caller', () async {
+      player.failingUrls.add(urlFor('s1'));
+
+      await expectLater(service.playAlbum(albumOf(1)), throwsA(anything));
+      await pumpEventQueue();
+
+      expect(errors, isEmpty);
+    });
+  });
+
   group('password changed', () {
     // The stream URLs carry the password, like the token and salt do
     var password = 'old';

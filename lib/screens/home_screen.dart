@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/app_state.dart';
+import '../services/audio_player_service.dart';
 import '../widgets/credentials_banner.dart';
+import '../widgets/playback_error_listener.dart';
 import '../widgets/album_list.dart';
 import '../widgets/now_playing_view.dart';
 import '../widgets/player_controls.dart';
@@ -41,6 +43,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return Selector<AppState, AudioPlayerService?>(
+      selector: (context, appState) => appState.audioPlayerService,
+      builder: (context, player, child) =>
+          PlaybackErrorListener(player: player, child: child!),
+      child: _buildScaffold(context),
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Voidweaver'),

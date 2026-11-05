@@ -150,6 +150,9 @@ class AudioPlayerService extends ChangeNotifier {
   StreamSubscription<SystemCommand>? _commandSubscription;
   StreamSubscription<void>? _networkSubscription;
 
+  final StreamController<String> _playbackErrors =
+      StreamController<String>.broadcast();
+
   // Async work (preloads, ReplayGain reads) can finish after dispose()
   bool _disposed = false;
   Future<void>? _released;
@@ -209,6 +212,12 @@ class AudioPlayerService extends ChangeNotifier {
   /// buffering) from playback that's about to continue.
   bool get playWhenReady =>
       _startsInProgress > 0 ? _playPending : _audioPlayer.playing;
+
+  /// Messages for the user about playback that stopped because a track
+  /// couldn't be played and no later one was downloaded: after Play, a skip,
+  /// or a track failing while it plays. Starting an album, random songs or a
+  /// song reports its failure by throwing instead, for the caller to show.
+  Stream<String> get playbackErrors => _playbackErrors.stream;
 
   bool get isSleepTimerActive => _sleepTimer.isActive;
   Duration? get sleepTimerDuration => _sleepTimer.duration;
@@ -445,7 +454,7 @@ class AudioPlayerService extends ChangeNotifier {
     try {
       await _loadQueue(0);
     } catch (e) {
-      _onLoadFailed('Failed to play $description: $e');
+      _onLoadFailed('Failed to play $description', e, report: false);
       rethrow;
     }
   }
@@ -459,13 +468,25 @@ class AudioPlayerService extends ChangeNotifier {
     try {
       await _loadQueue(0);
     } catch (e) {
-      _onLoadFailed('Failed to play song: $e');
+      _onLoadFailed('Failed to play song', e, report: false);
       rethrow;
     }
   }
 
-  void _onLoadFailed(String message) {
-    _log.warning(message);
+  /// Stops after [error] kept the current track from playing. With [report],
+  /// the user is told on [playbackErrors]; without it, the caller rethrows
+  /// [error] and shows it.
+  void _onLoadFailed(String message, Object error, {bool report = true}) {
+    _log.warning(message, error);
+    final song = _currentSong;
+    if (report && song != null && !_disposed) {
+      _playbackErrors.add(
+        NetworkErrorHelper.getErrorMessage(
+          error,
+          context: 'Could not play "${song.title}"',
+        ),
+      );
+    }
     // Otherwise the player stays idle with `playing` set, which the system
     // controls show as still loading
     if (_audioPlayer.playing) {
@@ -774,7 +795,7 @@ class AudioPlayerService extends ChangeNotifier {
         _loadQueue(
           failedIndex,
           position: position,
-        ).catchError((Object e) => _onLoadFailed('Failed to play song: $e')),
+        ).catchError((Object e) => _onLoadFailed('Failed to play song', e)),
       );
       return;
     }
@@ -810,7 +831,7 @@ class AudioPlayerService extends ChangeNotifier {
       try {
         await _jumpTo(next);
       } catch (e) {
-        _onLoadFailed('Failed to play song: $e');
+        _onLoadFailed('Failed to play song', e);
       }
       return;
     }
@@ -819,7 +840,7 @@ class AudioPlayerService extends ChangeNotifier {
     if (failedIndex != _currentIndex) {
       _setCurrentTrack(failedIndex, playing: false);
     }
-    _onLoadFailed('Failed to play song: ${error.message ?? error}');
+    _onLoadFailed('Failed to play song', error);
   }
 
   /// The first track after [index] that's completely cached.
@@ -860,7 +881,7 @@ class AudioPlayerService extends ChangeNotifier {
       try {
         await _loadQueue(_currentIndex, position: position ?? _currentPosition);
       } catch (e) {
-        _onLoadFailed('Failed to play song: $e');
+        _onLoadFailed('Failed to play song', e);
       }
       return;
     }
@@ -944,8 +965,7 @@ class AudioPlayerService extends ChangeNotifier {
         await _jumpTo(reached);
       }
     } catch (e) {
-      _log.warning('[$source] Error during skip', e);
-      _onLoadFailed('Failed to play song: $e');
+      _onLoadFailed('[$source] Failed to play song', e);
     } finally {
       _skipTarget = null;
       _skipOperationInProgress = false;
@@ -1142,6 +1162,7 @@ class AudioPlayerService extends ChangeNotifier {
     // Not disposed here: AppState owns it and keeps it across logins
     _persistence?.flushPendingPositionSave();
     _scrobbleQueue.dispose();
+    unawaited(_playbackErrors.close());
     _released = _audioPlayer.dispose().catchError((Object e) {
       _log.warning('Could not release the player', e);
     });

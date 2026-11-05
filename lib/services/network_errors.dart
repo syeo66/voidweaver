@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:voidweaver_player/voidweaver_player.dart' show PlayerException;
 import 'package:xml/xml.dart';
 
 import 'network_config.dart';
@@ -48,6 +49,10 @@ class NetworkErrorHelper {
 
     if (error is HttpStatusException) {
       return _getHttpStatusMessage(error, baseContext);
+    }
+
+    if (error is PlayerException) {
+      return '$baseContext${_playerErrorMessage(error)}';
     }
 
     if (error is TlsException) {
@@ -127,6 +132,28 @@ class NetworkErrorHelper {
       default:
         return null;
     }
+  }
+
+  /// A message for an error of the native player, by Media3's
+  /// `PlaybackException` error code
+  static String _playerErrorMessage(PlayerException error) {
+    switch (error.code) {
+      case 2001: // ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
+        return 'Cannot reach server. Please check your internet connection.';
+      case 2002: // ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
+        return 'Connection timed out. Please check your internet connection.';
+      case 2004: // ERROR_CODE_IO_BAD_HTTP_STATUS
+        return 'The server returned an error.';
+    }
+    // 2xxx: other input errors, e.g. the server sending an error document
+    // instead of audio. 3xxx: parsing, 4xxx: decoding.
+    if (error.code >= 2000 && error.code < 3000) {
+      return 'The track could not be loaded.';
+    }
+    if (error.code >= 3000 && error.code < 5000) {
+      return 'The file can\'t be played.';
+    }
+    return 'Something went wrong. Please try again.';
   }
 
   static String _getHttpStatusMessage(

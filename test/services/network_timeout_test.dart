@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:voidweaver_player/voidweaver_player.dart' show PlayerException;
 import 'package:xml/xml.dart';
 
 import 'package:voidweaver/services/network_config.dart';
@@ -255,6 +256,20 @@ void main() {
 
       expect(message, contains('Cannot find server'));
       expect(message, contains('internet connection'));
+    });
+
+    test('explains errors of the player by their code', () {
+      String messageFor(int code) =>
+          NetworkErrorHelper.getErrorMessage(PlayerException(code, 'Source'));
+
+      // Media3's PlaybackException codes
+      expect(messageFor(2001), contains('Cannot reach server'));
+      expect(messageFor(2002), contains('timed out'));
+      expect(messageFor(2004), contains('server returned an error'));
+      expect(messageFor(2000), contains('could not be loaded'));
+      expect(messageFor(3001), contains('can\'t be played'));
+      expect(messageFor(4001), contains('can\'t be played'));
+      expect(messageFor(0), contains('Something went wrong'));
     });
 
     test('explains no route to host', () {
