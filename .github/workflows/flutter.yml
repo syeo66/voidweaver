@@ -10,6 +10,10 @@ on:
 
 jobs:
   test:
+    # tool/release.sh pushes main and the tag together; the tag's run checks
+    # the release commit, so the branch's run of it would only repeat that.
+    # The jobs that need this one are skipped with it.
+    if: github.ref_type == 'tag' || !startsWith(github.event.head_commit.message, 'release v')
     runs-on: ubuntu-latest
     
     steps:
