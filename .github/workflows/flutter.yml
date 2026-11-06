@@ -3,6 +3,8 @@ name: Flutter CI/CD
 on:
   push:
     branches: [ main ]
+    # A version tag publishes a GitHub release, see docs/RELEASING.md
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
 
@@ -71,7 +73,23 @@ jobs:
     - name: Install dependencies
       run: flutter pub get
 
+    # The release key, if the repository has it. Without it (forks, or not set
+    # up yet) the APK is signed with the debug key, which the release job
+    # rejects.
+    - name: Decode release keystore
+      env:
+        KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+      run: |
+        if [ -n "$KEYSTORE_BASE64" ]; then
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "VOIDWEAVER_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+        fi
+
     - name: Build Android APK
+      env:
+        VOIDWEAVER_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+        VOIDWEAVER_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+        VOIDWEAVER_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
       run: flutter build apk --release
 
     # Notification resources, media session manifest entries and classes,
@@ -134,3 +152,48 @@ jobs:
         profile: pixel_6
         disable-animations: true
         script: flutter test integration_test
+
+  # Publishes the APK as a GitHub release when a version tag is pushed
+  # (git tag v1.2.0 && git push origin v1.2.0). Only after everything else
+  # passed.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    needs: [test, build-android, integration-test]
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Download the APK
+      uses: actions/download-artifact@v8
+      with:
+        name: android-apk
+
+    # The tag must be the version in pubspec.yaml, or the release would
+    # announce one version and ship another
+    - name: Check the tag against pubspec.yaml
+      run: |
+        version=$(sed -n 's/^version: *\([^+ ]*\).*/\1/p' pubspec.yaml)
+        if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+          echo "Tag $GITHUB_REF_NAME doesn't match pubspec.yaml's version $version" >&2
+          exit 1
+        fi
+        echo "VERSION=$version" >> "$GITHUB_ENV"
+
+    # A debug-signed APK can't update an installed release
+    - name: Check the signature
+      run: tool/check_apk_signature.sh app-release.apk
+
+    - name: Create the release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        mv app-release.apk "voidweaver-v$VERSION.apk"
+        sha256sum "voidweaver-v$VERSION.apk" > "voidweaver-v$VERSION.apk.sha256"
+        # 1.2.0-beta.1 is a prerelease
+        case "$VERSION" in *-*) pre=--prerelease ;; *) pre= ;; esac
+        gh release create "$GITHUB_REF_NAME" $pre --verify-tag --generate-notes \
+          --title "Voidweaver $VERSION" \
+          "voidweaver-v$VERSION.apk" "voidweaver-v$VERSION.apk.sha256"

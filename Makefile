@@ -1,5 +1,5 @@
 # Voidweaver Flutter Project Makefile
-.PHONY: help setup analyze format test test-android test-integration check-apk check-emulator check-emulator-fake build-release clean doctor devices run install upgrade
+.PHONY: help setup analyze format test test-android test-integration check-apk check-emulator check-emulator-fake build-release deploy deploy-patch deploy-minor deploy-major clean doctor devices run install upgrade
 
 # Default target
 all: format analyze test
@@ -17,6 +17,8 @@ help:
 	@echo "  check-emulator - Check media session, media keys and resumption in the running emulator"
 	@echo "  check-emulator-fake - The same against the fake server, no login needed (fresh app data)"
 	@echo "  build-release - Build release APK (includes format, analyze, test)"
+	@echo "  deploy        - Alias for deploy-patch"
+	@echo "  deploy-patch  - Bump the patch version, tag and push; CI publishes the release (also deploy-minor, deploy-major)"
 	@echo "  clean         - Clean build artifacts"
 	@echo "  doctor        - Check Flutter installation"
 	@echo "  devices       - List available devices"
@@ -119,3 +121,10 @@ devices:
 run: setup
 	@echo "Running app..."
 	flutter run
+
+# Release: bump the version, commit, tag and push (asks before pushing);
+# the tag makes CI publish the GitHub release, see docs/RELEASING.md
+deploy-patch deploy-minor deploy-major: deploy-%:
+	tool/release.sh $*
+
+deploy: deploy-patch

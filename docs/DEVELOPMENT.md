@@ -73,6 +73,7 @@ Testing the native layer (media session, notification, media keys, R8) in the em
 - Backups are off: `allowBackup="false"`, plus `res/xml/data_extraction_rules.xml` because on Android 12+ `allowBackup` alone doesn't stop the transfer to a new device. The credentials are encrypted with a Keystore key that never leaves the device, so a restored copy can't be read. The settings share one SharedPreferences file with the saved queue and pending scrobbles, so they can't be backed up on their own.
 - The plugin's manifest declares `PlaybackService` (`foregroundServiceType="mediaPlayback"`) and its permissions; it's merged into the app's.
 - Versioning: the version name (`1.1.0`) comes from `pubspec.yaml` and is bumped by hand. The build number (`versionCode`) is the git commit count, set in `android/app/build.gradle.kts`, so it rises with every commit; the pubspec's `+N` or `--build-number` only wins if it's higher. CI checks out the full history for this. Settings shows both at the bottom.
+- Releases: a `v*` tag publishes the APK as a GitHub release, signed with the key from the repository secrets, see [RELEASING.md](RELEASING.md).
 
 ## Tests
 

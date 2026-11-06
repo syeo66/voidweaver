@@ -55,11 +55,24 @@ android {
         }
     }
 
+    // The release key comes from the environment (CI decodes it from a
+    // secret, see docs/RELEASING.md). Without it the release build is signed
+    // with the debug key, so `flutter run --release` and local checks work;
+    // such an APK can't update an installed release, and tool/check_apk_signature.sh
+    // rejects it.
+    val releaseKeystore = System.getenv("VOIDWEAVER_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
+    if (releaseKeystore != null) {
+        signingConfigs.create("release") {
+            storeFile = file(releaseKeystore)
+            storePassword = System.getenv("VOIDWEAVER_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("VOIDWEAVER_KEY_ALIAS")
+            keyPassword = System.getenv("VOIDWEAVER_KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (releaseKeystore != null) "release" else "debug")
         }
     }
 }
