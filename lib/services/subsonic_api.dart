@@ -223,10 +223,6 @@ class SubsonicApi {
         contextDescription: 'Subsonic API: $endpoint',
         retry: retry,
       );
-      // Not the body: it can be a whole HTML error page
-      if (response.statusCode != 200) {
-        throw HttpStatusException(response.statusCode);
-      }
       return response.bodyBytes;
     } catch (e) {
       // The one log line per failed request (the retry service logs each

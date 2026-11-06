@@ -17,6 +17,11 @@ class NetworkRetryService {
   /// Execute an HTTP GET request with retry logic and timeout handling.
   /// Without [retry] the request is sent once: for requests that aren't safe
   /// to repeat, because a timeout doesn't tell whether the server got them.
+  ///
+  /// A response other than 2xx is an [HttpStatusException]: a server or
+  /// gateway error (e.g. 502 while the server restarts) is retried like a
+  /// timeout, see [NetworkConfig.shouldRetry]. A request that times out is
+  /// aborted, so it doesn't keep its connection open.
   Future<http.Response> getWithRetry(
     Uri uri, {
     Map<String, String>? headers,
@@ -25,7 +30,22 @@ class NetworkRetryService {
     bool retry = true,
   }) async {
     return _executeWithRetry(
-      () => _httpClient.get(uri, headers: headers),
+      (abortTrigger) async {
+        final request = http.AbortableRequest(
+          'GET',
+          uri,
+          abortTrigger: abortTrigger,
+        );
+        if (headers != null) request.headers.addAll(headers);
+        // The body is read inside the attempt, so the timeout covers it
+        final response = await http.Response.fromStream(
+          await _httpClient.send(request),
+        );
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw HttpStatusException(response.statusCode);
+        }
+        return response;
+      },
       requestType: requestType,
       contextDescription: contextDescription ?? 'GET $uri',
       maxAttempts: retry ? config.maxRetryAttempts : 1,
@@ -34,7 +54,7 @@ class NetworkRetryService {
 
   /// Execute any HTTP request with retry logic and timeout handling
   Future<http.Response> _executeWithRetry(
-    Future<http.Response> Function() request, {
+    Future<http.Response> Function(Future<void> abortTrigger) request, {
     required NetworkRequestType requestType,
     required String contextDescription,
     required int maxAttempts,
@@ -116,16 +136,19 @@ class NetworkRetryService {
     }
   }
 
-  /// Execute a request with timeout handling
+  /// Execute a request with timeout handling. On a timeout the request is
+  /// aborted: `Future.timeout` alone only stops waiting for it.
   Future<http.Response> _executeWithTimeout(
-    Future<http.Response> Function() request,
+    Future<http.Response> Function(Future<void> abortTrigger) request,
     NetworkRequestType requestType,
   ) async {
     final timeout = config.getTimeoutForRequestType(requestType);
+    final abort = Completer<void>();
 
     try {
-      return await request().timeout(timeout);
+      return await request(abort.future).timeout(timeout);
     } on TimeoutException catch (e) {
+      abort.complete();
       throw NetworkTimeoutException(
         'Request timed out after ${timeout.inSeconds} seconds',
         attemptsMade: 1,
