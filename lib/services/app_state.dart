@@ -187,6 +187,7 @@ class AppState extends ChangeNotifier {
         audioCache: _audioCache,
         scrobbleQueue: _scrobbleQueue,
       );
+      if (!_visible) _audioPlayerService!.setVisible(false);
 
       _isConfigured = true;
       _configurationLoadingState = LoadingState.success;
@@ -457,6 +458,7 @@ class AppState extends ChangeNotifier {
   void setVisible(bool visible) {
     if (visible == _visible) return;
     _visible = visible;
+    _audioPlayerService?.setVisible(visible);
     if (_api == null) return;
     if (!visible) {
       _stopBackgroundSync();

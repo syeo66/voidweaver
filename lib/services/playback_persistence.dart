@@ -1,8 +1,11 @@
-import 'dart:convert';
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'subsonic_api.dart';
 
@@ -80,18 +83,28 @@ class PersistedPlaybackState {
 /// Saves the queue and the playback position, so they're restored on the
 /// next start.
 ///
-/// The queue and the position are stored under separate keys: the position is
-/// saved every few seconds while playing, and SharedPreferences on Android
-/// rewrites its whole file on every change, so those saves leave out the
-/// queue unless it changed.
+/// The queue is stored in SharedPreferences and written only when it changes.
+/// The position is saved every few seconds while playing, so it lives in a
+/// small file of its own (`playback_position.json`, written to a temporary
+/// name and renamed): SharedPreferences on Android rewrites its whole file,
+/// with the queue, the pending scrobbles and the settings, on every change.
 class PlaybackPersistenceService {
   static const String _queueKey = 'playbackQueue';
-  static const String _positionKey = 'playbackPosition';
+  // Where the position was kept before it had a file; read when there is no
+  // file yet, and removed with the next position write
+  static const String _legacyPositionKey = 'playbackPosition';
+  static const String _positionFileName = 'playback_position.json';
   final Duration _positionSaveInterval;
+  final Directory? _directoryOverride;
 
   SharedPreferences? _prefs;
   Timer? _positionSaveTimer;
   PersistedPlaybackState? _pendingPositionState;
+
+  // Writes and deletes of the position file, one after the other: they share
+  // a temporary name, and a clear must come after the writes before it
+  Future<void> _fileOps = Future.value();
+  Future<File?>? _positionFileFuture;
 
   // The queue last saved; the player service replaces its playlist list
   // whenever the queue changes, so identity tells whether it needs saving.
@@ -101,13 +114,30 @@ class PlaybackPersistenceService {
   String? _savedPlaylistSource;
   String? _savedSourceId;
 
+  /// [directory] holds the position file; by default the app's private
+  /// storage.
   PlaybackPersistenceService({
     this._positionSaveInterval = const Duration(seconds: 5),
-  });
+    @visibleForTesting Directory? directory,
+  }) : _directoryOverride = directory;
 
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
   }
+
+  /// The position file, or null if the app's storage can't be found. Looked
+  /// up on first use, so a failure only costs the position, not the start.
+  Future<File?> _positionFile() => _positionFileFuture ??= () async {
+    try {
+      final directory =
+          _directoryOverride ?? await getApplicationSupportDirectory();
+      await directory.create(recursive: true);
+      return File('${directory.path}/$_positionFileName');
+    } catch (e) {
+      _log.warning('No storage for the playback position', e);
+      return null;
+    }
+  }();
 
   Future<void> savePlaybackState(PersistedPlaybackState state) async {
     // An explicit save supersedes any pending position save, which would
@@ -139,18 +169,42 @@ class PlaybackPersistenceService {
         _savedSourceId = state.sourceId;
         _log.fine('Saved playback queue: ${state.playlist.length} songs');
       }
-      await _prefs!.setString(
-        _positionKey,
-        jsonEncode({
-          'currentIndex': state.currentIndex,
-          'currentPositionMs': state.currentPosition.inMilliseconds,
-          'isPlaying': state.isPlaying,
-          'lastUpdated': state.lastUpdated.millisecondsSinceEpoch,
-        }),
-      );
     } catch (e) {
-      _log.warning('Failed to save playback state', e);
+      _log.warning('Failed to save the playback queue', e);
     }
+    await _writePosition(state);
+  }
+
+  Future<void> _writePosition(PersistedPlaybackState state) {
+    final json = jsonEncode({
+      'currentIndex': state.currentIndex,
+      'currentPositionMs': state.currentPosition.inMilliseconds,
+      'isPlaying': state.isPlaying,
+      'lastUpdated': state.lastUpdated.millisecondsSinceEpoch,
+    });
+    return _inFileOrder(() async {
+      final file = await _positionFile();
+      if (file == null) return;
+      try {
+        // A crash mid-write can't leave a truncated file
+        final temp = File('${file.path}.tmp');
+        await temp.writeAsString(json);
+        await temp.rename(file.path);
+        // The position moved out of SharedPreferences; this rewrites its file
+        // once, after the first save by this version
+        if (_prefs!.containsKey(_legacyPositionKey)) {
+          await _prefs!.remove(_legacyPositionKey);
+        }
+      } catch (e) {
+        _log.warning('Failed to save the playback position', e);
+      }
+    });
+  }
+
+  Future<void> _inFileOrder(Future<void> Function() operation) {
+    final result = _fileOps.then((_) => operation());
+    _fileOps = result.then<void>((_) {}, onError: (_) {});
+    return result;
   }
 
   Future<PersistedPlaybackState?> loadPlaybackState() async {
@@ -161,15 +215,17 @@ class PlaybackPersistenceService {
 
     try {
       final queue = _prefs!.getString(_queueKey);
-      final position = _prefs!.getString(_positionKey);
-      if (queue == null || position == null) {
+      if (queue == null) {
         _log.fine('No saved playback state found');
         return null;
       }
+      // Without a readable position the queue still comes back, from its
+      // first song
+      final position = await _readPosition() ?? <String, dynamic>{};
 
       final state = PersistedPlaybackState.fromJson({
         ...jsonDecode(queue) as Map<String, dynamic>,
-        ...jsonDecode(position) as Map<String, dynamic>,
+        ...position,
       });
 
       if (state != null) {
@@ -183,6 +239,29 @@ class PlaybackPersistenceService {
       _log.warning('Failed to load playback state', e);
       return null;
     }
+  }
+
+  /// The saved position as JSON, from the file or, for a state saved by an
+  /// earlier version, from SharedPreferences. Null if there is none, or it
+  /// can't be read.
+  Future<Map<String, dynamic>?> _readPosition() async {
+    // After writes still in progress
+    await _fileOps;
+    try {
+      final file = await _positionFile();
+      if (file != null && await file.exists()) {
+        return jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      _log.warning('Failed to read the playback position', e);
+    }
+    try {
+      final legacy = _prefs!.getString(_legacyPositionKey);
+      if (legacy != null) return jsonDecode(legacy) as Map<String, dynamic>;
+    } catch (e) {
+      _log.warning('Failed to read the saved playback position', e);
+    }
+    return null;
   }
 
   /// A song in the saved queue's list was replaced in place (ReplayGain
@@ -214,17 +293,27 @@ class PlaybackPersistenceService {
 
   Future<void> clearPlaybackState() async {
     _cancelPendingPositionSave();
-    if (_prefs == null) return;
-
-    try {
-      _savedPlaylist = null;
-      for (final key in [_queueKey, _positionKey]) {
-        await _prefs!.remove(key);
+    _savedPlaylist = null;
+    final prefs = _prefs;
+    if (prefs != null) {
+      try {
+        for (final key in [_queueKey, _legacyPositionKey]) {
+          await prefs.remove(key);
+        }
+      } catch (e) {
+        _log.warning('Failed to clear playback state', e);
       }
-      _log.info('Cleared saved playback state');
-    } catch (e) {
-      _log.warning('Failed to clear playback state', e);
     }
+    // After the writes in progress, so none lands after the clear
+    await _inFileOrder(() async {
+      try {
+        final file = await _positionFile();
+        if (file != null && await file.exists()) await file.delete();
+      } catch (e) {
+        _log.warning('Failed to clear the playback position', e);
+      }
+    });
+    _log.info('Cleared saved playback state');
   }
 
   /// Writes a position save that's waiting for its timer right away.

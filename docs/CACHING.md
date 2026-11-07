@@ -8,7 +8,7 @@ Three caches keep the app fast and usable offline. All of them can be cleared fr
 
 - **Scoped per login.** Each `SubsonicApi` has its own `ApiCache`, with the namespace `serverUrl|username`; the scope directory is the namespace's MD5. The memory cache and request deduplication belong to the instance, so a new login never gets the previous one's data or attaches to its requests. `SubsonicApi.dispose()` closes the cache: a fetch still running at logout returns to its caller but stores nothing, so it can't put the server's data back after logout removed it.
 
-Not in SharedPreferences: on Android that's a single XML file, loaded whole at startup and rewritten whole on every change, including each playback position save, so a large library would slow both down. Files are written to a temporary name and then renamed, and a corrupted file is deleted and fetched again.
+Not in SharedPreferences: on Android that's a single XML file, loaded whole at startup and rewritten whole on every change, so a large library would slow both down (the playback position has a file of its own for the same reason, see [PLAYBACK.md](PLAYBACK.md#restoring-playback)). Files are written to a temporary name and then renamed, and a corrupted file is deleted and fetched again.
 
 | Call | TTL | Persistent |
 |------|-----|------------|

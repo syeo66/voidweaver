@@ -93,11 +93,16 @@ The sleep timer (`startSleepTimer()`, implemented in `SleepTimer`) pauses playba
 
 ## Restoring playback
 
-`PlaybackPersistenceService` saves the queue, index and position (throttled to every 5 s while playing, and after every track change). The queue is only written again when it changed: a new playlist list, or ReplayGain read from a file into one of its songs (`queueChanged()`), so a restored queue keeps the gains that were read. On start, `restorePlaybackState()` loads the saved song paused. It runs while the home screen is already shown; if the user starts playback first, the restore gives up and leaves the new queue alone.
+`PlaybackPersistenceService` saves the queue, index and position (throttled to every 5 s while playing, and after every track change). The position goes to its own file, `playback_position.json` in the app's private storage, written to a temporary name and renamed, one write after the other. Android's SharedPreferences rewrites its whole XML file on every change, queue, pending scrobbles and settings included, so a save every 5 s there would rewrite all of it. The queue stays in SharedPreferences and is only written again when it changed: a new playlist list, or ReplayGain read from a file into one of its songs (`queueChanged()`), so a restored queue keeps the gains that were read. On start, `restorePlaybackState()` loads the saved song paused. It runs while the home screen is already shown; if the user starts playback first, the restore gives up and leaves the new queue alone.
 
+- A position file that's missing or can't be read still restores the queue, from its first song. A position saved by an earlier version (SharedPreferences key `playbackPosition`) is read when there's no file, and removed with the next save. A logout deletes the file with the queue.
 - The queue is loaded with `initialIndex` and `initialPosition` instead of a `seek()` afterwards. With a separate seek, load events reporting position 0 could arrive after the seek, so the playhead showed 0:00 while audio resumed at the saved position. `_currentPosition` is also set directly so the UI is right before the player reports anything.
 - If loading fails (e.g. offline at startup), `_needsSourceReload` is set and `play()` loads the queue again at `_pendingResumePosition`. Restoring never skips ahead to a downloaded track.
 - A restored song has no start time (`ListeningTracker.hasStarted`) until it's played. The first `play()` sets it, sends "now playing" and starts the downloads. Without a start time it would never be scrobbled.
+
+## Position updates while hidden
+
+`PlaylistPlayer` sends a state snapshot to Dart every 200 ms while playing, and each one wakes Dart. While the app is hidden (playing with the screen off) nobody sees the position, so `AppState.setVisible()` (driven by `AppRouter`'s lifecycle listener) tells the service, which sets the interval to 1 s with `setPositionUpdateInterval()` and back to 200 ms when the app is shown. Setting it sends a snapshot right away. A second is enough for what still needs the position: the scrobble decision (`ListeningTracker` adds up the position's advance, which stays within its seek tolerance) and the position save. Other state changes (play, pause, track change) are sent when they happen, whatever the interval. The system controls take the position from the Media3 session, not from these snapshots. A new player starts at 200 ms; `AppState` hides a service it creates while the app is hidden.
 
 ## Scrobbling
 

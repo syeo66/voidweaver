@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
@@ -20,6 +21,7 @@ void main() {
     late MockSubsonicApi mockApi;
     late MockSettingsService mockSettingsService;
     late MockAudioPlayer mockAudioPlayer;
+    late Directory storage;
 
     final song = Song(
       id: 'song1',
@@ -33,7 +35,8 @@ void main() {
       TestWidgetsFlutterBinding.ensureInitialized();
     });
 
-    setUp(() {
+    setUp(() async {
+      storage = await Directory.systemTemp.createTemp('restore');
       mockApi = newMockApi();
       mockSettingsService = MockSettingsService();
       mockAudioPlayer = MockAudioPlayer();
@@ -61,6 +64,8 @@ void main() {
     tearDown(() async {
       service.dispose();
       await mockAudioPlayer.dispose();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await storage.delete(recursive: true);
     });
 
     Future<PlaybackPersistenceService> savedAt(Duration position) async {
@@ -72,11 +77,11 @@ void main() {
         lastUpdated: DateTime.now(),
       );
       SharedPreferences.setMockInitialValues({});
-      final writer = PlaybackPersistenceService();
+      final writer = PlaybackPersistenceService(directory: storage);
       await writer.initialize();
       await writer.savePlaybackState(saved);
       // A new instance, as on the next start
-      final persistence = PlaybackPersistenceService();
+      final persistence = PlaybackPersistenceService(directory: storage);
       await persistence.initialize();
       return persistence;
     }
@@ -195,7 +200,7 @@ void main() {
       'a single song replaces the saved source of the album before it',
       () async {
         SharedPreferences.setMockInitialValues({});
-        final persistence = PlaybackPersistenceService();
+        final persistence = PlaybackPersistenceService(directory: storage);
         await persistence.initialize();
         service = AudioPlayerService(
           mockApi,
@@ -221,6 +226,26 @@ void main() {
         final saved = await persistence.loadPlaybackState();
         expect(saved!.playlistSource, 'song');
         expect(saved.sourceId, 'song2');
+      },
+    );
+
+    test(
+      'the player reports the position less often while the app is hidden',
+      () async {
+        service = AudioPlayerService(
+          mockApi,
+          mockSettingsService,
+          audioPlayer: mockAudioPlayer,
+        );
+
+        service.setVisible(false);
+        service.setVisible(true);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(mockAudioPlayer.positionIntervals, [
+          const Duration(seconds: 1),
+          const Duration(milliseconds: 200),
+        ]);
       },
     );
   });

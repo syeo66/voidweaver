@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,6 +10,7 @@ void main() {
   group('PlaybackPersistenceService position saves', () {
     const interval = Duration(milliseconds: 100);
     late PlaybackPersistenceService persistence;
+    late Directory directory;
 
     final songs = [
       Song(id: 'song1', title: 'One', artist: 'A', album: 'B', duration: 300),
@@ -26,11 +28,20 @@ void main() {
 
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
-      persistence = PlaybackPersistenceService(positionSaveInterval: interval);
+      directory = await Directory.systemTemp.createTemp('persistence');
+      persistence = PlaybackPersistenceService(
+        positionSaveInterval: interval,
+        directory: directory,
+      );
       await persistence.initialize();
     });
 
-    tearDown(() => persistence.dispose());
+    tearDown(() async {
+      persistence.dispose();
+      // Writes in progress could recreate it
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await directory.delete(recursive: true);
+    });
 
     test('saves periodically while position updates keep arriving', () async {
       // Simulate continuous playback: an update every 20ms for 3 intervals.
@@ -76,20 +87,93 @@ void main() {
       expect(saved!.currentPosition, const Duration(seconds: 42));
     });
 
-    test('position saves leave the saved queue alone', () async {
-      await persistence.savePlaybackState(stateAt(0, 0));
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('playbackQueue');
+    test(
+      'position saves go to a file and leave SharedPreferences alone',
+      () async {
+        await persistence.savePlaybackState(stateAt(0, 0));
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('playbackQueue');
 
-      persistence.schedulePositionSave(stateAt(1, 30));
-      await Future<void>.delayed(interval * 2);
+        persistence.schedulePositionSave(stateAt(1, 30));
+        await Future<void>.delayed(interval * 2);
 
-      expect(prefs.getString('playbackQueue'), isNull);
-      expect(
-        jsonDecode(prefs.getString('playbackPosition')!),
-        containsPair('currentIndex', 1),
-      );
+        expect(prefs.getString('playbackQueue'), isNull);
+        expect(prefs.getKeys(), isEmpty);
+        final file = File('${directory.path}/playback_position.json');
+        expect(
+          jsonDecode(await file.readAsString()),
+          containsPair('currentIndex', 1),
+        );
+        expect(File('${file.path}.tmp').existsSync(), isFalse);
+      },
+    );
+
+    test('writes in a row end with the last one', () async {
+      await Future.wait([
+        for (var i = 0; i < 10; i++)
+          persistence.savePlaybackState(stateAt(0, i)),
+      ]);
+
+      final saved = await persistence.loadPlaybackState();
+      expect(saved!.currentPosition, const Duration(seconds: 9));
     });
+
+    test('a position saved by an earlier version is restored', () async {
+      final legacy = {
+        'currentIndex': 1,
+        'currentPositionMs': 42000,
+        'isPlaying': false,
+        'lastUpdated': 0,
+      };
+      SharedPreferences.setMockInitialValues({
+        'playbackQueue': jsonEncode({
+          'playlist': [for (final s in songs) s.toJson()],
+        }),
+        'playbackPosition': jsonEncode(legacy),
+      });
+      persistence = PlaybackPersistenceService(directory: directory);
+      await persistence.initialize();
+
+      final saved = await persistence.loadPlaybackState();
+      expect(saved!.currentIndex, 1);
+      expect(saved.currentPosition, const Duration(seconds: 42));
+
+      // The next save moves it to the file
+      await persistence.savePlaybackState(stateAt(1, 50));
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.containsKey('playbackPosition'), isFalse);
+      final again = await persistence.loadPlaybackState();
+      expect(again!.currentPosition, const Duration(seconds: 50));
+    });
+
+    test('a position file that cannot be read leaves the queue', () async {
+      await persistence.savePlaybackState(stateAt(1, 30));
+      await File('${directory.path}/playback_position.json')
+          .writeAsString('{"currentIn');
+
+      final saved = await persistence.loadPlaybackState();
+      expect(saved!.playlist, songs);
+      expect(saved.currentIndex, 0);
+      expect(saved.currentPosition, Duration.zero);
+    });
+
+    test(
+      'without storage for the position, the queue is still saved',
+      () async {
+        // A file where the directory should be
+        final blocker = File('${directory.path}/blocker')..createSync();
+        persistence = PlaybackPersistenceService(
+          directory: Directory('${blocker.path}/sub'),
+        );
+        await persistence.initialize();
+
+        await persistence.savePlaybackState(stateAt(1, 30));
+
+        final saved = await persistence.loadPlaybackState();
+        expect(saved!.playlist, songs);
+        expect(saved.currentPosition, Duration.zero);
+      },
+    );
 
     test('saves the queue again once it was replaced', () async {
       await persistence.savePlaybackState(stateAt(0, 0));
@@ -136,6 +220,25 @@ void main() {
       persistence.schedulePositionSave(stateAt(0, 42));
       await persistence.clearPlaybackState();
       await Future<void>.delayed(interval * 2);
+
+      expect(await persistence.loadPlaybackState(), isNull);
+    });
+
+    test('clear removes the position file', () async {
+      await persistence.savePlaybackState(stateAt(0, 42));
+      await persistence.clearPlaybackState();
+
+      expect(
+        File('${directory.path}/playback_position.json').existsSync(),
+        isFalse,
+      );
+      expect(await persistence.loadPlaybackState(), isNull);
+    });
+
+    test('clear comes after a write in progress', () async {
+      final saving = persistence.savePlaybackState(stateAt(0, 42));
+      await persistence.clearPlaybackState();
+      await saving;
 
       expect(await persistence.loadPlaybackState(), isNull);
     });

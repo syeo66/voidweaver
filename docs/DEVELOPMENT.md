@@ -40,7 +40,7 @@ Endpoints used: `ping` (checks the credentials on login), `getAlbumList2` (`type
 | `lib/services/api_cache.dart`, `audio_cache.dart`, `image_cache_manager.dart` | Caching, see [CACHING.md](CACHING.md) |
 | `lib/services/scrobble_queue.dart` | Persistent scrobble queue with retries |
 | `lib/services/replaygain_reader.dart`, `lib/services/replaygain/` | ReplayGain tag reading: `ReplayGainReader` fetches the start of the file and parses it on a background isolate; one parser per tag format (`id3v2.dart`, `ape.dart`, `vorbis.dart`, `mp4.dart`), see [REPLAYGAIN.md](REPLAYGAIN.md) |
-| `lib/services/playback_persistence.dart` | Saves and restores queue and position (separate SharedPreferences keys, so the position save every 5 s doesn't rewrite the queue) |
+| `lib/services/playback_persistence.dart` | Saves and restores queue and position: the queue in SharedPreferences (written when it changes), the position in its own small file (`playback_position.json`, saved every 5 s while playing), so those saves don't rewrite SharedPreferences, see [PLAYBACK.md](PLAYBACK.md#restoring-playback) |
 | `lib/services/network_*.dart` | Timeout presets, retry with backoff, user-facing error messages |
 | `lib/services/error_handler.dart`, `lib/widgets/error_boundary.dart` | Global error handler and `ErrorBoundary` / `.withErrorBoundary()` widgets |
 

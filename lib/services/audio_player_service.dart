@@ -49,6 +49,12 @@ class AudioPlayerService extends ChangeNotifier {
   /// it instead of going back a track
   static const _restartThreshold = Duration(seconds: 3);
 
+  /// How often the player reports the position while the app is shown, and
+  /// while it's hidden (playing with the screen off): each report wakes
+  /// Dart. A second is enough for scrobbling and for saving the position.
+  static const _visiblePositionInterval = Duration(milliseconds: 200);
+  static const _hiddenPositionInterval = Duration(seconds: 1);
+
   final VoidweaverPlayer _audioPlayer;
   final SubsonicApi _api;
   final SettingsService _settingsService;
@@ -222,6 +228,21 @@ class AudioPlayerService extends ChangeNotifier {
   /// or a track failing while it plays. Starting an album, random songs or a
   /// song reports its failure by throwing instead, for the caller to show.
   Stream<String> get playbackErrors => _playbackErrors.stream;
+
+  /// Called when the app is shown or hidden, see [AppState.setVisible]. While
+  /// it's hidden the player reports the position less often.
+  void setVisible(bool visible) {
+    if (_disposed) return;
+    unawaited(
+      _audioPlayer
+          .setPositionUpdateInterval(
+            visible ? _visiblePositionInterval : _hiddenPositionInterval,
+          )
+          .catchError((Object e) {
+            _log.warning('Could not set the position update interval', e);
+          }),
+    );
+  }
 
   bool get isSleepTimerActive => _sleepTimer.isActive;
   Duration? get sleepTimerDuration => _sleepTimer.duration;

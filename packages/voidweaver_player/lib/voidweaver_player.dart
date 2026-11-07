@@ -164,7 +164,8 @@ class VoidweaverPlayer {
         .listen(_onEvent);
   }
 
-  /// Updated about every 200 ms while playing, and on every state change.
+  /// Updated while playing at the interval of [setPositionUpdateInterval]
+  /// (200 ms until it's called), and on every state change.
   Stream<Duration> get positionStream => _positionController.stream;
   Stream<Duration?> get durationStream => _durationController.stream;
   Stream<PlayerState> get playerStateStream => _playerStateController.stream;
@@ -304,6 +305,16 @@ class VoidweaverPlayer {
     if (volume == _volume) return Future.value();
     _volume = volume;
     return _invoke('setVolume', {'volume': volume});
+  }
+
+  /// How often the position is reported on [positionStream] while playing,
+  /// from 100 ms to 10 s (the default is 200 ms). Every report wakes the app's
+  /// Dart code, so a longer interval saves power while nobody looks at the
+  /// position. Other state changes are reported when they happen. The next
+  /// report comes right away.
+  Future<void> setPositionUpdateInterval(Duration interval) {
+    final ms = interval.inMilliseconds.clamp(100, 10000);
+    return _invoke('setPositionUpdateInterval', {'interval': ms});
   }
 
   /// Starts or resumes playback. Completes right away.

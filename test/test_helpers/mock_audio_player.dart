@@ -234,6 +234,14 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
     volumes.add(volume);
   }
 
+  /// The intervals set with [setPositionUpdateInterval], in order
+  final List<Duration> positionIntervals = [];
+
+  @override
+  Future<void> setPositionUpdateInterval(Duration interval) async {
+    positionIntervals.add(interval);
+  }
+
   @override
   Future<void> dispose() async {
     await _positionController.close();

@@ -282,6 +282,24 @@ void main() {
     expect(player.volume, 1.0);
   });
 
+  test('setPositionUpdateInterval sends the interval in ms, clamped', () async {
+    await player.setPositionUpdateInterval(const Duration(seconds: 1));
+    await player.setPositionUpdateInterval(const Duration(milliseconds: 10));
+    await player.setPositionUpdateInterval(const Duration(minutes: 5));
+
+    expect(
+      [
+        for (final call in platform.calls)
+          if (call.method == 'setPositionUpdateInterval') call.arguments,
+      ],
+      [
+        {'interval': 1000},
+        {'interval': 100},
+        {'interval': 10000},
+      ],
+    );
+  });
+
   test('setGain sends only changed gains', () async {
     final a = source('a', gain: 0.5);
     await player.setAudioSources([a]);

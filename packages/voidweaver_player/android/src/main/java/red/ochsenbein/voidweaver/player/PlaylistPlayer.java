@@ -50,7 +50,7 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
   private static final int STATE_READY = 3;
   private static final int STATE_COMPLETED = 4;
 
-  private static final long POSITION_UPDATE_INTERVAL_MS = 200;
+  private static final long DEFAULT_POSITION_UPDATE_INTERVAL_MS = 200;
 
   /**
    * Failed loads are retried this often before the error is reported, with 0, 1, 2, ... up to 5 s
@@ -70,6 +70,9 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
   private final Context context;
   private final Handler handler = new Handler(Looper.getMainLooper());
   private final Runnable positionUpdate = this::onPositionUpdate;
+
+  // How often a state snapshot is sent while playing; Dart sets it, see setPositionUpdateInterval
+  private long positionUpdateIntervalMs = DEFAULT_POSITION_UPDATE_INTERVAL_MS;
 
   @Nullable private EventChannel.EventSink eventSink;
   @Nullable private MethodChannel.Result pendingLoad;
@@ -153,6 +156,9 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
           // also across a track change (the sleep timer's fade-out)
           player.setVolume(((Number) call.argument("volume")).floatValue());
           break;
+        case "setPositionUpdateInterval":
+          setPositionUpdateInterval(intArg(call, "interval"));
+          break;
         case "play":
           PlaybackService.ensureStarted(context);
           player.play();
@@ -200,6 +206,16 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
         .setCustomCacheKey((String) source.get("cacheKey"))
         .setMediaMetadata(metadata.build())
         .build();
+  }
+
+  /**
+   * Every snapshot wakes Dart, which matters while the screen is off: Dart asks for a longer
+   * interval then. The next one is sent right away, so the app is up to date when it's shown again.
+   */
+  private void setPositionUpdateInterval(int intervalMs) {
+    positionUpdateIntervalMs = intervalMs;
+    handler.removeCallbacks(positionUpdate);
+    if (player.isPlaying()) onPositionUpdate();
   }
 
   private void setAudioSources(MethodCall call, MethodChannel.Result result) {
@@ -314,14 +330,14 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
     sendState();
     handler.removeCallbacks(positionUpdate);
     if (player.isPlaying()) {
-      handler.postDelayed(positionUpdate, POSITION_UPDATE_INTERVAL_MS);
+      handler.postDelayed(positionUpdate, positionUpdateIntervalMs);
     }
   }
 
   private void onPositionUpdate() {
     sendState();
     if (player.isPlaying()) {
-      handler.postDelayed(positionUpdate, POSITION_UPDATE_INTERVAL_MS);
+      handler.postDelayed(positionUpdate, positionUpdateIntervalMs);
     }
   }
 
