@@ -70,7 +70,7 @@ final class PlayerSession {
     public ListenableFuture<MediaSession.ConnectionResult> onConnectAsync(
         MediaSession session, MediaSession.ControllerInfo controller) {
       return Futures.immediateFuture(
-          new MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+          new MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
               .setAvailablePlayerCommands(MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS)
               .setAvailableSessionCommands(
                   MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS)
