@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 import 'package:voidweaver/main.dart';
 import 'package:voidweaver/services/app_state.dart';
@@ -70,4 +71,59 @@ void main() {
     await tester.pump();
     expect(themeMode(), equals(ThemeMode.light));
   });
+
+  testWidgets('App offers a retry when its saved data can\'t be read', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final working = SharedPreferencesStorePlatform.instance;
+    SharedPreferencesStorePlatform.instance = _FailingStore(working);
+
+    Future<void> settle() async {
+      for (var i = 0; i < 10; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump();
+      }
+    }
+
+    await tester.pumpWidget(const MyApp());
+    await settle();
+
+    expect(find.text('Try again'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+
+    // The storage works again
+    SharedPreferencesStorePlatform.instance = working;
+    await tester.tap(find.text('Try again'));
+    await settle();
+
+    expect(find.text('Try again'), findsNothing);
+    expect(
+      find.text('Voidweaver could not read its saved data.'),
+      findsNothing,
+    );
+  });
+}
+
+/// A store that can't be read
+class _FailingStore extends SharedPreferencesStorePlatform {
+  _FailingStore(this._working);
+
+  final SharedPreferencesStorePlatform _working;
+
+  @override
+  Future<Map<String, Object>> getAll() async =>
+      throw StateError('storage unavailable');
+
+  @override
+  Future<bool> clear() => _working.clear();
+
+  @override
+  Future<bool> remove(String key) => _working.remove(key);
+
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) =>
+      _working.setValue(valueType, key, value);
 }

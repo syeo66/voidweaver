@@ -101,10 +101,16 @@ class AppState extends ChangeNotifier {
   /// Why the last [configure] failed, for the login screen
   String? get configurationError => _configurationError;
 
+  /// Loads the settings and the saved queue, and logs in with the saved
+  /// credentials. Throws if the app's storage can't be read; it can be called
+  /// again then, and doesn't repeat the steps that worked.
   Future<void> initialize() async {
-    _settingsService = SettingsService();
-    await _settingsService!.initialize();
-    _settingsService!.addListener(_applyNetworkConfig);
+    if (_settingsService == null) {
+      final settings = SettingsService();
+      await settings.initialize();
+      settings.addListener(_applyNetworkConfig);
+      _settingsService = settings;
+    }
     // Before anything streams
     _applyNetworkConfig();
     // The app's theme comes from the settings
@@ -112,10 +118,14 @@ class AppState extends ChangeNotifier {
 
     await ReplayGainDebugLogger.instance.initialize();
 
-    _persistenceService = PlaybackPersistenceService();
-    await _persistenceService!.initialize();
+    if (_persistenceService == null) {
+      final persistence = PlaybackPersistenceService();
+      await persistence.initialize();
+      _persistenceService = persistence;
+    }
 
-    await _loadServerConfig();
+    // Not again after a retry that only failed before this point
+    if (!_isConfigured) await _loadServerConfig();
   }
 
   /// Sets up the services for a server. With [verifyCredentials] (a new

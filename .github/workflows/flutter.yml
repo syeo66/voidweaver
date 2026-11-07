@@ -1,5 +1,8 @@
 name: Flutter CI/CD
 
+# Actions are pinned to commit SHAs, as a tag can be moved to other code (the
+# build job has the signing secrets). Dependabot updates them, see
+# .github/dependabot.yml.
 on:
   push:
     branches: [ main ]
@@ -7,6 +10,10 @@ on:
     tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
+
+# Every job gets read access only; the release job asks for more
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -17,10 +24,10 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
     
     - name: Setup Flutter
-      uses: subosito/flutter-action@v2
+      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
       with:
         flutter-version: '3.47.7'
         channel: 'stable'
@@ -44,7 +51,7 @@ jobs:
       run: flutter test
     
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v7
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
       with:
         files: coverage/lcov.info
         fail_ci_if_error: false
@@ -54,13 +61,13 @@ jobs:
     needs: test
     
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         # Full history: the build number is the commit count
         fetch-depth: 0
     
     - name: Setup Flutter
-      uses: subosito/flutter-action@v2
+      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
       with:
         flutter-version: '3.47.7'
         channel: 'stable'
@@ -70,7 +77,7 @@ jobs:
     # Gradle User Home (wrapper, dependencies). The basic provider: the
     # default one is proprietary.
     - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v6
+      uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
       with:
         cache-provider: basic
 
@@ -107,7 +114,7 @@ jobs:
       run: ./gradlew :voidweaver_player:testDebugUnitTest
     
     - name: Upload APK artifact
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
       with:
         name: android-apk
         path: build/app/outputs/flutter-apk/app-release.apk
@@ -117,10 +124,10 @@ jobs:
     needs: test
 
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Setup Flutter
-      uses: subosito/flutter-action@v2
+      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
       with:
         flutter-version: '3.47.7'
         channel: 'stable'
@@ -130,7 +137,7 @@ jobs:
     # Gradle User Home (wrapper, dependencies). The basic provider: the
     # default one is proprietary.
     - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v6
+      uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
       with:
         cache-provider: basic
 
@@ -148,7 +155,7 @@ jobs:
     # (debug build). The release-build checks (tool/emulator_check.sh) run
     # locally only: in the runner's emulator they failed at the login step.
     - name: Run integration tests in an emulator
-      uses: reactivecircus/android-emulator-runner@v2
+      uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
       with:
         api-level: 35
         arch: x86_64
@@ -168,10 +175,10 @@ jobs:
       contents: write
 
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
     - name: Download the APK
-      uses: actions/download-artifact@v8
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
       with:
         name: android-apk
 

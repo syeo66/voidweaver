@@ -1,0 +1,39 @@
+version: 2
+updates:
+  # Keeps the SHAs the workflow's actions are pinned to current
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: pub
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      pub:
+        update-types: [minor, patch]
+
+  - package-ecosystem: pub
+    directory: /packages/voidweaver_player
+    schedule:
+      interval: weekly
+    groups:
+      pub:
+        update-types: [minor, patch]
+
+  # The app's Gradle build and the player plugin's (Media3). Major updates of
+  # AGP, Kotlin and Media3 need the emulator checks of docs/ANDROID.md, so
+  # they come as their own pull requests.
+  - package-ecosystem: gradle
+    directories:
+      - /android
+      - /packages/voidweaver_player/android
+    schedule:
+      interval: weekly
+    groups:
+      gradle:
+        update-types: [minor, patch]

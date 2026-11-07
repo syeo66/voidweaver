@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:logging/logging.dart';
 import 'package:provider/provider.dart';
 
 import 'services/app_state.dart';
@@ -11,6 +12,8 @@ import 'screens/home_screen.dart';
 import 'widgets/error_boundary.dart';
 import 'utils/log.dart';
 import 'utils/test_ca.dart';
+
+final _log = Logger('main');
 
 void main() async {
   // Run the app in a zone to catch async errors
@@ -91,6 +94,8 @@ class AppRouter extends StatefulWidget {
 
 class _AppRouterState extends State<AppRouter> {
   bool _initialized = false;
+  // Why the app couldn't start (its storage couldn't be read), until a retry
+  bool _initFailed = false;
   late final AppLifecycleListener _lifecycleListener;
 
   @override
@@ -114,16 +119,55 @@ class _AppRouterState extends State<AppRouter> {
   }
 
   Future<void> _initializeApp() async {
-    await context.read<AppState>().initialize();
+    final appState = context.read<AppState>();
+    var failed = false;
+    try {
+      await appState.initialize();
+    } catch (e, stackTrace) {
+      _log.severe('The app could not start', e, stackTrace);
+      failed = true;
+    }
     if (mounted) {
       setState(() {
-        _initialized = true;
+        _initialized = !failed;
+        _initFailed = failed;
       });
     }
   }
 
+  void _retryInitialization() {
+    setState(() => _initFailed = false);
+    unawaited(_initializeApp());
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_initFailed) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, size: 48),
+                const SizedBox(height: 16),
+                const Text(
+                  'Voidweaver could not read its saved data.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: _retryInitialization,
+                  child: const Text('Try again'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     if (!_initialized) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }

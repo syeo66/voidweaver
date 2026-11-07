@@ -74,6 +74,7 @@ Testing the native layer (media session, notification, media keys, R8) in the em
 - The plugin's manifest declares `PlaybackService` (`foregroundServiceType="mediaPlayback"`) and its permissions; it's merged into the app's.
 - Versioning: the version name (`1.1.0`) comes from `pubspec.yaml` and is bumped by hand. The build number (`versionCode`) is the git commit count, set in `android/app/build.gradle.kts`, so it rises with every commit; the pubspec's `+N` or `--build-number` only wins if it's higher. CI checks out the full history for this. Settings shows both at the bottom.
 - Releases: a `v*` tag publishes the APK as a GitHub release, signed with the key from the repository secrets, see [RELEASING.md](RELEASING.md).
+- CI: the workflow's actions are pinned to commit SHAs (the build job has the signing secrets, and a tag can be moved), with the version as a comment; Dependabot (`.github/dependabot.yml`) proposes the updates, along with pub and Gradle ones. Pin new actions the same way. Pull requests that change Media3, AGP or Kotlin need the emulator checks above.
 
 ## Tests
 

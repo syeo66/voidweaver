@@ -2,10 +2,13 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:logging/logging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'network_config.dart';
 import '../models/album_list_type.dart';
+
+final _log = Logger('settings');
 
 enum ReplayGainMode {
   off,
@@ -56,23 +59,67 @@ class SettingsService extends ChangeNotifier {
     await _loadSettings();
   }
 
+  /// The value stored under [key], read with [read], or [fallback] if there
+  /// is none or it has another type than expected. One bad setting must not
+  /// keep the app from starting.
+  T _load<T>(
+    String key,
+    T? Function(SharedPreferences prefs) read,
+    T fallback,
+  ) {
+    try {
+      return read(_prefs!) ?? fallback;
+    } catch (e) {
+      _log.warning('Ignoring the stored setting $key', e);
+      return fallback;
+    }
+  }
+
+  /// The value of [values] at the stored index [key]. The index of a value no
+  /// longer (or not yet) in [values] gives [fallback].
+  T _loadEnum<T>(String key, List<T> values, T fallback) {
+    final index = _load<int?>(key, (prefs) => prefs.getInt(key), null);
+    if (index == null) return fallback;
+    if (index < 0 || index >= values.length) {
+      _log.warning('Ignoring the stored setting $key: $index');
+      return fallback;
+    }
+    return values[index];
+  }
+
   Future<void> _loadSettings() async {
     if (_prefs == null) return;
 
-    final modeIndex = _prefs!.getInt(_replayGainModeKey) ?? 0;
-    _replayGainMode = ReplayGainMode.values[modeIndex];
+    _replayGainMode = _loadEnum(
+      _replayGainModeKey,
+      ReplayGainMode.values,
+      ReplayGainMode.off,
+    );
 
-    _replayGainPreamp = _prefs!.getDouble(_replayGainPreampKey) ?? 0.0;
-    _replayGainPreventClipping =
-        _prefs!.getBool(_replayGainPreventClippingKey) ?? true;
-    _replayGainFallbackGain =
-        _prefs!.getDouble(_replayGainFallbackGainKey) ?? 0.0;
+    _replayGainPreamp = _load(
+      _replayGainPreampKey,
+      (prefs) => prefs.getDouble(_replayGainPreampKey),
+      0.0,
+    );
+    _replayGainPreventClipping = _load(
+      _replayGainPreventClippingKey,
+      (prefs) => prefs.getBool(_replayGainPreventClippingKey),
+      true,
+    );
+    _replayGainFallbackGain = _load(
+      _replayGainFallbackGainKey,
+      (prefs) => prefs.getDouble(_replayGainFallbackGainKey),
+      0.0,
+    );
 
-    final themeModeIndex = _prefs!.getInt(_themeModeKey) ?? 0;
-    _themeMode = ThemeMode.values[themeModeIndex];
+    _themeMode = _loadEnum(_themeModeKey, ThemeMode.values, ThemeMode.system);
 
     // Load network configuration
-    final networkConfigJson = _prefs!.getString(_networkConfigKey);
+    final networkConfigJson = _load<String?>(
+      _networkConfigKey,
+      (prefs) => prefs.getString(_networkConfigKey),
+      null,
+    );
     if (networkConfigJson != null) {
       try {
         final configMap = jsonDecode(networkConfigJson) as Map<String, dynamic>;
@@ -85,12 +132,22 @@ class SettingsService extends ChangeNotifier {
       _networkConfig = NetworkConfig.defaultConfig;
     }
 
-    _scrobbleMinPlayTimeMinutes =
-        _prefs!.getDouble(_scrobbleMinPlayTimeMinutesKey) ?? 2.0;
-    _scrobbleThresholdPercent =
-        _prefs!.getDouble(_scrobbleThresholdPercentKey) ?? 50.0;
+    _scrobbleMinPlayTimeMinutes = _load(
+      _scrobbleMinPlayTimeMinutesKey,
+      (prefs) => prefs.getDouble(_scrobbleMinPlayTimeMinutesKey),
+      2.0,
+    );
+    _scrobbleThresholdPercent = _load(
+      _scrobbleThresholdPercentKey,
+      (prefs) => prefs.getDouble(_scrobbleThresholdPercentKey),
+      50.0,
+    );
 
-    final albumListType = _prefs!.getString(_albumListTypeKey);
+    final albumListType = _load<String?>(
+      _albumListTypeKey,
+      (prefs) => prefs.getString(_albumListTypeKey),
+      null,
+    );
     _albumListType =
         AlbumListType.values
             .where((t) => t.name == albumListType)
