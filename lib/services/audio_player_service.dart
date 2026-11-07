@@ -175,9 +175,13 @@ class AudioPlayerService extends ChangeNotifier {
       retryDelay: downloadRetryDelay,
       onReplayGain: _storeReplayGain,
     );
-    // Downloads that failed while offline start again
+    // Downloads that failed while offline start again, and scrobbles that
+    // couldn't be sent go out
     _networkSubscription = _audioCache.networkAvailable.listen(
-      (_) => _downloads.networkAvailable(),
+      (_) {
+        _downloads.networkAvailable();
+        _scrobbleQueue.networkAvailable();
+      },
       onError: (Object e) {
         _log.warning('[audio_cache] Network events failed', e);
       },

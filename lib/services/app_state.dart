@@ -55,9 +55,21 @@ class AppState extends ChangeNotifier {
   Timer? _syncStatusResetTimer;
   DateTime? _lastSyncTime;
 
+  // How often the background sync looks again (the timer's period). "Recently
+  // added" is cheap to check (`getScanStatus`), so it's checked this often.
   static const _syncInterval = Duration(minutes: 5);
+  // "Recently played" is fetched in full. It changes when a play is
+  // scrobbled, which the app sees itself ([_onScrobbled]), so this only
+  // catches plays from other apps.
+  static const _recentSyncInterval = Duration(minutes: 20);
   // Background sync only runs while the app is visible, see setVisible()
   bool _visible = true;
+
+  // Plays the server counted for this login, and how many of them the
+  // "Recently played" list was fetched after: a difference means the list
+  // is out of date, whatever its age
+  int _scrobblesSent = 0;
+  int _scrobblesListed = 0;
 
   // What secure storage holds (server URL, username, password), as read at
   // startup or last written; configure() only writes credentials that differ
@@ -165,7 +177,9 @@ class AppState extends ChangeNotifier {
       api.credentialsRejected.addListener(notifyListeners);
 
       _audioCache = AudioCache(namespace: serverUrl);
-      _scrobbleQueue = ScrobbleQueue(api);
+      _scrobbleQueue = ScrobbleQueue(api, onSubmitted: _onScrobbled);
+      _scrobblesSent = 0;
+      _scrobblesListed = 0;
       _audioPlayerService = AudioPlayerService(
         api,
         _settingsService!,
@@ -297,6 +311,7 @@ class AppState extends ChangeNotifier {
     final api = _api;
     if (api == null) return;
     final type = albumListType;
+    final listed = _scrobblesSent;
 
     _isLoading = true;
     _albumError = null;
@@ -305,13 +320,14 @@ class AppState extends ChangeNotifier {
     try {
       final albums = await api.getAlbumList(
         type: type,
-        forceRefresh: forceRefresh,
+        forceRefresh: forceRefresh || _recentListStale(type),
       );
       // Logged out or switched to the other order meanwhile, in which case
       // the load for that order finishes
       if (!identical(api, _api) || type != albumListType) return;
       _albums = albums;
       _lastSyncTime = DateTime.now();
+      if (type == AlbumListType.recent) _scrobblesListed = listed;
     } catch (e) {
       if (!identical(api, _api) || type != albumListType) return;
       _albumError = NetworkErrorHelper.getErrorMessage(
@@ -321,6 +337,8 @@ class AppState extends ChangeNotifier {
     }
     _isLoading = false;
     notifyListeners();
+    // Not after a failure: a request that fails would repeat itself
+    if (_albumError == null) _refetchIfStale();
   }
 
   Future<void> _backgroundSync() async {
@@ -333,9 +351,13 @@ class AppState extends ChangeNotifier {
     _syncStatus = SyncStatus.syncing;
     notifyListeners();
     final type = albumListType;
+    final listed = _scrobblesSent;
 
     try {
-      final newAlbums = await api.getAlbumList(type: type);
+      final newAlbums = await api.getAlbumList(
+        type: type,
+        forceRefresh: _recentListStale(type),
+      );
       // Logged out meanwhile
       if (!identical(api, _api)) return;
       // Switched to the other order meanwhile: that load's list, error and
@@ -346,6 +368,7 @@ class AppState extends ChangeNotifier {
         return;
       }
       _albums = newAlbums;
+      if (type == AlbumListType.recent) _scrobblesListed = listed;
       _syncStatus = SyncStatus.success;
       _lastSyncTime = DateTime.now();
       _albumError = null;
@@ -371,13 +394,59 @@ class AppState extends ChangeNotifier {
         notifyListeners();
       }
     });
+    if (_syncStatus == SyncStatus.success) _refetchIfStale();
+  }
+
+  /// Whether a play was counted since the "Recently played" list was
+  /// fetched, so the server's list differs from [type]'s cached one.
+  bool _recentListStale(AlbumListType type) =>
+      type == AlbumListType.recent && _scrobblesSent != _scrobblesListed;
+
+  /// Whether the album list is old enough to fetch again. "Recently played"
+  /// isn't fetched on every timer tick, see [_recentSyncInterval].
+  bool get _syncDue {
+    final lastSync = _lastSyncTime;
+    if (lastSync == null) return true;
+    final type = albumListType;
+    if (_recentListStale(type)) return true;
+    final interval = type == AlbumListType.recent
+        ? _recentSyncInterval
+        : _syncInterval;
+    return DateTime.now().difference(lastSync) >= interval;
+  }
+
+  /// The server counted a play of this login: "Recently played" has changed.
+  /// Fetched again right away if that's the list shown and the app is
+  /// visible; otherwise the next load or sync does it, see [_recentListStale].
+  void _onScrobbled() {
+    if (_api == null) return;
+    _scrobblesSent++;
+    // A fetch already running may have been answered before the play was
+    // counted, and a new request would share it; the one that's running
+    // fetches again when it's done, see [_refetchIfStale]
+    if (_isLoading || _syncStatus == SyncStatus.syncing) return;
+    _refetchIfStale();
+  }
+
+  /// Fetches the "Recently played" list again if it's shown, the app is
+  /// visible, and a play was counted since it was fetched. Called after each
+  /// successful fetch and when a play is counted; it stops once a fetch
+  /// started after the last play.
+  void _refetchIfStale() {
+    if (_visible && _recentListStale(albumListType)) {
+      unawaited(_backgroundSync());
+    }
   }
 
   void _startBackgroundSync() {
     _syncTimer?.cancel();
     if (!_visible) return;
     _syncTimer = Timer.periodic(_syncInterval, (timer) {
-      unawaited(_backgroundSync());
+      // "Recently added" is checked every time (a cheap request unless the
+      // library was scanned); "Recently played" only when it's due
+      if (albumListType != AlbumListType.recent || _syncDue) {
+        unawaited(_backgroundSync());
+      }
     });
   }
 
@@ -394,11 +463,7 @@ class AppState extends ChangeNotifier {
       return;
     }
     _startBackgroundSync();
-    final lastSync = _lastSyncTime;
-    if (lastSync == null ||
-        DateTime.now().difference(lastSync) >= _syncInterval) {
-      unawaited(_backgroundSync());
-    }
+    if (_syncDue) unawaited(_backgroundSync());
   }
 
   void _stopBackgroundSync() {
@@ -515,6 +580,8 @@ class AppState extends ChangeNotifier {
     _isConfigured = false;
     _syncStatus = SyncStatus.idle;
     _lastSyncTime = null;
+    _scrobblesSent = 0;
+    _scrobblesListed = 0;
     _configurationLoadingState = LoadingState.idle;
     _configurationError = null;
 

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:logging/logging.dart';
 
@@ -49,34 +50,48 @@ class ScrobbleRequest {
 /// subsoxy tells plays from skips by the order and timestamps of scrobbles,
 /// so a submission that can't be sent (offline, server down, credentials
 /// refused) stays at the front and blocks the ones behind it until it goes
-/// through or expires after [_maxAge]. It's retried every
-/// [_processingInterval] and whenever a new request is queued. A submission
+/// through or expires after [_maxAge]. It's retried whenever a new request is
+/// queued, when the network is back ([networkAvailable]), and by a timer that
+/// only runs while something is blocked: after 30 s, then at twice the delay
+/// each time, up to 5 minutes. With nothing to send there's no timer, so a
+/// phone playing with the screen off isn't woken for an empty queue. A submission
 /// the server rejects for itself (e.g. unknown song) is dropped, and so is a
 /// "now playing" that fails: it would be stale by the time it's retried.
 /// For the same reason only submissions are saved: a "now playing" from the
 /// last session would mark a song as playing that isn't.
 class ScrobbleQueue {
   static const String _storageKey = 'scrobble_queue';
-  static const Duration _processingInterval = Duration(seconds: 30);
   static const Duration _maxAge = Duration(days: 7); // Drop old requests
 
   final SubsonicApi _api;
+
+  /// Called after the server accepted a submission, i.e. after a play was
+  /// counted there.
+  final void Function()? onSubmitted;
+  final Duration _initialRetryDelay;
+  final Duration _maxRetryDelay;
   final List<ScrobbleRequest> _queue = [];
-  Timer? _processingTimer;
+  // Set while a submission is waiting to be sent again
+  Timer? _retryTimer;
+  late Duration _retryDelay = _initialRetryDelay;
   bool _isProcessing = false;
   bool _disposed = false;
 
-  ScrobbleQueue(this._api);
+  ScrobbleQueue(
+    this._api, {
+    this.onSubmitted,
+    @visibleForTesting this._initialRetryDelay = const Duration(seconds: 30),
+    @visibleForTesting this._maxRetryDelay = const Duration(minutes: 5),
+  });
 
   /// Initialize the queue by loading persisted requests
   Future<void> initialize() async {
     await _loadQueue();
-    _startProcessingTimer();
     _log.info(
       'ScrobbleQueue initialized with ${_queue.length} pending requests',
     );
     // Plays left from the last session, or from a login whose password the
-    // server rejected, go out now rather than at the first timer tick
+    // server rejected, go out now
     unawaited(_processQueue());
   }
 
@@ -155,8 +170,11 @@ class ScrobbleQueue {
           continue;
         }
 
+        var sent = false;
         try {
           await _sendScrobble(request);
+          sent = true;
+          _retryDelay = _initialRetryDelay;
           _log.fine(
             'Successfully sent ${request.type.name} for song ${request.songId}',
           );
@@ -176,10 +194,13 @@ class ScrobbleQueue {
           );
         }
         _queue.remove(request);
+        if (sent && request.type == ScrobbleType.submission) {
+          onSubmitted?.call();
+        }
 
         // Small delay between requests to avoid overwhelming the server
         if (_queue.isNotEmpty && !_disposed) {
-          await Future.delayed(const Duration(milliseconds: 100));
+          await Future<void>.delayed(const Duration(milliseconds: 100));
         }
       }
 
@@ -196,12 +217,48 @@ class ScrobbleQueue {
       _isProcessing = false;
     }
 
-    // Requests queued while the queue was being saved. After a failure the
-    // timer retries instead, so a failing request isn't sent in a loop.
-    if (!blocked && _queue.isNotEmpty && !_disposed) {
-      unawaited(_processQueue());
+    if (blocked) {
+      // Not sent in a loop: the timer retries, at longer intervals
+      _scheduleRetry();
+    } else {
+      _cancelRetry();
+      // Requests queued while the queue was being saved
+      if (_queue.isNotEmpty && !_disposed) unawaited(_processQueue());
     }
   }
+
+  /// Sends the blocked submission again after the current delay, which
+  /// doubles up to the maximum for the next time.
+  void _scheduleRetry() {
+    if (_disposed) return;
+    _retryTimer?.cancel();
+    final delay = _retryDelay;
+    _retryDelay = delay * 2 > _maxRetryDelay ? _maxRetryDelay : delay * 2;
+    _log.fine('Retrying the scrobble queue in ${delay.inSeconds} s');
+    _retryTimer = Timer(delay, () {
+      _retryTimer = null;
+      unawaited(_processQueue());
+    });
+  }
+
+  void _cancelRetry() {
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    _retryDelay = _initialRetryDelay;
+  }
+
+  /// The network is back (see `AudioCache.networkAvailable`): a blocked
+  /// submission is sent now, rather than when its timer fires, and the next
+  /// failure starts from the shortest delay again.
+  void networkAvailable() {
+    if (_disposed || _queue.isEmpty) return;
+    _cancelRetry();
+    unawaited(_processQueue());
+  }
+
+  /// Whether a blocked submission is waiting for its next attempt
+  @visibleForTesting
+  bool get retryScheduled => _retryTimer != null;
 
   /// Send a single scrobble request to the API
   Future<void> _sendScrobble(ScrobbleRequest request) async {
@@ -216,16 +273,6 @@ class ScrobbleQueue {
         );
         break;
     }
-  }
-
-  /// Start periodic processing timer
-  void _startProcessingTimer() {
-    _processingTimer?.cancel();
-    _processingTimer = Timer.periodic(_processingInterval, (_) {
-      if (!_disposed) {
-        unawaited(_processQueue());
-      }
-    });
   }
 
   /// Load queue from persistent storage
@@ -313,8 +360,8 @@ class ScrobbleQueue {
   /// Dispose and cleanup resources
   void dispose() {
     _disposed = true;
-    _processingTimer?.cancel();
-    _processingTimer = null;
+    _retryTimer?.cancel();
+    _retryTimer = null;
     _log.fine('ScrobbleQueue disposed');
   }
 }

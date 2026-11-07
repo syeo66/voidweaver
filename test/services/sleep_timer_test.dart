@@ -138,7 +138,7 @@ void main() {
       expect(audioPlayerService.isSleepTimerActive, true);
 
       // Wait for timer to complete
-      await Future.delayed(const Duration(milliseconds: 150));
+      await Future<void>.delayed(const Duration(milliseconds: 150));
 
       // Verify timer completed and is no longer active
       expect(audioPlayerService.isSleepTimerActive, false);
@@ -174,7 +174,7 @@ void main() {
 
       service.startSleepTimer(const Duration(milliseconds: 10));
       // An unhandled error from pause() would fail the test
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
 
       expect(service.isSleepTimerActive, false);
     });

@@ -62,7 +62,9 @@ class _HomeScreenState extends State<HomeScreen> {
             tooltip: 'Search',
             onPressed: () {
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => const SearchScreen()),
+                MaterialPageRoute<void>(
+                  builder: (context) => const SearchScreen(),
+                ),
               );
             },
           ),
@@ -139,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 unawaited(_confirmLogout());
               } else if (value == 'settings') {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
+                  MaterialPageRoute<void>(
                     builder: (context) => const SettingsScreen(),
                   ),
                 );

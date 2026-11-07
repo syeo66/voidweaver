@@ -82,7 +82,9 @@ class ReplayGainDebugLogger extends ChangeNotifier {
     final line =
         '${DateTime.now().toIso8601String()}  ${redactCredentials(message)}';
 
-    _writeQueue = _writeQueue.then((_) => _appendLine(line)).catchError((e) {
+    _writeQueue = _writeQueue.then((_) => _appendLine(line)).catchError((
+      Object e,
+    ) {
       _log.warning('Debug log: Write failed', e);
     });
   }

@@ -12,7 +12,6 @@
 ## Reliability
 - [ ] Handle self-signed certificates
 - [ ] Better login validation and feedback
-- [ ] Smarter background sync: "Recently added" is only fetched again after a library scan (`getScanStatus`), but "Recently played" is still fetched every 5 minutes while the app is visible
 - [ ] Crash reporting
 - [ ] Battery optimization
 

@@ -62,7 +62,7 @@ void main() {
       Future<String> makeRequest() {
         return cache.getOrFetch<String>(endpoint, params, () async {
           callCount++;
-          await Future.delayed(const Duration(milliseconds: 50));
+          await Future<void>.delayed(const Duration(milliseconds: 50));
           return expectedResult;
         }, cacheDuration: const Duration(seconds: 10));
       }
@@ -99,7 +99,7 @@ void main() {
       expect(callCount, 1);
 
       // Wait for cache to expire
-      await Future.delayed(const Duration(milliseconds: 100));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
 
       // Second call should fetch new data
       final result2 = await cache.getOrFetch<String>(
@@ -310,7 +310,7 @@ void main() {
         () async => 'fresh',
         cacheDuration: Duration.zero,
       );
-      await Future.delayed(const Duration(milliseconds: 5));
+      await Future<void>.delayed(const Duration(milliseconds: 5));
 
       final result = await cache.getOrFetch<String>(
         'endpoint',
@@ -331,7 +331,7 @@ void main() {
           cacheDuration: Duration.zero,
           usePersistentCache: true,
         );
-        await Future.delayed(const Duration(milliseconds: 5));
+        await Future<void>.delayed(const Duration(milliseconds: 5));
 
         final restarted = ApiCache.forTesting(directory: directory);
         await restarted.initialize();

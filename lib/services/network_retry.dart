@@ -61,6 +61,7 @@ class NetworkRetryService {
   }) async {
     final stopwatch = Stopwatch()..start();
     Object? lastError;
+    StackTrace? lastStackTrace;
     int attemptNumber = 0;
 
     while (attemptNumber < maxAttempts) {
@@ -78,8 +79,9 @@ class NetworkRetryService {
         );
 
         return response;
-      } catch (error) {
+      } catch (error, stackTrace) {
         lastError = error;
+        lastStackTrace = stackTrace;
 
         _log.warning(
           'Network request failed on attempt $attemptNumber: $contextDescription',
@@ -99,7 +101,7 @@ class NetworkRetryService {
 
           _log.fine('Retrying in ${retryDelay.inMilliseconds}ms...');
 
-          await Future.delayed(retryDelay);
+          await Future<void>.delayed(retryDelay);
         }
       }
     }
@@ -126,7 +128,8 @@ class NetworkRetryService {
 
     // Fallback - rethrow the last error
     if (lastError != null) {
-      throw lastError;
+      // With its own stack trace: a plain throw would point at this line
+      Error.throwWithStackTrace(lastError, lastStackTrace!);
     } else {
       throw NetworkTimeoutException(
         'Unknown network error after $attemptNumber attempts: $contextDescription',

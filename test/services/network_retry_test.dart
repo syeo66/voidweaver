@@ -172,4 +172,25 @@ void main() {
       expect(aborted, isFalse);
     });
   });
+
+  group('other errors', () {
+    test('are rethrown with the stack trace of where they happened', () async {
+      final service = serviceFor(MockClient((request) => _failInClient()));
+
+      Object? error;
+      StackTrace? stackTrace;
+      try {
+        await service.getWithRetry(uri);
+      } catch (e, s) {
+        error = e;
+        stackTrace = s;
+      }
+
+      expect(error, isA<FormatException>());
+      expect(stackTrace.toString(), contains('_failInClient'));
+    });
+  });
 }
+
+Future<http.Response> _failInClient() async =>
+    throw const FormatException('not a response');

@@ -187,7 +187,7 @@ void main() {
     await tester.runAsync(() async {
       await tester.tap(find.byIcon(Icons.skip_next));
       // Let the skip finish loading the next track
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
     });
     await tester.pump();
 

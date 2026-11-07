@@ -36,7 +36,7 @@ void main() {
       // Simulate continuous playback: an update every 20ms for 3 intervals.
       for (var i = 0; i < 15; i++) {
         persistence.schedulePositionSave(stateAt(0, i));
-        await Future.delayed(const Duration(milliseconds: 20));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
       }
 
       final saved = await persistence.loadPlaybackState();
@@ -48,7 +48,7 @@ void main() {
       persistence.schedulePositionSave(stateAt(0, 1));
       persistence.schedulePositionSave(stateAt(0, 2));
       persistence.schedulePositionSave(stateAt(0, 3));
-      await Future.delayed(interval * 2);
+      await Future<void>.delayed(interval * 2);
 
       final saved = await persistence.loadPlaybackState();
       expect(saved!.currentPosition, const Duration(seconds: 3));
@@ -59,7 +59,7 @@ void main() {
       () async {
         persistence.schedulePositionSave(stateAt(0, 42));
         await persistence.savePlaybackState(stateAt(1, 0));
-        await Future.delayed(interval * 2);
+        await Future<void>.delayed(interval * 2);
 
         final saved = await persistence.loadPlaybackState();
         expect(saved!.currentIndex, 1);
@@ -82,7 +82,7 @@ void main() {
       await prefs.remove('playbackQueue');
 
       persistence.schedulePositionSave(stateAt(1, 30));
-      await Future.delayed(interval * 2);
+      await Future<void>.delayed(interval * 2);
 
       expect(prefs.getString('playbackQueue'), isNull);
       expect(
@@ -125,7 +125,7 @@ void main() {
       playlist[1] = playlist[1].copyWith(replayGainTrackGain: -6.5);
       persistence.queueChanged();
       persistence.schedulePositionSave(state(10));
-      await Future.delayed(interval * 2);
+      await Future<void>.delayed(interval * 2);
 
       final saved = await persistence.loadPlaybackState();
       expect(saved!.playlist[1].replayGainTrackGain, -6.5);
@@ -135,7 +135,7 @@ void main() {
     test('clear discards a pending position save', () async {
       persistence.schedulePositionSave(stateAt(0, 42));
       await persistence.clearPlaybackState();
-      await Future.delayed(interval * 2);
+      await Future<void>.delayed(interval * 2);
 
       expect(await persistence.loadPlaybackState(), isNull);
     });

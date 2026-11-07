@@ -90,7 +90,7 @@ void main() {
         clock: mockAudioPlayer.clock,
       );
       expect(await service.restorePlaybackState(), isTrue);
-      await Future.delayed(const Duration(milliseconds: 250));
+      await Future<void>.delayed(const Duration(milliseconds: 250));
     }
 
     test('playhead shows the restored position', () async {
@@ -99,7 +99,7 @@ void main() {
       expect(service.currentPosition, const Duration(seconds: 90));
 
       await service.play();
-      await Future.delayed(const Duration(milliseconds: 250));
+      await Future<void>.delayed(const Duration(milliseconds: 250));
       expect(service.currentPosition, const Duration(seconds: 90));
     });
 
@@ -108,17 +108,17 @@ void main() {
       clearInteractions(mockApi);
 
       await service.play();
-      await Future.delayed(const Duration(milliseconds: 250));
+      await Future<void>.delayed(const Duration(milliseconds: 250));
       verify(mockApi.scrobbleNowPlaying('song1')).called(1);
 
       mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 150));
-      await Future.delayed(const Duration(milliseconds: 250));
+      await Future<void>.delayed(const Duration(milliseconds: 250));
       verify(
         mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
       ).called(1);
 
       mockAudioPlayer.simulateCompletion();
-      await Future.delayed(const Duration(milliseconds: 250));
+      await Future<void>.delayed(const Duration(milliseconds: 250));
       verifyNever(
         mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
       );
@@ -132,9 +132,9 @@ void main() {
 
         await service.play();
         mockAudioPlayer.simulatePositionChange(const Duration(seconds: 250));
-        await Future.delayed(const Duration(milliseconds: 250));
+        await Future<void>.delayed(const Duration(milliseconds: 250));
         mockAudioPlayer.simulateCompletion();
-        await Future.delayed(const Duration(milliseconds: 250));
+        await Future<void>.delayed(const Duration(milliseconds: 250));
 
         verifyNever(
           mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
@@ -148,7 +148,7 @@ void main() {
       expect(mockAudioPlayer.playing, isFalse);
 
       await service.resumeIfRequested();
-      await Future.delayed(const Duration(milliseconds: 250));
+      await Future<void>.delayed(const Duration(milliseconds: 250));
 
       expect(mockAudioPlayer.playing, isTrue);
       expect(service.currentPosition, const Duration(seconds: 90));
@@ -159,7 +159,7 @@ void main() {
       await restoreAt(const Duration(seconds: 90));
 
       await service.resumeIfRequested();
-      await Future.delayed(const Duration(milliseconds: 250));
+      await Future<void>.delayed(const Duration(milliseconds: 250));
 
       expect(mockAudioPlayer.playing, isFalse);
     });
@@ -176,7 +176,7 @@ void main() {
         audioCache: FakeAudioCache(),
       );
       final restoring = service.restorePlaybackState();
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
 
       await service.playSong(
         Song(id: 'song2', title: 'Other', artist: 'Other', album: 'Other'),
@@ -184,7 +184,7 @@ void main() {
       tags.complete(const ReplayGainData());
 
       expect(await restoring, isFalse);
-      await Future.delayed(const Duration(milliseconds: 250));
+      await Future<void>.delayed(const Duration(milliseconds: 250));
       expect(service.playlist.map((s) => s.id), ['song2']);
       expect(service.currentSong?.id, 'song2');
       expect(mockAudioPlayer.playing, isTrue);
@@ -216,7 +216,7 @@ void main() {
         await service.playSong(
           Song(id: 'song2', title: 'Other', artist: 'Other', album: 'Other'),
         );
-        await Future.delayed(const Duration(milliseconds: 250));
+        await Future<void>.delayed(const Duration(milliseconds: 250));
 
         final saved = await persistence.loadPlaybackState();
         expect(saved!.playlistSource, 'song');

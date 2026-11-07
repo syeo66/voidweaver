@@ -353,7 +353,7 @@ class _SearchScreenState extends State<SearchScreen>
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(
+          MaterialPageRoute<void>(
             builder: (context) => ArtistDetailScreen(artist: artist),
           ),
         );

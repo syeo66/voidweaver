@@ -132,7 +132,7 @@ void main() {
   group('next()', () {
     test('loads and plays the following track', () async {
       await service.playAlbum(album(3));
-      await Future.delayed(pastSkipDebounce);
+      await Future<void>.delayed(pastSkipDebounce);
 
       await service.next();
 
@@ -154,7 +154,7 @@ void main() {
 
     test('ignores a second skip within the debounce window', () async {
       await service.playAlbum(album(3));
-      await Future.delayed(pastSkipDebounce);
+      await Future<void>.delayed(pastSkipDebounce);
 
       await service.next();
       await service.next();
@@ -167,9 +167,9 @@ void main() {
       player.seekGate = Completer();
 
       final skipping = service.next();
-      await Future.delayed(pastSkipDebounce);
+      await Future<void>.delayed(pastSkipDebounce);
       unawaited(service.next());
-      await Future.delayed(pastSkipDebounce);
+      await Future<void>.delayed(pastSkipDebounce);
       unawaited(service.next());
       expect(service.currentIndex, 1);
       expect(service.isSkipOperationInProgress, isTrue);
@@ -188,7 +188,7 @@ void main() {
 
       final skipping = service.next();
       for (var i = 0; i < 3; i++) {
-        await Future.delayed(pastSkipDebounce);
+        await Future<void>.delayed(pastSkipDebounce);
         unawaited(service.next());
       }
       player.seekGate!.complete();
@@ -200,10 +200,10 @@ void main() {
 
     test('allows another skip once the debounce window has passed', () async {
       await service.playAlbum(album(3));
-      await Future.delayed(pastSkipDebounce);
+      await Future<void>.delayed(pastSkipDebounce);
 
       await service.next();
-      await Future.delayed(pastSkipDebounce);
+      await Future<void>.delayed(pastSkipDebounce);
       await service.next();
 
       expect(service.currentIndex, 2);
@@ -214,7 +214,7 @@ void main() {
       cache.cached.add('s3');
 
       await service.playAlbum(album(3));
-      await Future.delayed(pastSkipDebounce);
+      await Future<void>.delayed(pastSkipDebounce);
       player.failingUrls.add(urlFor('s2'));
 
       await service.next();
@@ -228,7 +228,7 @@ void main() {
 
     test('stops on a track that can\'t load when nothing later can', () async {
       await service.playAlbum(album(2));
-      await Future.delayed(pastSkipDebounce);
+      await Future<void>.delayed(pastSkipDebounce);
       player.failingUrls.add(urlFor('s2'));
 
       await service.next();
@@ -256,9 +256,9 @@ void main() {
 
     test('restarts a track that has played for a few seconds', () async {
       await service.playAlbum(album(3));
-      await Future.delayed(pastSkipDebounce);
+      await Future<void>.delayed(pastSkipDebounce);
       await service.next();
-      await Future.delayed(pastSkipDebounce);
+      await Future<void>.delayed(pastSkipDebounce);
       player.simulatePositionChange(const Duration(seconds: 10));
       await settle();
 
@@ -278,7 +278,7 @@ void main() {
 
       await service.previous();
       // The scrobble queue sends requests asynchronously, 100 ms apart
-      await Future.delayed(const Duration(milliseconds: 500));
+      await Future<void>.delayed(const Duration(milliseconds: 500));
 
       verify(mockApi.scrobbleNowPlaying('s1')).called(2);
     });
@@ -291,7 +291,7 @@ void main() {
       // A late position update of the track being skipped
       player.simulatePositionChange(const Duration(seconds: 10));
       await settle();
-      await Future.delayed(pastSkipDebounce);
+      await Future<void>.delayed(pastSkipDebounce);
       unawaited(service.previous());
       player.seekGate!.complete();
       await skipping;
@@ -302,9 +302,9 @@ void main() {
 
     test('goes back to the preceding track', () async {
       await service.playAlbum(album(3));
-      await Future.delayed(pastSkipDebounce);
+      await Future<void>.delayed(pastSkipDebounce);
       await service.next();
-      await Future.delayed(pastSkipDebounce);
+      await Future<void>.delayed(pastSkipDebounce);
 
       await service.previous();
 
@@ -344,7 +344,7 @@ void main() {
 
       player.simulateCompletion();
       player.simulateCompletion();
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
 
       verify(mockApi.scrobbleSubmission('s1', playedAt: anyNamed('playedAt')))
           .called(1);
@@ -379,7 +379,7 @@ void main() {
 
       player.simulateCompletion();
       // The scrobble queue sends requests asynchronously
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
 
       verify(mockApi.scrobbleSubmission('s1', playedAt: anyNamed('playedAt')))
           .called(1);
