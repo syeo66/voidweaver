@@ -12,13 +12,13 @@ dependencies:
   http: ^1.6.0
   voidweaver_player:
     path: packages/voidweaver_player
-  crypto: ^3.0.7
+  crypto: ^3.0.8
   xml: ^7.1.0
   shared_preferences: ^2.5.6
   flutter_secure_storage: ^11.2.0
   logging: ^1.3.0
   provider: ^6.1.5+1
-  cached_network_image: ^4.0.4
+  cached_network_image: ^4.0.6
   path_provider: ^2.1.6
   share_plus: ^13.3.1
   package_info_plus: ^10.2.2
