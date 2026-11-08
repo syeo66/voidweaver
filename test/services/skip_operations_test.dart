@@ -182,6 +182,63 @@ void main() {
       expect(service.isSkipOperationInProgress, isFalse);
     });
 
+    test(
+      'a pause during a slow skip holds when presses moved its target',
+      () async {
+        await service.playAlbum(album(4));
+        player.seekGate = Completer();
+
+        final skipping = service.next();
+        await Future<void>.delayed(pastSkipDebounce);
+        unawaited(service.next());
+        await service.pause();
+        player.seekGate!.complete();
+        await skipping;
+        await pumpEventQueue();
+
+        expect(service.currentIndex, 2);
+        expect(player.currentIndex, 2);
+        expect(player.playing, isFalse);
+        expect(service.playbackState, PlaybackState.paused);
+      },
+    );
+
+    test('a play after a pause during a slow skip plays its target', () async {
+      await service.playAlbum(album(4));
+      player.seekGate = Completer();
+
+      final skipping = service.next();
+      await Future<void>.delayed(pastSkipDebounce);
+      unawaited(service.next());
+      await service.pause();
+      await service.play();
+      player.seekGate!.complete();
+      await skipping;
+      await pumpEventQueue();
+
+      expect(player.currentIndex, 2);
+      expect(player.playing, isTrue);
+    });
+
+    test(
+      'a stop during a slow skip holds when presses moved its target',
+      () async {
+        await service.playAlbum(album(4));
+        player.seekGate = Completer();
+
+        final skipping = service.next();
+        await Future<void>.delayed(pastSkipDebounce);
+        unawaited(service.next());
+        await service.stop();
+        player.seekGate!.complete();
+        await skipping;
+        await pumpEventQueue();
+
+        expect(service.currentIndex, 2);
+        expect(player.playing, isFalse);
+      },
+    );
+
     test('presses during a skip stop at the last track', () async {
       await service.playAlbum(album(3));
       player.seekGate = Completer();

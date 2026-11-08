@@ -652,22 +652,25 @@ class AudioPlayerService extends ChangeNotifier {
     _onTrackStarted();
   }
 
-  /// Moves playback to [index] within the current sequence.
-  Future<void> _jumpTo(int index) async {
+  /// Moves playback to [index] within the current sequence. Without [play]
+  /// the track stays paused there, as after a pause() during the move.
+  Future<void> _jumpTo(int index, {bool play = true}) async {
     // After stop() or an error the player has to load again
     if (_needsSourceReload ||
         _audioPlayer.processingState == ProcessingState.idle) {
-      return _loadQueue(index);
+      return _loadQueue(index, play: play);
     }
 
     final generation = _generation;
-    _playPending = true;
+    _playPending = play;
     _startsInProgress++;
     try {
       // Inside the operation, so an index event for the old track arriving
       // meanwhile isn't taken for an advance from the new one
       await _playerOp(() async {
         if (generation != _generation) return;
+        // As playing even without [play]: a play() during the move starts
+        // it, and if it stays paused, _startUnlessPaused() clears the start
         _setCurrentTrack(index, playing: true);
         // Before seeking, so the track starts at its own gain
         await _loadReplayGain(index);
@@ -964,6 +967,9 @@ class AudioPlayerService extends ChangeNotifier {
   /// another one but moves the target, and the skip continues there once it
   /// has reached its earlier target. So pressing Next three times moves three
   /// tracks, however long each takes to load.
+  ///
+  /// A skip starts playback; a pause() or stop() during it holds for the rest
+  /// of it, so the moves after that one leave the track paused.
   Future<void> _skip(String source, int Function(int from) targetFrom) async {
     final target = targetFrom(_skipTarget ?? _currentIndex);
     if (target < 0 || target >= _playlist.length) return;
@@ -985,9 +991,12 @@ class AudioPlayerService extends ChangeNotifier {
       int? reached;
       // Ends early if a new queue was started meanwhile
       while (_skipTarget != reached && identical(playlist, _playlist)) {
+        // The first move plays. The later ones play unless pause() or stop()
+        // cleared _playPending during an earlier move.
+        final play = reached == null || _playPending;
         reached = _skipTarget!;
         _scrobbleCurrentSongIfEligible();
-        await _jumpTo(reached);
+        await _jumpTo(reached, play: play);
       }
     } catch (e) {
       _onLoadFailed('[$source] Failed to play song', e);
