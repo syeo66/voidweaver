@@ -46,12 +46,35 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
   final Map<String, double> _gains = {};
 
   /// While set, a seek to another item waits for it to complete, like an
-  /// item that takes a while to load.
+  /// item that takes a while to load: the player moves to the item at once,
+  /// buffering, and the seek completes once it's ready.
   Completer<void>? seekGate;
 
   /// While set, setting the sequence waits for it to complete, like a first
   /// track that takes a while to load.
   Completer<void>? loadGate;
+
+  // The load and the seek waiting at their gate. Like the real player
+  // (PlaylistPlayer's interruptLoad() and completeSeek()), a new sequence or
+  // stop() ends a waiting load with PlayerInterruptedException, a load error
+  // ends it with the error, and any other seek, load, stop() or error
+  // completes a waiting seek.
+  Completer<void>? _pendingLoad;
+  Completer<void>? _pendingSeek;
+
+  void _interruptLoad([Object? error]) {
+    final load = _pendingLoad;
+    _pendingLoad = null;
+    load?.completeError(
+      error ?? PlayerInterruptedException('Loading interrupted'),
+    );
+  }
+
+  void _completeSeek() {
+    final seek = _pendingSeek;
+    _pendingSeek = null;
+    seek?.complete();
+  }
 
   /// The gain of the item for [source] (in the notation of
   /// [sequenceSources]) in the current sequence.
@@ -110,7 +133,19 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
   @override
   List<AudioSource> get sequence => List.unmodifiable(_sequence);
 
+  /// Why the player is idle: after [stop], or after an item failed to load
+  /// (see [failures]). Null while it isn't idle, or before anything loaded.
+  String? idleCause;
+
+  /// How many times an item failed to load, by a load error or a failing
+  /// URL: each one leaves the player idle
+  int failures = 0;
+
+  /// Called with each seek within the current item, before it's carried out
+  void Function(Duration position)? onSeekWithinItem;
+
   void _setState(bool playing, ProcessingState processingState) {
+    if (processingState != ProcessingState.idle) idleCause = null;
     _currentPlayerState = PlayerState(playing, processingState);
     _stateController.add(_currentPlayerState);
   }
@@ -132,8 +167,13 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
   /// The item at the current index failed to load: the player reports the
   /// error and goes idle.
   void _failCurrent() {
+    final error = PlayerException(0, 'Source error', _currentIndex);
+    failures++;
     _setState(playing, ProcessingState.idle);
-    _errorController.add(PlayerException(0, 'Source error', _currentIndex));
+    idleCause = 'error';
+    _errorController.add(error);
+    _interruptLoad(error);
+    _completeSeek();
   }
 
   @override
@@ -142,6 +182,8 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
     int initialIndex = 0,
     Duration initialPosition = Duration.zero,
   }) async {
+    _interruptLoad();
+    _completeSeek();
     _sequence
       ..clear()
       ..addAll(audioSources);
@@ -149,12 +191,18 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
     final index = initialIndex;
     loadedSources.add(_describe(_sequence[index]));
     _moveTo(index, initialPosition);
-    if (loadGate != null) {
+    final gate = loadGate;
+    if (gate != null) {
+      final load = _pendingLoad = Completer<void>();
       _setState(playing, ProcessingState.buffering);
-      await loadGate!.future;
+      // Throws if a new sequence, stop() or a load error ends the load first
+      await Future.any([gate.future, load.future]);
+      _pendingLoad = null;
     }
     if (_fails(index)) {
+      failures++;
       _setState(playing, ProcessingState.idle);
+      idleCause = 'error';
       throw PlayerException(0, 'Network unreachable', index);
     }
     _setState(playing, ProcessingState.ready);
@@ -171,9 +219,12 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
     return requested;
   }
 
+  /// Like ExoPlayer's playWhenReady: an idle player stays idle (it has to
+  /// load first), a buffering one plays once it's ready, a completed one
+  /// stays completed.
   @override
   Future<void> play() async {
-    _setState(true, ProcessingState.ready);
+    _setState(true, processingState);
 
     // Playback continues from the current position
     _positionController.add(_position);
@@ -186,7 +237,10 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
 
   @override
   Future<void> stop() async {
+    _interruptLoad();
+    _completeSeek();
     _setState(false, ProcessingState.idle);
+    idleCause = 'stop';
     _position = Duration.zero;
     _positionController.add(_position);
   }
@@ -196,19 +250,47 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
 
   @override
   Future<void> seek(Duration? position, {int? index}) async {
+    _completeSeek();
     if (index == null || index == _currentIndex) {
+      onSeekWithinItem?.call(position ?? Duration.zero);
       seeks.add(position ?? Duration.zero);
       _position = position ?? Duration.zero;
       _positionController.add(_position);
+      // A completed player seeks back into the item
+      if (processingState == ProcessingState.completed) {
+        _setState(playing, ProcessingState.ready);
+      }
       return;
     }
-    await seekGate?.future;
+    // Like Media3 (ExoPlayerImpl.seekTo), an index past the end of the
+    // sequence is ignored
+    if (index >= _sequence.length) return;
+    // An idle player (stopped, or after an error) moves to the item but
+    // doesn't load it, and the seek completes at once (PlaylistPlayer)
+    if (processingState == ProcessingState.idle) {
+      _moveTo(index, position ?? Duration.zero);
+      return;
+    }
     loadedSources.add(_describe(_sequence[index]));
     _moveTo(index, position ?? Duration.zero);
+    final gate = seekGate;
+    if (gate != null) {
+      final seek = _pendingSeek = Completer<void>();
+      _setState(playing, ProcessingState.buffering);
+      await Future.any([gate.future, seek.future]);
+      // Completed by a later seek, load, stop() or error
+      if (seek.isCompleted) return;
+      _pendingSeek = null;
+    }
     if (_fails(index)) {
       // Like the real player, the seek completes once the item has failed
       // and the error was reported
       await Future.microtask(_failCurrent);
+      return;
+    }
+    // A seek takes a completed player back into the sequence
+    if (gate != null || processingState == ProcessingState.completed) {
+      _setState(playing, ProcessingState.ready);
     }
   }
 
@@ -296,6 +378,21 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
 
   /// The current item running out of buffered data while it plays.
   void simulateBuffering() => _setState(playing, ProcessingState.buffering);
+
+  /// Another app taking the audio focus for good (e.g. starting its own
+  /// playback): ExoPlayer pauses by itself, without a call from the service.
+  void simulateFocusLoss() => _setState(false, processingState);
+
+  /// Enough data buffered again after [simulateBuffering], or for a load or
+  /// seek waiting at its gate: the item plays on, or stays paused. Like the
+  /// real player, a load or seek waiting to be ready completes.
+  void simulateBufferingEnd() {
+    _setState(playing, ProcessingState.ready);
+    final load = _pendingLoad;
+    _pendingLoad = null;
+    load?.complete();
+    _completeSeek();
+  }
 
   /// A position update without time passing, like after a seek. See
   /// [simulatePlayingTo] for playback.

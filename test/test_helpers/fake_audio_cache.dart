@@ -25,6 +25,10 @@ class FakeAudioCache implements AudioCache {
   /// When set, downloads wait for it to complete.
   Completer<void>? gate;
 
+  /// When set, [firstCached] waits for it to complete, like a slow look into
+  /// the player's cache.
+  Completer<void>? lookupGate;
+
   /// Every song downloaded, in order.
   final List<String> downloaded = [];
 
@@ -97,6 +101,7 @@ class FakeAudioCache implements AudioCache {
 
   @override
   Future<Song?> firstCached(List<Song> songs) async {
+    await lookupGate?.future;
     for (final song in songs) {
       if (cached.contains(song.id)) return song;
     }

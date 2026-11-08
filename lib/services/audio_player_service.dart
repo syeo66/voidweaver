@@ -92,8 +92,9 @@ class AudioPlayerService extends ChangeNotifier {
   // Set while setAudioSources() runs; its load errors are thrown, not handled
   // through the error stream
   bool _settingSources = false;
-  // A playback error reported while a player operation was running
-  PlayerException? _deferredError;
+  // A playback error reported while a player operation was running, and
+  // the start it came during
+  ({PlayerException error, int ticket})? _deferredError;
   // The index _jumpTo() seeked to, until the player reports it. Until then,
   // an index event can still be from before the seek: after previous(), the
   // old track's index would look like an advance.
@@ -114,6 +115,17 @@ class AudioPlayerService extends ChangeNotifier {
   // pause() during one clears it, play() sets it again
   int _startsInProgress = 0;
   bool _playPending = false;
+  // The ticket of the last load or skip, taken when it begins. A load only
+  // starts playback if no skip began after it (one queued behind it makes
+  // its own target current before the load gets to start), and a player
+  // error is only handled if no load or skip began after it arrived, see
+  // _continueAfterError()
+  int _lastStart = 0;
+  // The last ticket when stop() was called. Stop ends a load in progress,
+  // which only notices a moment later, so a play() right after it loads
+  // anew instead of leaving playback to that load. A skip that was in
+  // progress still reaches its target, paused, and reports its failure.
+  int _stopTicket = -1;
 
   // Set when a song couldn't be loaded (e.g. offline at startup); the queue
   // is loaded again on the next play()
@@ -195,6 +207,21 @@ class AudioPlayerService extends ChangeNotifier {
     _initializePlayer();
     unawaited(_scrobbleQueue.initialize());
   }
+
+  /// Loads and skips in progress that start playback once their track is
+  /// ready, see [playWhenReady]
+  @visibleForTesting
+  int get startsInProgress => _startsInProgress;
+
+  /// Changes to the player's index or sequence that are queued or running,
+  /// see _playerOp()
+  @visibleForTesting
+  int get pendingPlayerOps => _pendingPlayerOps;
+
+  /// Whether the next play() or skip loads the queue again (after stop() or
+  /// an error) instead of seeking
+  @visibleForTesting
+  bool get needsSourceReload => _needsSourceReload;
 
   /// Whether a skip is being carried out; the UI disables the skip buttons.
   bool get isSkipOperationInProgress => _skipOperationInProgress;
@@ -279,7 +306,7 @@ class AudioPlayerService extends ChangeNotifier {
       switch (state.processingState) {
         case ProcessingState.completed:
           // Not again after _onQueueCompleted() paused the player
-          if (state.playing) _onQueueCompleted();
+          if (state.playing) _onPlayerCompleted();
           return;
         case ProcessingState.idle:
           if (!state.playing) _playbackState = PlaybackState.stopped;
@@ -541,12 +568,17 @@ class AudioPlayerService extends ChangeNotifier {
     return result.whenComplete(() {
       _pendingPlayerOps--;
       if (_pendingPlayerOps > 0 || _disposed) return;
-      final error = _deferredError;
+      final deferred = _deferredError;
       _deferredError = null;
-      if (error != null) {
-        _onPlayerError(error);
+      if (deferred != null) {
+        _onPlayerError(deferred.error, ticket: deferred.ticket);
       } else {
         _followPlayer();
+      }
+      // The end of the queue, reported while the operation ran
+      if (_audioPlayer.processingState == ProcessingState.completed &&
+          _audioPlayer.playing) {
+        _onPlayerCompleted();
       }
     });
   }
@@ -579,8 +611,11 @@ class AudioPlayerService extends ChangeNotifier {
     int startIndex, {
     Duration position = Duration.zero,
     bool play = true,
+    int? ticket,
   }) async {
     final generation = ++_generation;
+    // A load that continues a start keeps its ticket
+    ticket ??= ++_lastStart;
     _awaitedIndex = null;
     _preparingLoad = generation;
     _seekBeforeLoad = null;
@@ -628,11 +663,14 @@ class AudioPlayerService extends ChangeNotifier {
         _log.warning(
           '[offline] Could not load index $startIndex, continuing at cached index $next',
         );
-        return await _loadQueue(next, play: _playPending);
+        return await _loadQueue(next, play: _playPending, ticket: ticket);
       }
       if (generation != _generation) return;
 
       _needsSourceReload = false;
+      // A skip queued behind the load has taken over (its target is current
+      // already) and starts playback itself
+      if (ticket != _lastStart) return;
       if (play) _startUnlessPaused();
     } finally {
       if (play) _startsInProgress--;
@@ -655,41 +693,78 @@ class AudioPlayerService extends ChangeNotifier {
   /// Moves playback to [index] within the current sequence. Without [play]
   /// the track stays paused there, as after a pause() during the move.
   Future<void> _jumpTo(int index, {bool play = true}) async {
-    // After stop() or an error the player has to load again
+    // After stop() or an error the player has to load again. So does a load
+    // that hasn't handed its sequence to the player yet (it's still reading
+    // the start track's ReplayGain): the player holds the one before, where
+    // [index] is another song or none. The load starts again at [index].
     if (_needsSourceReload ||
+        _preparingLoad == _generation ||
         _audioPlayer.processingState == ProcessingState.idle) {
       return _loadQueue(index, play: play);
     }
 
     final generation = _generation;
+    final ticket = ++_lastStart;
     _playPending = play;
     _startsInProgress++;
+    var reload = false;
     try {
       // Inside the operation, so an index event for the old track arriving
       // meanwhile isn't taken for an advance from the new one
       await _playerOp(() async {
         if (generation != _generation) return;
+        // The load queued before this one failed meanwhile: the player is
+        // idle, where a seek doesn't load the target. Loaded after the
+        // operation instead, right away: the failed load then finds a newer
+        // generation and doesn't report a failure the skip has superseded
+        // (with its message naming the skip's target, current by then).
+        // Load-bearing: nothing else keeps that failure quiet (_loadQueue()'s
+        // `generation != _generation` return depends on this reload). The
+        // check after the ReplayGain read comes too late for it.
+        if (_needsSourceReload ||
+            _audioPlayer.processingState == ProcessingState.idle) {
+          reload = true;
+          return;
+        }
         // As playing even without [play]: a play() during the move starts
         // it, and if it stays paused, _startUnlessPaused() clears the start
         _setCurrentTrack(index, playing: true);
+        // Set with the current track: from here on the player is on another
+        // item than the service until it reports [index], which isn't an
+        // advance (see _followPlayer()), also if this ends in a reload.
+        // Cleared once the player reports [index], or by the next
+        // _loadQueue(). If the player moved on past it before this operation
+        // ended (a track shorter than the seek takes), it would stay set
+        // until then.
+        _awaitedIndex = index;
         // Before seeking, so the track starts at its own gain
         await _loadReplayGain(index);
         if (generation != _generation) return;
-        _awaitedIndex = index;
+        // Also if the track that was playing failed, or stop() was called,
+        // while the tags were read
+        if (_audioPlayer.processingState == ProcessingState.idle) {
+          reload = true;
+          return;
+        }
         await _seekToItem(index);
       });
-      // The target failed to load: _onPlayerError() takes over, continuing
-      // at a cached track or stopping on this one
-      if (generation != _generation ||
-          _currentIndex != index ||
-          _needsSourceReload) {
+      if (!reload) {
+        // The target failed to load: _onPlayerError() takes over,
+        // continuing at a cached track or stopping on this one
+        if (generation != _generation ||
+            _currentIndex != index ||
+            _needsSourceReload) {
+          return;
+        }
+        _startUnlessPaused();
         return;
       }
-
-      _startUnlessPaused();
     } finally {
       _startsInProgress--;
     }
+    if (generation != _generation) return;
+    // Unless a pause() meanwhile cleared it
+    return _loadQueue(index, play: _playPending, ticket: ticket);
   }
 
   /// Seeks to the start of the item at [index]. The player's seek() completes
@@ -741,11 +816,16 @@ class AudioPlayerService extends ChangeNotifier {
   /// The playlist entry behind the player's item at [sequenceIndex], if it
   /// belongs to the current sequence.
   _QueueEntry? _entryAt(int? sequenceIndex) {
+    final tag = _tagAt(sequenceIndex);
+    return tag?.generation == _generation ? tag : null;
+  }
+
+  /// The tag of the player's item at [sequenceIndex], of whichever sequence.
+  _QueueEntry? _tagAt(int? sequenceIndex) {
     final sequence = _audioPlayer.sequence;
     if (sequenceIndex == null || sequenceIndex >= sequence.length) return null;
     final tag = sequence[sequenceIndex].tag;
-    if (tag is! _QueueEntry || tag.generation != _generation) return null;
-    return tag;
+    return tag is _QueueEntry ? tag : null;
   }
 
   void _setCurrentTrack(
@@ -773,6 +853,26 @@ class AudioPlayerService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The player reached the end of its sequence. Handled once no operation
+  /// is changing the player (checked again after it, see _playerOp()), and
+  /// only if the player is on the service's current track. Otherwise the end
+  /// belongs to a track the service has moved away from: a skip's target
+  /// (still reading its ReplayGain before the seek) or a new queue's start
+  /// track would be taken as played to its end, and scrobbled.
+  ///
+  /// The finished track isn't credited with the rest after its last position
+  /// update then (no listenedToEnd()): a skip already scrobbled it if it
+  /// passed the threshold, and a new queue's load means the user left it.
+  void _onPlayerCompleted() {
+    if (_pendingPlayerOps > 0 || _disposed) return;
+    final entry = _entryAt(_audioPlayer.currentIndex);
+    if (entry == null || entry.index != _currentIndex) {
+      _log.fine('Ignoring the end of a track the queue moved away from');
+      return;
+    }
+    _onQueueCompleted();
+  }
+
   /// The last track played to its end. The player stays completed with
   /// `playing` set, which the system controls show as playing, and play()
   /// does nothing in that state. So pause at the start of the last track: Play
@@ -794,11 +894,35 @@ class AudioPlayerService extends ChangeNotifier {
     );
   }
 
-  void _onPlayerError(PlayerException error) {
+  /// [ticket]: the [_lastStart] when the error arrived, for one deferred
+  /// until the player operations were done.
+  void _onPlayerError(PlayerException error, {int? ticket}) {
     // setAudioSources() throws its errors, see _loadQueue()
     if (_settingSources || _disposed) return;
+    ticket ??= _lastStart;
+    // A deferred error, and a load or skip began since it arrived: that one
+    // loads the track it was asked for, so the error must not mark the queue
+    // for reloading (a later Play would load it again, from the start) or
+    // reload it. Checked here, before anything is changed: by now the player
+    // may hold the new sequence, where error.index names another item.
+    if (ticket != _lastStart) {
+      _log.fine('Ignoring an error a later start superseded', error);
+      return;
+    }
+    // An item of a sequence a load is replacing (it's still reading the
+    // start track's ReplayGain): the load replaces it anyway. Otherwise the
+    // error would stop the new queue's start track, which never played. An
+    // error without an item in the sequence (no index, or past its end) is
+    // taken as the current sequence's.
+    final generation = _tagAt(error.index)?.generation ?? _generation;
+    if (generation != _generation) {
+      _log.fine('Ignoring an error of a replaced queue', error);
+      return;
+    }
     if (_pendingPlayerOps > 0) {
-      _deferredError = error;
+      // Handled once the operations are done. A load that replaced the
+      // sequence meanwhile took a later ticket, see _continueAfterError()
+      _deferredError = (error: error, ticket: ticket);
       return;
     }
 
@@ -808,6 +932,16 @@ class AudioPlayerService extends ChangeNotifier {
     // again. Set right away, so _jumpTo() doesn't take its target for started.
     _needsSourceReload = true;
     _pendingResumePosition = Duration.zero;
+    // A skip heading for another track (a press during it moved its target
+    // on) loads that one; this one was left already. Covered by its test in
+    // skip_operations_test.dart only: no randomized run reaches it.
+    final skipTarget = _skipTarget;
+    if (_skipOperationInProgress &&
+        skipTarget != null &&
+        skipTarget != failedIndex) {
+      _log.info('A skip to index $skipTarget goes on past the failed one');
+      return;
+    }
     if (_sourcesStale && playWhenReady) {
       // Most likely the old password in the item's URL: load the queue
       // again, with new URLs, where it failed. If that fails too, it's
@@ -827,7 +961,14 @@ class AudioPlayerService extends ChangeNotifier {
       );
       return;
     }
-    unawaited(_continueAfterError(failedIndex, error, resume: playWhenReady));
+    unawaited(
+      _continueAfterError(
+        failedIndex,
+        error,
+        resume: playWhenReady,
+        ticket: ticket,
+      ),
+    );
   }
 
   /// The API's password changed (see [SubsonicApi.usePassword]). Playback
@@ -847,14 +988,22 @@ class AudioPlayerService extends ChangeNotifier {
     int failedIndex,
     PlayerException error, {
     required bool resume,
+    required int ticket,
   }) async {
     final generation = _generation;
     final next = resume ? await _nextCachedIndex(failedIndex) : null;
-    // The queue was replaced, or a skip took over, while looking
-    if (_disposed || generation != _generation || _pendingPlayerOps > 0) {
+    // The queue was replaced, or a load or skip took over, while looking.
+    // Not any player operation: a seek meanwhile (the user dragging the
+    // seek bar while it buffered) would leave the failure unhandled, shown
+    // as loading for good.
+    if (_disposed || generation != _generation || ticket != _lastStart) {
       return;
     }
-    if (next != null) {
+    // Paused while looking: as for a track that failed while paused, it
+    // stops on the failed one
+    if (next != null && !playWhenReady) {
+      _log.info('[offline] Paused meanwhile, not continuing at index $next');
+    } else if (next != null) {
       _log.info('[offline] Continuing at cached index $next');
       try {
         await _jumpTo(next);
@@ -895,7 +1044,8 @@ class AudioPlayerService extends ChangeNotifier {
     );
     if (_playlist.isEmpty) return;
 
-    if (_startsInProgress > 0) {
+    // Unless no load or skip began since a stop()
+    if (_startsInProgress > 0 && _stopTicket != _lastStart) {
       // Paused during a load or skip: it starts playback once it's done
       _playPending = true;
       notifyListeners();
@@ -934,6 +1084,7 @@ class AudioPlayerService extends ChangeNotifier {
 
   Future<void> stop() async {
     _playPending = false;
+    _stopTicket = _lastStart;
     await _audioPlayer.stop();
     _currentPosition = Duration.zero;
     _totalDuration = Duration.zero;

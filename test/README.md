@@ -8,6 +8,20 @@ flutter test --coverage
 
 Tests need no device, network or platform plugins.
 
+## Randomized playback test
+
+`services/playback_random_actions_test.dart` runs random sequences of presses (in the app and as system commands) and player events (track ends, buffering, load errors, failing URLs, slow seeks and loads, audio focus loss) against `AudioPlayerService` with the fake player, and checks rules that must hold once everything has settled: no skip or start left in progress, nothing stuck at loading, the player holding the service's playlist and on its track, the state matching the player, Pause/Stop and Play holding, an unsuperseded failure stopped and reported once, "now playing" only for the player's current item, no more scrobbles than plays, errors only for tracks the player has been on. 400 runs by default (about 2 s); each rule about the last press checks a good share of them, so a change to the model can't switch one off unnoticed.
+
+```bash
+flutter test test/services/playback_random_actions_test.dart --dart-define=PLAYBACK_SEED=<seed>  # replay one, with the service's log
+flutter test test/services/playback_random_actions_test.dart --dart-define=PLAYBACK_RUNS=20000   # more runs; prints how often each rule was checked
+flutter test test/services/playback_random_actions_test.dart --dart-define=PLAYBACK_STEPS=120    # longer runs (default 40 steps)
+```
+
+Run it with many more runs after changing `audio_player_service.dart`. When it fails, check first whether the fake player can do what the run shows: most false alarms so far were the fake doing something the real one can't (see `mock_audio_player.dart`, whose behaviors follow `PlaylistPlayer` and Media3). A real bug gets a readable regression test of its own in the matching test file.
+
+It doesn't use `fakeAsync`: awaiting `StreamSubscription.cancel()` on a broadcast stream continues on the root zone's microtask queue, which `fakeAsync` doesn't run, so `_seekToItem()` never returns there. Keep that in mind for any `fakeAsync` test of the player service. Time is a fake clock passed to the service instead, and the event loop only advances through `pumpEventQueue()`, so a seed always replays the same way.
+
 ## Integration tests
 
 `integration_test/` runs user flows of the whole app on a device or emulator: log in, play an album to its end (scrobbles included), random songs and the player controls, and a password changed on the server. They run against `FakeSubsonicServer`, which runs inside the app, with the real player (Media3 ExoPlayer and its media session) streaming from it.
@@ -44,7 +58,7 @@ The Java tests (`packages/voidweaver_player/android/src/test/`) cover `GainAudio
 - `widgets/`: error boundaries, album list, album tiles (playing on tap, the error shown), player controls, search screen (debounce, stale responses), sync status indicator
 - `screens/`: home and settings screens, in portrait and landscape at a phone's size (`tester.view`); artist screens (responses arriving after the screen is gone or the user went back); the advanced network settings dialog (validation, keeping the settings it doesn't show)
 - `fixtures/replaygain/`: sample tag data for the parser tests
-- `test_helpers/mock_audio_player.dart`: fake `VoidweaverPlayer` holding a sequence, like the real one; `simulateTrackTransition()`, `simulateCompletion()`, `simulateLoadError()`, `simulateSystemCommand()`, `failingUrls`, `gainOfSource()` etc. Like the real player, a `seek()` to an item in `failingUrls` reports the error, then completes.
+- `test_helpers/mock_audio_player.dart`: fake `VoidweaverPlayer` holding a sequence, like the real one; `simulateTrackTransition()`, `simulateCompletion()`, `simulateLoadError()`, `simulateBuffering()`/`simulateBufferingEnd()`, `simulateFocusLoss()`, `simulateSystemCommand()`, `failingUrls`, `seekGate`/`loadGate`, `gainOfSource()` etc. It follows the real player where the order of events matters: a `seek()` to another item moves there at once and completes once it's ready (or has failed, after reporting the error); a seek past the end is ignored; an idle player moves on a seek but doesn't load; a new sequence, `stop()` or an error ends a waiting load (`PlayerInterruptedException` or the error) and completes a waiting seek; `play()` keeps the processing state (playWhenReady); a seek takes a completed player back to ready.
 
 ## Writing tests
 

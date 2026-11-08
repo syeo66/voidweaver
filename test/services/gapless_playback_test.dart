@@ -46,6 +46,16 @@ void main() {
   Album albumOf(int count) =>
       album([for (var i = 1; i <= count; i++) song('s$i')]);
 
+  // A song the server sends no ReplayGain for: its tags are read from the
+  // file before it starts, through mockApi.readReplayGain
+  Song unread(String id) => Song(
+    id: id,
+    title: 'Title $id',
+    artist: 'Artist',
+    album: 'Album',
+    duration: 180,
+  );
+
   /// Waits until [condition] holds, failing after a second.
   Future<void> until(bool Function() condition, String description) async {
     for (var i = 0; i < 100; i++) {
@@ -500,6 +510,43 @@ void main() {
       expect(player.loadedSources, [urlFor('s1')]);
     });
 
+    test(
+      'the end of the queue arriving during a skip back is not the target\'s',
+      () async {
+        await service.playAlbum(album([unread('s1'), song('s2')]));
+        player.simulateTrackTransition();
+        await until(
+          () => service.currentSong?.id == 's2',
+          'the service follows',
+        );
+        // s1 is scrobbled for the transition; only what follows counts here
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        clearInteractions(mockApi);
+        // Previous reads s1's tags before it seeks back, so the player is
+        // still on s2 when the end of s2 (the last track) arrives
+        final gainRead = Completer<ReplayGainData>();
+        when(mockApi.readReplayGain('s1')).thenAnswer((_) => gainRead.future);
+
+        final skipping = service.previous();
+        await pumpEventQueue();
+        player.simulateCompletion();
+        await pumpEventQueue();
+        gainRead.complete(const ReplayGainData());
+        await skipping;
+        // The scrobble queue sends requests asynchronously, 100 ms apart
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+
+        // s1 wasn't heard yet: the end belonged to s2
+        verifyNever(
+          mockApi.scrobbleSubmission('s1', playedAt: anyNamed('playedAt')),
+        );
+        expect(service.currentSong?.id, 's1');
+        expect(player.currentIndex, 0);
+        expect(player.playing, isTrue);
+        expect(service.playbackState, PlaybackState.playing);
+      },
+    );
+
     test('play after the end replays the last track as a new play', () async {
       await service.playAlbum(albumOf(1));
       player.simulateCompletion();
@@ -666,6 +713,196 @@ void main() {
       expect(errors, isEmpty);
     });
 
+    test('ignores an error of the queue a new album replaces', () async {
+      await service.playAlbum(albumOf(2));
+      final gainRead = Completer<ReplayGainData>();
+      when(mockApi.readReplayGain('n1')).thenAnswer((_) => gainRead.future);
+
+      // The new album reads its first track's tags before it replaces the
+      // player's sequence; meanwhile the old track breaks off
+      final starting = service.playAlbum(
+        Album(
+          id: 'album2',
+          name: 'New',
+          artist: 'Artist',
+          songs: [unread('n1'), song('n2')],
+        ),
+      );
+      await pumpEventQueue();
+      player.simulateLoadError();
+      await pumpEventQueue();
+      gainRead.complete(const ReplayGainData());
+      await starting;
+      await pumpEventQueue();
+
+      expect(errors, isEmpty);
+      expect(service.currentSong?.id, 'n1');
+      expect(player.playing, isTrue);
+      expect(service.playbackState, PlaybackState.playing);
+    });
+
+    test(
+      'ignores an error held during a skip once a new album replaced the queue',
+      () async {
+        await service.playAlbum(album([song('s1'), unread('s2'), song('s3')]));
+        await Future<void>.delayed(pastSkipDebounce);
+        final gainRead = Completer<ReplayGainData>();
+        when(mockApi.readReplayGain('s2')).thenAnswer((_) => gainRead.future);
+
+        // The skip reads its target's tags, so it's still running when the
+        // old track breaks off: the error is held until it's done. By then
+        // another album has replaced the queue.
+        final skipping = service.next();
+        await pumpEventQueue();
+        player.simulateLoadError();
+        final starting = service.playAlbum(
+          Album(
+            id: 'album2',
+            name: 'New',
+            artist: 'Artist',
+            songs: [song('n1'), song('n2')],
+          ),
+        );
+        await pumpEventQueue();
+        gainRead.complete(const ReplayGainData());
+        await skipping;
+        await starting;
+        await pumpEventQueue();
+
+        expect(errors, isEmpty);
+        expect(service.currentSong?.id, 'n1');
+        expect(player.currentIndex, 0);
+        expect(player.playing, isTrue);
+        expect(service.playbackState, PlaybackState.playing);
+      },
+    );
+
+    test('an error held during a skip doesn\'t reload a new album after a '
+        'password change', () async {
+      await service.playAlbum(album([song('s1'), unread('s2'), song('s3')]));
+      await Future<void>.delayed(pastSkipDebounce);
+      final gainRead = Completer<ReplayGainData>();
+      when(mockApi.readReplayGain('s2')).thenAnswer((_) => gainRead.future);
+
+      // The skip reads its target's tags, so it's still running when the
+      // old track breaks off: the error is held until it's done. By then
+      // another album has replaced the queue.
+      // The stream URLs carry an old password: an error loads the queue
+      // again where it failed, which must not be the new album
+      service.credentialsChanged();
+      final skipping = service.next();
+      await pumpEventQueue();
+      player.simulateLoadError();
+      final starting = service.playAlbum(
+        Album(
+          id: 'album2',
+          name: 'New',
+          artist: 'Artist',
+          songs: [song('n1'), song('n2')],
+        ),
+      );
+      await pumpEventQueue();
+      gainRead.complete(const ReplayGainData());
+      await skipping;
+      await starting;
+      await pumpEventQueue();
+
+      expect(errors, isEmpty);
+      expect(
+        player.loadedSources.where((url) => url == urlFor('n1')),
+        hasLength(1),
+      );
+      expect(service.currentSong?.id, 'n1');
+      expect(player.currentIndex, 0);
+      expect(player.playing, isTrue);
+      expect(service.playbackState, PlaybackState.playing);
+    });
+
+    test(
+      'a seek right after a track fails doesn\'t hide the failure',
+      () async {
+        await service.playAlbum(albumOf(1));
+        player.simulateBuffering();
+
+        player.simulateLoadError();
+        // The service gets the error and looks for a downloaded track to go
+        // on at; the user drags the seek bar meanwhile
+        await Future<void>.value();
+        unawaited(service.seekTo(const Duration(seconds: 25)));
+        await pumpEventQueue();
+
+        expect(errors, [startsWith('Could not play "Title s1"')]);
+        expect(service.playbackState, PlaybackState.stopped);
+      },
+    );
+
+    test('a pause while looking for a downloaded track to go on at holds and '
+        'reports the failure', () async {
+      cache.cached.add('s3');
+      await service.playAlbum(albumOf(3));
+      cache.lookupGate = Completer();
+
+      player.simulateLoadError();
+      await pumpEventQueue();
+      // The service looks into the cache for a track to go on at
+      await service.pause();
+      cache.lookupGate!.complete();
+      await pumpEventQueue();
+
+      // As for a track failing while paused: it stops on it, and the
+      // message is expected (s1 did fail)
+      expect(player.playing, isFalse);
+      expect(service.currentSong?.id, 's1');
+      expect(service.playbackState, PlaybackState.stopped);
+      expect(errors, [startsWith('Could not play "Title s1"')]);
+    });
+
+    test('an error held while a new album loads, with a seek queued behind the '
+        'load, leaves the new album as it is', () async {
+      await service.playAlbum(album([song('s1'), unread('s2'), song('s3')]));
+      await Future<void>.delayed(pastSkipDebounce);
+      final gainRead = Completer<ReplayGainData>();
+      when(mockApi.readReplayGain('s2')).thenAnswer((_) => gainRead.future);
+
+      // The skip reads its target's tags; the old track breaks off
+      // meanwhile, so its error is held until the operations are done
+      final skipping = service.next();
+      await pumpEventQueue();
+      player.simulateLoadError();
+      player.loadGate = Completer();
+      final starting = service.playAlbum(
+        Album(
+          id: 'album2',
+          name: 'New',
+          artist: 'Artist',
+          songs: [song('n1'), song('n2')],
+        ),
+      );
+      await pumpEventQueue();
+      gainRead.complete(const ReplayGainData());
+      await pumpEventQueue();
+      // The new album's load is running: a seek queues behind it
+      final seeking = service.seekTo(const Duration(seconds: 60));
+      player.loadGate!.complete();
+      await skipping;
+      await starting;
+      await seeking;
+      await pumpEventQueue();
+      expect(service.currentSong?.id, 'n1');
+      expect(player.playing, isTrue);
+
+      // Pause and Play resume the new album where it is, without loading
+      // it again
+      await service.pause();
+      final loads = player.loadedSources.length;
+      await service.play();
+      await pumpEventQueue();
+      expect(player.loadedSources, hasLength(loads));
+      expect(player.position, const Duration(seconds: 60));
+      expect(player.playing, isTrue);
+      expect(errors, isEmpty);
+    });
+
     test('leaves a failed start to its caller', () async {
       player.failingUrls.add(urlFor('s1'));
 
@@ -770,6 +1007,49 @@ void main() {
 
   // The play button stays a pause button while a track loads or buffers
   group('pausing while loading', () {
+    test('play right after a stop during a slow load plays', () async {
+      await service.playAlbum(albumOf(2));
+      await service.stop();
+      player.loadGate = Completer();
+
+      unawaited(service.play());
+      await pumpEventQueue();
+      // Stop ends the load; the play right after it comes before the load
+      // has noticed
+      unawaited(service.stop());
+      unawaited(service.play());
+      await pumpEventQueue();
+      player.loadGate!.complete();
+      await pumpEventQueue();
+
+      expect(player.playing, isTrue);
+      expect(player.processingState, ProcessingState.ready);
+      expect(service.playbackState, PlaybackState.playing);
+      expect(service.startsInProgress, 0);
+    });
+
+    test('play after a stop and a skip during the slow load plays', () async {
+      await service.playAlbum(albumOf(3));
+      await Future<void>.delayed(pastSkipDebounce);
+      await service.stop();
+      player.loadGate = Completer();
+
+      // After the stop the skip loads the queue at its target; Play during
+      // that load leaves the start to it
+      final skipping = service.next();
+      await pumpEventQueue();
+      await service.play();
+      player.loadGate!.complete();
+      await skipping;
+      await pumpEventQueue();
+
+      expect(service.currentSong?.id, 's2');
+      expect(player.currentIndex, 1);
+      expect(player.playing, isTrue);
+      expect(service.playbackState, PlaybackState.playing);
+      expect(service.startsInProgress, 0);
+    });
+
     test('pause while buffering pauses, play continues', () async {
       cache.reachable = false;
       await service.playAlbum(albumOf(2));
