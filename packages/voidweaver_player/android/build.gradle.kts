@@ -1,6 +1,9 @@
 group = "red.ochsenbein.voidweaver.player"
 version = "1.0"
 
+// Only for building the plugin on its own: in the app's build, AGP comes from
+// android/settings.gradle.kts, whose version applies to this project too.
+// Keep the two the same.
 buildscript {
     repositories {
         google()
@@ -8,7 +11,7 @@ buildscript {
     }
 
     dependencies {
-        classpath("com.android.tools.build:gradle:9.1.0")
+        classpath("com.android.tools.build:gradle:9.5.1")
     }
 }
 

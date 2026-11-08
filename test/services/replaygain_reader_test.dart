@@ -335,6 +335,18 @@ void main() {
       );
     });
 
+    test('has unavailable data when the rest can\'t be read', () async {
+      // The first 256KB alone don't contain the ReplayGain frames, and the
+      // source has no more (a partly cached file)
+      final bytes = loadFixture('thebrowning_not_alone_evolved_large_cover');
+      final data = await ReplayGainReader.readFromHead(
+        (length) async =>
+            Uint8List.sublistView(bytes, 0, math.min(length, 256 * 1024)),
+      );
+      expect(data.hasAnyData, isFalse);
+      expect(data.unavailable, isTrue);
+    });
+
     test('requiredHeaderSize leaves small tags alone', () {
       final bytes = loadFixture('mindinabox_broken_legacies_01_evasion');
       expect(ReplayGainReader.requiredHeaderSize(bytes), bytes.length);
@@ -418,6 +430,18 @@ void main() {
     test('returns no data for an empty tag', () {
       final data = ReplayGainReader.parseBytes(id3v23([]));
       expect(data.hasAnyData, isFalse);
+    });
+
+    test('a file read without tags is not unavailable', () async {
+      final data = await ReplayGainReader.readFromHead((_) async => id3v23([]));
+      expect(data.hasAnyData, isFalse);
+      expect(data.unavailable, isFalse);
+    });
+
+    test('has unavailable data when the start can\'t be read', () async {
+      final data = await ReplayGainReader.readFromHead((_) async => null);
+      expect(data.hasAnyData, isFalse);
+      expect(data.unavailable, isTrue);
     });
   });
 
@@ -989,13 +1013,16 @@ void main() {
     group('with a fallback URL', () {
       /// Serves the tags at /stream, and answers /download with [download]
       Future<(String, String, List<String>)> serveBoth(
-        Future<void> Function(HttpResponse) download,
-      ) async {
+        Future<void> Function(HttpResponse) download, {
+        Future<void> Function(HttpResponse)? stream,
+      }) async {
         final paths = <String>[];
         final server = await serve((request) async {
           paths.add(request.uri.path);
           if (request.uri.path == '/download') {
             await download(request.response);
+          } else if (stream != null) {
+            await stream(request.response);
           } else {
             request.response.add(
               id3v23(txxxFrame('REPLAYGAIN_TRACK_GAIN', '-6.5 dB')),
@@ -1034,6 +1061,8 @@ void main() {
           client: client,
         );
         expect(data.hasAnyData, isFalse);
+        // Known to have none, see ReplayGainResolver.readMissing
+        expect(data.unavailable, isFalse);
         expect(paths, ['/download']);
       });
 
@@ -1071,6 +1100,26 @@ void main() {
         expect(paths, ['/download', '/stream']);
       });
 
+      test('has unavailable data when the server refuses both', () async {
+        final (download, stream, paths) = await serveBoth(
+          (response) async {
+            response.statusCode = HttpStatus.forbidden;
+          },
+          stream: (response) async {
+            response.statusCode = HttpStatus.forbidden;
+          },
+        );
+
+        final data = await ReplayGainReader.readFromUrl(
+          download,
+          fallbackUrl: stream,
+          client: client,
+        );
+        expect(data.hasAnyData, isFalse);
+        expect(data.unavailable, isTrue);
+        expect(paths, ['/download', '/stream']);
+      });
+
       test('gives up on both within the timeout', () async {
         final paths = <String>[];
         // The first URL never answers
@@ -1093,6 +1142,7 @@ void main() {
           timeout: const Duration(milliseconds: 200),
         );
         expect(data.hasAnyData, isFalse);
+        expect(data.unavailable, isTrue);
         await Future<void>.delayed(const Duration(milliseconds: 100));
         expect(paths, ['/download']);
       });
@@ -1109,6 +1159,7 @@ void main() {
         timeout: const Duration(milliseconds: 200),
       );
       expect(data.hasAnyData, isFalse);
+      expect(data.unavailable, isTrue);
       expect(stopwatch.elapsed, lessThan(const Duration(seconds: 2)));
     });
   });

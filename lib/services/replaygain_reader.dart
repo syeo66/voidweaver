@@ -30,8 +30,9 @@ class ReplayGainReader {
   /// [client] (see `SubsonicApi.readReplayGain`). If the server refuses [url]
   /// (an error status, or a Subsonic error response instead of audio), reads
   /// from [fallbackUrl] instead. Playback waits for this, so after [timeout]
-  /// (for both) it gives up and returns no data (the fallback gain applies)
-  /// rather than hold it up on a stalled connection.
+  /// (for both) it gives up and returns [ReplayGainData.unavailable] (the
+  /// fallback gain applies) rather than hold it up on a stalled connection;
+  /// so it does if the server refuses both.
   static Future<ReplayGainData> readFromUrl(
     String url, {
     required http.Client client,
@@ -53,7 +54,7 @@ class ReplayGainReader {
         }
         readerLog(() => 'The server refused the request');
       }
-      return const ReplayGainData();
+      return const ReplayGainData.unavailable();
     }
 
     try {
@@ -62,11 +63,11 @@ class ReplayGainReader {
       readerLog(() => 'Reading ReplayGain metadata timed out after $timeout');
       timedOut = true;
       await head?.close();
-      return const ReplayGainData();
+      return const ReplayGainData.unavailable();
     } catch (e, stackTrace) {
       readerLog(() => 'Error reading ReplayGain metadata: $e');
       readerLog(() => 'Stack trace: $stackTrace');
-      return const ReplayGainData();
+      return const ReplayGainData.unavailable();
     }
   }
 
@@ -85,19 +86,23 @@ class ReplayGainReader {
       }
     } catch (e) {
       readerLog(() => 'Error reading ReplayGain metadata from file: $e');
-      return const ReplayGainData();
+      return const ReplayGainData.unavailable();
     }
   }
 
   /// Reads ReplayGain metadata through [readHead], which returns up to the
   /// given number of bytes from the start of the audio (null if unavailable).
-  /// Reads more if the tags extend past the first 256 KB.
+  /// Reads more if the tags extend past the first 256 KB. Returns
+  /// [ReplayGainData.unavailable] if the start can't be read, or no data was
+  /// found in tags that were cut off.
   static Future<ReplayGainData> readFromHead(
     Future<Uint8List?> Function(int length) readHead,
   ) async {
     try {
       final head = await readHead(_maxHeaderSize);
-      if (head == null || head.isEmpty) return const ReplayGainData();
+      if (head == null || head.isEmpty) {
+        return const ReplayGainData.unavailable();
+      }
       var bytes = head;
       readerLog(
         () =>
@@ -106,6 +111,7 @@ class ReplayGainReader {
       );
       // FLAC blocks and MP4 atoms reveal the next one's position only once
       // they are read, so this can take several steps
+      var truncated = false;
       for (
         var required = requiredHeaderSize(bytes);
         required > bytes.length;
@@ -115,13 +121,21 @@ class ReplayGainReader {
           () => 'Metadata extends to $required bytes, reading the rest',
         );
         final more = await readHead(required);
-        if (more == null || more.length <= bytes.length) break;
+        if (more == null || more.length <= bytes.length) {
+          truncated = true;
+          break;
+        }
         bytes = more;
       }
-      return await _parseInBackground(bytes);
+      final data = await _parseInBackground(bytes);
+      // The tags may continue in the part that couldn't be read
+      if (truncated && !data.hasAnyData) {
+        return const ReplayGainData.unavailable();
+      }
+      return data;
     } catch (e) {
       readerLog(() => 'Error reading ReplayGain metadata: $e');
-      return const ReplayGainData();
+      return const ReplayGainData.unavailable();
     }
   }
 

@@ -1,5 +1,5 @@
 name: voidweaver
-description: A Flutter audioplayer app connecting to Subsonic API with advanced caching
+description: Android music player for a Subsonic server (Navidrome behind subsoxy) that plays whole albums and random songs
 publish_to: none
 version: 1.1.6+2
 
@@ -45,4 +45,4 @@ flutter_launcher_icons:
   android: "launcher_icon"
   ios: false
   image_path: "assets/icon/icon.png"
-  min_sdk_android: 21 # android min sdk min:16, default 21
+  min_sdk_android: 24 # the app's minSdk (Flutter's default, and the player plugin's)

@@ -81,6 +81,21 @@ void main() {
       verifyNever(api.readReplayGain(any));
     });
 
+    test(
+      'reads the file on the server when the cached tag is cut off',
+      () async {
+        // A partly cached track whose tag runs past the cached part
+        cache.cached.add('s1');
+        cache.tags['s1'] = const ReplayGainData.unavailable();
+        when(api.readReplayGain('s1'))
+            .thenAnswer((_) async => const ReplayGainData(trackGain: -9));
+
+        final data = await resolver.readMissing(song());
+
+        expect(data?.trackGain, -9);
+      },
+    );
+
     test('reads the start of the file on the server otherwise', () async {
       when(api.readReplayGain('s1'))
           .thenAnswer((_) async => const ReplayGainData(trackGain: -9));
@@ -94,6 +109,59 @@ void main() {
       when(api.readReplayGain('s1')).thenThrow(Exception('offline'));
 
       expect(await resolver.readMissing(song()), isNull);
+    });
+
+    // Starts and skips wait for the read, up to a few seconds each time
+    test('does not read a file without tags again', () async {
+      when(api.readReplayGain('s1'))
+          .thenAnswer((_) async => const ReplayGainData());
+
+      final first = await resolver.readMissing(song());
+      final second = await resolver.readMissing(song());
+
+      expect(first?.hasAnyData, isFalse);
+      expect(second?.hasAnyData, isFalse);
+      verify(api.readReplayGain('s1')).called(1);
+    });
+
+    test('reads again after the file could not be read', () async {
+      var reads = 0;
+      when(api.readReplayGain('s1')).thenAnswer(
+        (_) async => ++reads == 1
+            ? const ReplayGainData.unavailable()
+            : const ReplayGainData(trackGain: -7),
+      );
+
+      await resolver.readMissing(song());
+      final data = await resolver.readMissing(song());
+
+      expect(data?.trackGain, -7);
+      verify(api.readReplayGain('s1')).called(2);
+    });
+
+    test('reads again after a read that threw', () async {
+      var reads = 0;
+      when(api.readReplayGain('s1')).thenAnswer((_) async {
+        if (++reads == 1) throw Exception('offline');
+        return const ReplayGainData(trackGain: -7);
+      });
+
+      expect(await resolver.readMissing(song()), isNull);
+      final data = await resolver.readMissing(song());
+
+      expect(data?.trackGain, -7);
+      verify(api.readReplayGain('s1')).called(2);
+    });
+
+    test('remembers a downloaded file without tags too', () async {
+      cache.cached.add('s1');
+      cache.tags['s1'] = const ReplayGainData();
+
+      await resolver.readMissing(song());
+      cache.cached.remove('s1');
+      await resolver.readMissing(song());
+
+      verifyNever(api.readReplayGain(any));
     });
   });
 }

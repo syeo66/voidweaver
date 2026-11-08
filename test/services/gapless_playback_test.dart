@@ -513,6 +513,11 @@ void main() {
     test(
       'the end of the queue arriving during a skip back is not the target\'s',
       () async {
+        // s1's tags couldn't be read at the start, so Previous reads them
+        // again (a file read without tags wouldn't be, see
+        // ReplayGainResolver.readMissing)
+        when(mockApi.readReplayGain('s1'))
+            .thenAnswer((_) async => const ReplayGainData.unavailable());
         await service.playAlbum(album([unread('s1'), song('s2')]));
         player.simulateTrackTransition();
         await until(
