@@ -70,6 +70,7 @@ class ScrobbleQueue {
   final void Function()? onSubmitted;
   final Duration _initialRetryDelay;
   final Duration _maxRetryDelay;
+  final DateTime Function() _clock;
   final List<ScrobbleRequest> _queue = [];
   // Set while a submission is waiting to be sent again
   Timer? _retryTimer;
@@ -82,6 +83,7 @@ class ScrobbleQueue {
     this.onSubmitted,
     @visibleForTesting this._initialRetryDelay = const Duration(seconds: 30),
     @visibleForTesting this._maxRetryDelay = const Duration(minutes: 5),
+    @visibleForTesting this._clock = DateTime.now,
   });
 
   /// Initialize the queue by loading persisted requests
@@ -101,7 +103,7 @@ class ScrobbleQueue {
       ScrobbleRequest(
         songId: songId,
         type: ScrobbleType.nowPlaying,
-        queuedAt: DateTime.now(),
+        queuedAt: _clock(),
       ),
     );
   }
@@ -113,7 +115,7 @@ class ScrobbleQueue {
         songId: songId,
         type: ScrobbleType.submission,
         playedAt: playedAt,
-        queuedAt: DateTime.now(),
+        queuedAt: _clock(),
       ),
     );
   }
@@ -162,9 +164,10 @@ class ScrobbleQueue {
 
         final request = _queue.first;
 
-        if (DateTime.now().difference(request.queuedAt) > _maxAge) {
+        final age = _clock().difference(request.queuedAt);
+        if (age > _maxAge) {
           _log.info(
-            'Dropping old scrobble request for song ${request.songId} (age: ${DateTime.now().difference(request.queuedAt).inDays} days)',
+            'Dropping old scrobble request for song ${request.songId} (age: ${age.inDays} days)',
           );
           _queue.remove(request);
           continue;

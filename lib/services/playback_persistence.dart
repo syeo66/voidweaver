@@ -55,26 +55,6 @@ class PersistedPlaybackState {
     }
   }
 
-  PersistedPlaybackState copyWith({
-    List<Song>? playlist,
-    int? currentIndex,
-    Duration? currentPosition,
-    bool? isPlaying,
-    DateTime? lastUpdated,
-    String? playlistSource,
-    String? sourceId,
-  }) {
-    return PersistedPlaybackState(
-      playlist: playlist ?? this.playlist,
-      currentIndex: currentIndex ?? this.currentIndex,
-      currentPosition: currentPosition ?? this.currentPosition,
-      isPlaying: isPlaying ?? this.isPlaying,
-      lastUpdated: lastUpdated ?? this.lastUpdated,
-      playlistSource: playlistSource ?? this.playlistSource,
-      sourceId: sourceId ?? this.sourceId,
-    );
-  }
-
   bool get isEmpty => playlist.isEmpty;
   bool get hasValidIndex => currentIndex >= 0 && currentIndex < playlist.length;
   Song? get currentSong => hasValidIndex ? playlist[currentIndex] : null;

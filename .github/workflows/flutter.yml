@@ -37,6 +37,18 @@ jobs:
     - name: Install dependencies
       run: flutter pub get
 
+    # The generated mocks must match their @GenerateMocks annotations; if this
+    # fails, run build_runner locally and commit the result (see test/README.md)
+    - name: Check the generated mocks are up to date
+      run: |
+        dart run build_runner build --delete-conflicting-outputs
+        # Also catches a generated file that was never committed
+        if [ -n "$(git status --porcelain -- test)" ]; then
+          git status --porcelain -- test
+          git diff -- test
+          exit 1
+        fi
+
     - name: Verify formatting
       run: dart format --output=none --set-exit-if-changed .
     
@@ -44,17 +56,11 @@ jobs:
       run: flutter analyze
     
     - name: Run tests
-      run: flutter test --coverage
+      run: flutter test
 
     - name: Run player plugin tests
       working-directory: packages/voidweaver_player
       run: flutter test
-    
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
-      with:
-        files: coverage/lcov.info
-        fail_ci_if_error: false
 
   build-android:
     runs-on: ubuntu-latest

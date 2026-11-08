@@ -648,6 +648,32 @@ void main() {
 
     tearDown(() => queue.dispose());
 
+    test('a blocked submission expires after 7 days', () async {
+      var now = DateTime(2026, 1, 1);
+      queue = ScrobbleQueue(
+        mockApi,
+        initialRetryDelay: const Duration(milliseconds: 40),
+        maxRetryDelay: const Duration(milliseconds: 160),
+        clock: () => now,
+      );
+      await queue.initialize();
+
+      await queue.queueSubmission('song1', playedAt: now);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      // Still blocked, and kept: the server can't be reached
+      expect(queue.queueSize, 1);
+      expect(queue.retryScheduled, isTrue);
+
+      final sent = attempts.length;
+      now = now.add(const Duration(days: 7, minutes: 1));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      // Dropped without another attempt
+      expect(attempts.length, sent);
+      expect(queue.queueSize, 0);
+      expect(queue.retryScheduled, isFalse);
+    });
+
     test('an empty queue has no timer', () async {
       queue = newQueue();
       await queue.initialize();
