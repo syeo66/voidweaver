@@ -1,7 +1,7 @@
 name: voidweaver
 description: Android music player for a Subsonic server (Navidrome behind subsoxy) that plays whole albums and random songs
 publish_to: none
-version: 1.1.8+2
+version: 1.1.9+2
 
 environment:
   sdk: ^3.13.0
