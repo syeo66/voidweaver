@@ -107,6 +107,11 @@ class FakeSubsonicServer {
   /// with `EnableDownloads` off: a Subsonic error (code 50).
   bool downloadsEnabled = true;
 
+  /// Endpoints answered with a Subsonic error (code 0, not an auth error)
+  /// instead, like a request that fails. Not retried by the app, unlike a
+  /// connection error.
+  final Set<String> failingEndpoints = {};
+
   /// Every request answered, oldest first
   final List<FakeRequest> requests = [];
 
@@ -170,6 +175,9 @@ class FakeSubsonicServer {
 
       if (!_authenticated(params)) {
         return _xmlError(response, 40, 'Wrong username or password');
+      }
+      if (failingEndpoints.contains(endpoint)) {
+        return _xmlError(response, 0, 'Failing on purpose: $endpoint');
       }
       switch (endpoint) {
         case 'ping':

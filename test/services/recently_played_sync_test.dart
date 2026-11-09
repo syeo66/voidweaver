@@ -114,6 +114,71 @@ void main() {
     expect(server.requestsTo('getAlbumList2').length, greaterThan(hiddenLists));
   });
 
+  // A fetch that fails returns the cached list (see ApiCache). It's shown,
+  // but must not count as up to date.
+  test('a refresh that falls back to the cached list reports the failure '
+      'and keeps the list', () async {
+    final appState = await loggedIn();
+    await _until(() => server.scrobbles.isNotEmpty, 'the play to arrive');
+    await _until(() => listsAfterScrobble() >= 1, 'the list to be fetched');
+    await _until(
+      () => !appState.isLoading && appState.syncStatus != SyncStatus.syncing,
+      'the fetches to finish',
+    );
+    final albums = appState.albums.map((a) => a.id).toList();
+    expect(albums, isNotEmpty);
+    final lastSync = appState.lastSyncTime;
+    expect(lastSync, isNotNull);
+
+    server.failingEndpoints.add('getAlbumList2');
+    await appState.loadAlbums(forceRefresh: true);
+
+    expect(appState.albums.map((a) => a.id), albums);
+    // The pull-to-refresh shows it in a snack bar
+    expect(appState.albumError, isNotNull);
+    expect(appState.lastSyncTime, lastSync);
+  });
+
+  test('a sync that falls back to the cached list fails, and the next one '
+      'fetches the list again', () async {
+    final appState = await loggedIn();
+    // Hidden, so the play counted after the first load started isn't
+    // fetched: the list is out of date
+    appState.setVisible(false);
+    await _until(() => server.scrobbles.isNotEmpty, 'the play to arrive');
+    await _until(() => !appState.isLoading, 'the first load to finish');
+    final albums = appState.albums.map((a) => a.id).toList();
+    expect(albums, isNotEmpty);
+    final lastSync = appState.lastSyncTime;
+
+    server.failingEndpoints.add('getAlbumList2');
+    appState.setVisible(true);
+    expect(appState.syncStatus, SyncStatus.syncing);
+    await _until(
+      () => appState.syncStatus != SyncStatus.syncing,
+      'the sync to finish',
+    );
+    expect(appState.syncStatus, SyncStatus.error);
+    expect(appState.albums.map((a) => a.id), albums);
+    expect(appState.lastSyncTime, lastSync);
+
+    // Still out of date, so it's due when shown again: before, the fallback
+    // counted as the fetch, and the next one came only after 20 minutes
+    server.failingEndpoints.clear();
+    final lists = server.requestsTo('getAlbumList2').length;
+    appState.setVisible(false);
+    appState.setVisible(true);
+    expect(appState.syncStatus, SyncStatus.syncing);
+    await _until(
+      () => appState.syncStatus != SyncStatus.syncing,
+      'the second sync to finish',
+    );
+    expect(appState.syncStatus, SyncStatus.success);
+    expect(server.requestsTo('getAlbumList2'), hasLength(lists + 1));
+    expect(appState.lastSyncTime, isNot(lastSync));
+    expect(appState.albumError, isNull);
+  });
+
   test('a play does not fetch the list of "Recently added"', () async {
     final appState = await loggedIn();
     await appState.setAlbumListType(AlbumListType.newest);

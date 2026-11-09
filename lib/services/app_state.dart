@@ -319,16 +319,27 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final albums = await api.getAlbumList(
+      final result = await api.getAlbumList(
         type: type,
         forceRefresh: forceRefresh || _recentListStale(type),
       );
       // Logged out or switched to the other order meanwhile, in which case
       // the load for that order finishes
       if (!identical(api, _api) || type != albumListType) return;
-      _albums = albums;
-      _lastSyncTime = DateTime.now();
-      if (type == AlbumListType.recent) _scrobblesListed = listed;
+      // The cached list if the fetch failed (e.g. offline): shown, but it
+      // isn't up to date, so the load counts as failed. The list stays on
+      // screen; a refresh by the user reports the error.
+      _albums = result.data;
+      final fetchError = result.fetchError;
+      if (fetchError != null) {
+        _albumError = NetworkErrorHelper.getErrorMessage(
+          fetchError,
+          context: 'Failed to load albums',
+        );
+      } else {
+        _lastSyncTime = DateTime.now();
+        if (type == AlbumListType.recent) _scrobblesListed = listed;
+      }
     } catch (e) {
       if (!identical(api, _api) || type != albumListType) return;
       _albumError = NetworkErrorHelper.getErrorMessage(
@@ -355,7 +366,7 @@ class AppState extends ChangeNotifier {
     final listed = _scrobblesSent;
 
     try {
-      final newAlbums = await api.getAlbumList(
+      final result = await api.getAlbumList(
         type: type,
         forceRefresh: _recentListStale(type),
       );
@@ -368,11 +379,20 @@ class AppState extends ChangeNotifier {
         notifyListeners();
         return;
       }
-      _albums = newAlbums;
-      if (type == AlbumListType.recent) _scrobblesListed = listed;
-      _syncStatus = SyncStatus.success;
-      _lastSyncTime = DateTime.now();
-      _albumError = null;
+      _albums = result.data;
+      final fetchError = result.fetchError;
+      if (fetchError != null) {
+        // The cached list, as the fetch failed: the sync failed, and the
+        // list isn't counted as up to date (its time, the plays it
+        // includes), so the next sync fetches it again
+        _syncStatus = SyncStatus.error;
+        _log.warning('Background sync failed', fetchError);
+      } else {
+        if (type == AlbumListType.recent) _scrobblesListed = listed;
+        _syncStatus = SyncStatus.success;
+        _lastSyncTime = DateTime.now();
+        _albumError = null;
+      }
     } catch (e) {
       if (!identical(api, _api)) return;
       if (type != albumListType) {

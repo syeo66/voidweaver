@@ -49,6 +49,22 @@ class CacheEntry<T> {
   }
 }
 
+/// What [ApiCache.getOrFetchResult] returns: the data, and whether it's the
+/// fallback to a cached entry because the fetch failed.
+class CacheResult<T> {
+  final T data;
+
+  /// Why the data couldn't be fetched, if [data] is the fallback to the
+  /// cached entry; null if it's fresh (fetched, or a cache hit that didn't
+  /// need fetching)
+  final Object? fetchError;
+
+  const CacheResult(this.data, {this.fetchError});
+
+  /// Whether [data] is the cached entry because the fetch failed
+  bool get isStale => fetchError != null;
+}
+
 /// Request deduplication and caching service for one login.
 ///
 /// Each [SubsonicApi] has its own cache, scoped by its [namespace] (server and
@@ -79,7 +95,7 @@ class ApiCache {
   final String namespace;
 
   final Map<String, CacheEntry<Object?>> _memoryCache = {};
-  final Map<String, Completer<Object?>> _ongoingRequests = {};
+  final Map<String, Completer<CacheResult<Object?>>> _ongoingRequests = {};
   final int _maxMemoryEntries;
   final Future<Directory?> Function() _rootProvider;
   Future<_Storage?>? _storageFuture;
@@ -145,7 +161,35 @@ class ApiCache {
   /// the server. An expired entry fetched at the same version is kept for
   /// another [cacheDuration] instead of being fetched again. A null version
   /// means unknown, and the data is fetched.
+  ///
+  /// Use [getOrFetchResult] to tell the stale fallback from fresh data.
   Future<T> getOrFetch<T>(
+    String endpoint,
+    Map<String, String>? params,
+    Future<T> Function() fetcher, {
+    Duration cacheDuration = const Duration(minutes: 5),
+    bool usePersistentCache = false,
+    bool forceRefresh = false,
+    Object? Function(T data)? toJson,
+    T Function(dynamic json)? fromJson,
+    Future<String?> Function()? version,
+  }) async => (await getOrFetchResult<T>(
+    endpoint,
+    params,
+    fetcher,
+    cacheDuration: cacheDuration,
+    usePersistentCache: usePersistentCache,
+    forceRefresh: forceRefresh,
+    toJson: toJson,
+    fromJson: fromJson,
+    version: version,
+  )).data;
+
+  /// Like [getOrFetch], but tells whether the data is the fallback to a
+  /// cached entry because the fetch failed ([CacheResult.isStale]), for
+  /// callers that keep track of when their data was last up to date. Also
+  /// for a request deduplicated onto one that fell back.
+  Future<CacheResult<T>> getOrFetchResult<T>(
     String endpoint,
     Map<String, String>? params,
     Future<T> Function() fetcher, {
@@ -164,7 +208,7 @@ class ApiCache {
       _log.fine('Cache HIT (memory): $key');
       // Now the most recently used, see _remember()
       _remember(key, memoryCached);
-      return memoryCached.data as T;
+      return CacheResult(memoryCached.data as T);
     }
 
     // Check persistent cache if enabled
@@ -177,18 +221,19 @@ class ApiCache {
         _log.fine('Cache HIT (persistent): $key');
         // Store in memory cache for faster access
         _remember(key, persistentCached);
-        return persistentCached.data;
+        return CacheResult(persistentCached.data);
       }
     }
 
     // Check if request is already in progress (deduplication)
     if (_ongoingRequests.containsKey(key)) {
       _log.fine('Request DEDUPLICATED: $key');
-      return await _ongoingRequests[key]!.future as T;
+      final shared = await _ongoingRequests[key]!.future;
+      return CacheResult(shared.data as T, fetchError: shared.fetchError);
     }
 
     // Start new request
-    final completer = Completer<T>();
+    final completer = Completer<CacheResult<T>>();
     // Errors are rethrown to the caller below; don't also report them as
     // unhandled when no deduplicated request is waiting on this future.
     completer.future.ignore();
@@ -242,16 +287,18 @@ class ApiCache {
         }
       }
 
-      completer.complete(result);
-      return result;
+      final fresh = CacheResult(result);
+      completer.complete(fresh);
+      return fresh;
     } catch (error) {
       // Fall back to stale data rather than failing outright
       final stale = memoryCached ?? persistentCached;
       if (stale != null) {
         _log.warning('Cache STALE (fetch failed: $error): $key');
         _remember(key, stale);
-        completer.complete(stale.data as T);
-        return stale.data as T;
+        final fallback = CacheResult(stale.data as T, fetchError: error);
+        completer.complete(fallback);
+        return fallback;
       }
       completer.completeError(error);
       rethrow;

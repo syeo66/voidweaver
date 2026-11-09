@@ -106,7 +106,7 @@ void main() {
 
   test('the fake server serves albums, songs and scrobbles', () async {
     final client = api();
-    final albums = await client.getAlbumList();
+    final albums = (await client.getAlbumList()).data;
     expect(albums.map((a) => a.name), [
       'First Light',
       'Second Wind',

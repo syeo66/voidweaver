@@ -20,6 +20,7 @@ import 'network_retry.dart';
 import 'replaygain_reader.dart';
 
 export '../models/subsonic_models.dart';
+export 'api_cache.dart' show CacheResult;
 
 final _log = Logger('subsonic_api');
 
@@ -272,7 +273,9 @@ class SubsonicApi {
   static const _albumPageSize = 500;
 
   /// Albums in the order of [type]. With [forceRefresh] they're fetched from
-  /// the server even if the cached list hasn't expired yet.
+  /// the server even if the cached list hasn't expired yet. If the fetch
+  /// fails, the cached list is returned, marked stale
+  /// ([CacheResult.isStale]), so the caller can tell it isn't up to date.
   ///
   /// [AlbumListType.newest] is every album, fetched page by page. An expired
   /// list is only fetched again if the server scanned the library since, see
@@ -281,7 +284,7 @@ class SubsonicApi {
   /// [AlbumListType.recent] is only the first page: its order changes with
   /// every play, so it's fetched again whenever it expires, and nobody
   /// scrolls past the last 500 albums played.
-  Future<List<Album>> getAlbumList({
+  Future<CacheResult<List<Album>>> getAlbumList({
     AlbumListType type = AlbumListType.recent,
     bool forceRefresh = false,
   }) async {
@@ -292,7 +295,7 @@ class SubsonicApi {
       albumsFromXml,
     );
 
-    return await _cache.getOrFetch<List<Album>>(
+    return await _cache.getOrFetchResult<List<Album>>(
       'getAlbumList2',
       {'type': type.name, 'size': '$_albumPageSize'},
       () => type == AlbumListType.newest

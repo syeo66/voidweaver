@@ -393,6 +393,145 @@ void main() {
       expect(result, 'cached');
     });
 
+    // Callers that keep track of when their data was last up to date (the
+    // album list's sync) must tell the fallback from fresh data
+    group('getOrFetchResult', () {
+      const expired = Duration(milliseconds: -1);
+      const offline = SocketException('offline');
+
+      Future<CacheResult<String>> get(
+        Future<String> Function() fetcher, {
+        Duration cacheDuration = expired,
+        bool forceRefresh = false,
+        Future<String?> Function()? version,
+        ApiCache? from,
+        bool persistent = true,
+      }) => (from ?? cache).getOrFetchResult<String>(
+        'endpoint',
+        null,
+        fetcher,
+        cacheDuration: cacheDuration,
+        usePersistentCache: persistent,
+        forceRefresh: forceRefresh,
+        version: version,
+      );
+
+      test('fetched data is fresh', () async {
+        final result = await get(() async => 'fetched');
+        expect(result.data, 'fetched');
+        expect(result.isStale, isFalse);
+        expect(result.fetchError, isNull);
+      });
+
+      test('a cache hit is fresh, from memory and from storage', () async {
+        await get(
+          () async => 'cached',
+          cacheDuration: const Duration(hours: 1),
+        );
+
+        final memory = await get(() async => 'not fetched');
+        expect(memory.data, 'cached');
+        expect(memory.isStale, isFalse);
+
+        final restarted = ApiCache.forTesting(directory: directory);
+        await restarted.initialize();
+        final stored = await get(() async => 'not fetched', from: restarted);
+        expect(stored.data, 'cached');
+        expect(stored.isStale, isFalse);
+      });
+
+      test('an entry renewed for an unchanged version is fresh', () async {
+        await get(() async => 'v1 data', version: () async => 'v1');
+        final renewed = await get(
+          () async => 'not fetched',
+          version: () async => 'v1',
+        );
+        expect(renewed.data, 'v1 data');
+        expect(renewed.isStale, isFalse);
+      });
+
+      test('the expired memory entry is stale when the fetch fails', () async {
+        await get(() async => 'old');
+        final result = await get(() async => throw offline);
+        expect(result.data, 'old');
+        expect(result.isStale, isTrue);
+        expect(result.fetchError, same(offline));
+      });
+
+      test(
+        'the stored entry is stale when the fetch fails after a restart',
+        () async {
+          await get(() async => 'saved');
+          final restarted = ApiCache.forTesting(directory: directory);
+          await restarted.initialize();
+
+          final result = await get(() async => throw offline, from: restarted);
+          expect(result.data, 'saved');
+          expect(result.fetchError, same(offline));
+        },
+      );
+
+      test('a valid entry is stale when a forced refresh fails', () async {
+        await get(() async => 'valid', cacheDuration: const Duration(hours: 1));
+        final result = await get(() async => throw offline, forceRefresh: true);
+        expect(result.data, 'valid');
+        expect(result.fetchError, same(offline));
+      });
+
+      test('the entry is stale when the version check fails', () async {
+        await get(() async => 'v1 data', version: () async => 'v1');
+        final result = await get(
+          () async => 'not fetched',
+          version: () async => throw offline,
+        );
+        expect(result.data, 'v1 data');
+        expect(result.fetchError, same(offline));
+      });
+
+      /// Two requests for the expired entry, the second while the first
+      /// fetches, which ends with [end]
+      Future<List<CacheResult<String>>> deduplicated(
+        void Function(Completer<String> fetching) end,
+      ) async {
+        await get(() async => 'old');
+        final fetching = Completer<String>();
+        final started = Completer<void>();
+        final first = get(() {
+          started.complete();
+          return fetching.future;
+        });
+        // Registered as in progress once it fetches
+        await started.future;
+        // Without storage, it joins the first synchronously, before [end]
+        final second = get(() async => 'not fetched', persistent: false);
+        end(fetching);
+        return Future.wait([first, second]);
+      }
+
+      test('a request deduplicated onto a failing one is stale too', () async {
+        final results = await deduplicated((f) => f.completeError(offline));
+        for (final result in results) {
+          expect(result.data, 'old');
+          expect(result.fetchError, same(offline));
+        }
+      });
+
+      test('a request deduplicated onto a successful one is fresh', () async {
+        final results = await deduplicated((f) => f.complete('new'));
+        for (final result in results) {
+          expect(result.data, 'new');
+          expect(result.isStale, isFalse);
+        }
+      });
+
+      test('nothing cached: the error is thrown', () async {
+        await expectLater(
+          get(() async => throw offline),
+          throwsA(same(offline)),
+        );
+      });
+    });
+
     group('memory limit', () {
       late ApiCache small;
       late Map<String, int> fetches;
