@@ -28,11 +28,24 @@ class _FakePlayer extends Fake implements AudioPlayerService {
 /// An [AppState] with the given player and no API (no cover art)
 class _FakeAppState extends AppState {
   final AudioPlayerService? _player;
+  SubsonicApi? _fakeApi;
 
   _FakeAppState(this._player);
 
   @override
   AudioPlayerService? get audioPlayerService => _player;
+
+  @override
+  SubsonicApi? get api => _fakeApi;
+
+  /// Changes the API like a login would
+  set fakeApi(SubsonicApi? value) {
+    _fakeApi = value;
+    notifyListeners();
+  }
+
+  /// Notifies like a sync or a load does, with nothing the tiles use changed
+  void notifyUnrelatedChange() => notifyListeners();
 }
 
 void main() {
@@ -93,6 +106,80 @@ void main() {
       player.result.complete();
       await tester.pump();
       expect(find.byType(CircularProgressIndicator), findsNothing);
+    });
+  });
+
+  group('rebuilds', () {
+    late _FakeAppState state;
+    late SubsonicApi api;
+    var rebuilds = 0;
+
+    setUp(() {
+      state = _FakeAppState(player);
+      api = SubsonicApi(
+        serverUrl: 'https://example.test',
+        username: 'user',
+        password: 'password',
+      );
+      rebuilds = 0;
+      debugOnRebuildDirtyWidget = (element, builtOnce) {
+        if (element.widget is AlbumTile || element.widget is AlbumGridTile) {
+          rebuilds++;
+        }
+      };
+    });
+
+    tearDown(() {
+      debugOnRebuildDirtyWidget = null;
+      api.dispose();
+    });
+
+    Future<void> pumpTiles(WidgetTester tester) => tester.pumpWidget(
+      ChangeNotifierProvider<AppState>.value(
+        value: state,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                SizedBox(
+                  width: 400,
+                  height: 100,
+                  child: AlbumTile(album: album),
+                ),
+                SizedBox(
+                  width: 200,
+                  height: 200,
+                  child: AlbumGridTile(album: album),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    testWidgets('a change of something else does not rebuild the tiles', (
+      tester,
+    ) async {
+      await pumpTiles(tester);
+      expect(rebuilds, 2);
+
+      state.notifyUnrelatedChange();
+      await tester.pump();
+      state.notifyUnrelatedChange();
+      await tester.pump();
+
+      expect(rebuilds, 2);
+    });
+
+    testWidgets('a new API rebuilds them', (tester) async {
+      await pumpTiles(tester);
+      expect(rebuilds, 2);
+
+      state.fakeApi = api;
+      await tester.pump();
+
+      expect(rebuilds, 4);
     });
   });
 

@@ -393,6 +393,135 @@ void main() {
       expect(result, 'cached');
     });
 
+    group('memory limit', () {
+      late ApiCache small;
+      late Map<String, int> fetches;
+
+      setUp(() {
+        small = ApiCache.forTesting(directory: directory, maxMemoryEntries: 3);
+        fetches = {};
+      });
+
+      /// Fetches [key] with a fetcher that counts its calls
+      Future<String> get(
+        String key, {
+        Duration duration = const Duration(minutes: 5),
+      }) => small.getOrFetch<String>(key, null, () async {
+        fetches[key] = (fetches[key] ?? 0) + 1;
+        return 'v$key';
+      }, cacheDuration: duration);
+
+      test('drops the least recently used entry beyond the limit', () async {
+        for (final key in ['a', 'b', 'c', 'd']) {
+          await get(key);
+        }
+
+        // c and d are still cached, a was dropped
+        await get('d');
+        await get('c');
+        expect(fetches, {'a': 1, 'b': 1, 'c': 1, 'd': 1});
+        await get('a');
+        expect(fetches['a'], 2);
+      });
+
+      test('a hit counts as a use', () async {
+        for (final key in ['a', 'b', 'c']) {
+          await get(key);
+        }
+        await get('a');
+        await get('d');
+
+        // b was the least recently used; a, c and d are kept
+        await get('a');
+        await get('c');
+        await get('d');
+        expect(fetches, {'a': 1, 'b': 1, 'c': 1, 'd': 1});
+        await get('b');
+        expect(fetches['b'], 2);
+      });
+
+      test('drops expired entries before fresh ones', () async {
+        await get('a');
+        await get('b', duration: Duration.zero);
+        await get('c');
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+        await get('d');
+
+        // b expired and went; a is older but fresh and stays
+        await get('a');
+        await get('c');
+        await get('d');
+        expect(fetches, {'a': 1, 'b': 1, 'c': 1, 'd': 1});
+      });
+
+      test('stays within the limit, however many keys are used', () async {
+        for (var i = 0; i < 50; i++) {
+          await get('key$i');
+        }
+
+        // Only the last three are cached
+        for (var i = 47; i < 50; i++) {
+          await get('key$i');
+        }
+        expect(fetches.values.every((count) => count == 1), isTrue);
+        await get('key46');
+        expect(fetches['key46'], 2);
+      });
+
+      test('a stale entry still serves a failed fetch', () async {
+        await get('a', duration: Duration.zero);
+        await get('b');
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+
+        final result = await small.getOrFetch<String>(
+          'a',
+          null,
+          () async => throw Exception('offline'),
+        );
+
+        expect(result, 'va');
+      });
+
+      test(
+        'a fetch failing after its entry was dropped still serves it',
+        () async {
+          final single = ApiCache.forTesting(
+            directory: directory,
+            maxMemoryEntries: 1,
+          );
+          await single.getOrFetch<String>(
+            'a',
+            null,
+            () async => 'va',
+            cacheDuration: Duration.zero,
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+
+          final fetch = Completer<String>();
+          final pending = single.getOrFetch<String>(
+            'a',
+            null,
+            () => fetch.future,
+          );
+          // Another key's entry pushes a's out of the memory cache
+          await single.getOrFetch<String>('b', null, () async => 'vb');
+          fetch.completeError(Exception('offline'));
+
+          expect(await pending, 'va');
+          // The entry that served the fallback is kept, not the fresh one
+          var refetched = false;
+          expect(
+            await single.getOrFetch<String>('b', null, () async {
+              refetched = true;
+              return 'vb2';
+            }),
+            'vb2',
+          );
+          expect(refetched, isTrue);
+        },
+      );
+    });
+
     group('with a version', () {
       const expired = Duration(milliseconds: -1);
       var fetches = 0;

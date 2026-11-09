@@ -64,7 +64,9 @@ class _AlbumTileState extends State<AlbumTile> with _PlaysAlbum {
   @override
   Widget build(BuildContext context) {
     final album = widget.album;
-    final api = context.watch<AppState>().api;
+    // Only the API matters here; AppState notifies about syncs, loading and
+    // more, which would rebuild every tile on screen
+    final api = context.select<AppState, SubsonicApi?>((state) => state.api);
     final colors = Theme.of(context).colorScheme;
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -133,7 +135,9 @@ class _AlbumGridTileState extends State<AlbumGridTile> with _PlaysAlbum {
   @override
   Widget build(BuildContext context) {
     final album = widget.album;
-    final api = context.watch<AppState>().api;
+    // Only the API matters here; AppState notifies about syncs, loading and
+    // more, which would rebuild every tile on screen
+    final api = context.select<AppState, SubsonicApi?>((state) => state.api);
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final placeholderIcon = Icon(

@@ -29,6 +29,9 @@ class _SearchScreenState extends State<SearchScreen>
   Timer? _debounce;
   // Incremented for every search; a response to an older one is dropped
   int _searchGeneration = 0;
+  // The result (an Album or a Song) whose playback is starting. A tap on any
+  // result meanwhile is ignored, see _startPlaying().
+  Object? _starting;
 
   @override
   void initState() {
@@ -65,22 +68,26 @@ class _SearchScreenState extends State<SearchScreen>
       return;
     }
 
+    final api = context.read<AppState>().api;
+    if (api == null) {
+      // Logged out: there's nothing to search, and nothing that would end a
+      // load
+      setState(() => _isLoading = false);
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = '';
     });
 
     try {
-      final appState = context.read<AppState>();
-      final api = appState.api;
-      if (api != null) {
-        final result = await api.search(query.trim());
-        if (mounted && generation == _searchGeneration) {
-          setState(() {
-            _searchResult = result;
-            _isLoading = false;
-          });
-        }
+      final result = await api.search(query.trim());
+      if (mounted && generation == _searchGeneration) {
+        setState(() {
+          _searchResult = result;
+          _isLoading = false;
+        });
       }
     } catch (e) {
       if (mounted && generation == _searchGeneration) {
@@ -94,6 +101,55 @@ class _SearchScreenState extends State<SearchScreen>
       }
     }
   }
+
+  /// Plays a tapped [result], showing a spinner on it, and returns to the
+  /// home screen once [play] says it started. A tap on any result while one
+  /// is starting is ignored.
+  Future<void> _startPlaying(
+    Object result,
+    Future<bool> Function() play,
+  ) async {
+    if (_starting != null) return;
+    setState(() => _starting = result);
+    try {
+      if (await play() && mounted) {
+        Navigator.of(context).pop(); // Return to home screen
+      }
+    } finally {
+      if (mounted) setState(() => _starting = null);
+    }
+  }
+
+  /// Plays [song], showing a snack bar if that fails. Returns whether it
+  /// started.
+  Future<bool> _playSongWithFeedback(Song song) async {
+    final player = context.read<AppState>().audioPlayerService;
+    final messenger = ScaffoldMessenger.of(context);
+    final errorColor = Theme.of(context).colorScheme.error;
+    try {
+      await player?.playSong(song);
+      return true;
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            NetworkErrorHelper.getErrorMessage(
+              e,
+              context: 'Failed to play song',
+            ),
+          ),
+          backgroundColor: errorColor,
+        ),
+      );
+      return false;
+    }
+  }
+
+  static const _startingIndicator = SizedBox(
+    width: 20,
+    height: 20,
+    child: CircularProgressIndicator(strokeWidth: 2),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -376,12 +432,10 @@ class _SearchScreenState extends State<SearchScreen>
           : const Icon(Icons.album),
       title: Text(album.name),
       subtitle: Text(album.artist),
-      onTap: () async {
-        // Search results have no songs: playAlbum() fetches them
-        if (await playAlbumWithFeedback(context, album) && mounted) {
-          Navigator.of(context).pop(); // Return to home screen
-        }
-      },
+      trailing: identical(_starting, album) ? _startingIndicator : null,
+      // Search results have no songs: playAlbum() fetches them
+      onTap: () =>
+          _startPlaying(album, () => playAlbumWithFeedback(context, album)),
     );
   }
 
@@ -401,31 +455,12 @@ class _SearchScreenState extends State<SearchScreen>
           : const Icon(Icons.music_note),
       title: Text(song.title),
       subtitle: Text('${song.artist} • ${song.album}'),
-      trailing: song.duration != null
+      trailing: identical(_starting, song)
+          ? _startingIndicator
+          : song.duration != null
           ? Text(formatClock(Duration(seconds: song.duration!)))
           : null,
-      onTap: () async {
-        try {
-          final appState = context.read<AppState>();
-          await appState.audioPlayerService?.playSong(song);
-          if (mounted) {
-            Navigator.of(context).pop(); // Return to home screen
-          }
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  NetworkErrorHelper.getErrorMessage(
-                    e,
-                    context: 'Failed to play song',
-                  ),
-                ),
-              ),
-            );
-          }
-        }
-      },
+      onTap: () => _startPlaying(song, () => _playSongWithFeedback(song)),
     );
   }
 }

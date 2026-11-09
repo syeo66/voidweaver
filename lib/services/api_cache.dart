@@ -58,18 +58,29 @@ class CacheEntry<T> {
 /// So one login never sees another's data, and after [close] (logout) a fetch
 /// that was still running stores nothing.
 class ApiCache {
-  ApiCache({required this.namespace}) : _rootProvider = _defaultRoot;
+  ApiCache({required this.namespace})
+    : _rootProvider = _defaultRoot,
+      _maxMemoryEntries = defaultMaxMemoryEntries;
 
   /// Keeps persistent entries under [directory]; without one, only in memory.
   @visibleForTesting
-  ApiCache.forTesting({Directory? directory, this.namespace = 'test'})
-    : _rootProvider = (() async => directory);
+  ApiCache.forTesting({
+    Directory? directory,
+    this.namespace = 'test',
+    this._maxMemoryEntries = defaultMaxMemoryEntries,
+  }) : _rootProvider = (() async => directory);
+
+  /// How many entries the memory cache keeps, see [_remember]. Every album
+  /// opened and every search adds one, so without a limit a long session
+  /// would only grow it.
+  static const defaultMaxMemoryEntries = 200;
 
   /// Identifies the login the entries belong to
   final String namespace;
 
   final Map<String, CacheEntry<Object?>> _memoryCache = {};
   final Map<String, Completer<Object?>> _ongoingRequests = {};
+  final int _maxMemoryEntries;
   final Future<Directory?> Function() _rootProvider;
   Future<_Storage?>? _storageFuture;
   final Set<Future<void>> _pendingWrites = {};
@@ -151,6 +162,8 @@ class ApiCache {
     final memoryCached = _memoryCache[key];
     if (!forceRefresh && memoryCached != null && memoryCached.isValid) {
       _log.fine('Cache HIT (memory): $key');
+      // Now the most recently used, see _remember()
+      _remember(key, memoryCached);
       return memoryCached.data as T;
     }
 
@@ -247,8 +260,38 @@ class ApiCache {
     }
   }
 
+  /// Stores [entry] as the most recently used one. Beyond
+  /// [_maxMemoryEntries], expired entries go first (least recently used
+  /// first), then the least recently used of the others. Never [key] itself.
+  /// A fetch that fails still has the stale entry it started with in a local
+  /// variable, so the fallback in [getOrFetch] doesn't depend on what's kept
+  /// here.
+  ///
+  /// Expired entries are kept while there's room: the memory cache is the
+  /// only stale fallback for data that isn't persisted (searches).
   void _remember(String key, CacheEntry<Object?> entry) {
-    if (!_closed) _memoryCache[key] = entry;
+    if (_closed) return;
+    // Removed first, so it moves to the end of the (insertion-ordered) map
+    _memoryCache.remove(key);
+    _memoryCache[key] = entry;
+    var excess = _memoryCache.length - _maxMemoryEntries;
+    if (excess <= 0) return;
+    // [key] stays, expired or not: it's the entry just stored or used
+    final others = [
+      for (final e in _memoryCache.entries)
+        if (e.key != key) e,
+    ];
+    for (final e in others) {
+      if (excess <= 0) return;
+      if (e.value.isExpired) {
+        _memoryCache.remove(e.key);
+        excess--;
+      }
+    }
+    for (final e in others) {
+      if (excess <= 0) return;
+      if (_memoryCache.remove(e.key) != null) excess--;
+    }
   }
 
   // Entries this long (in characters) are decoded on a background isolate,
