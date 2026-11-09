@@ -106,9 +106,10 @@ class AudioPlayerService extends ChangeNotifier {
 
   // Skips
   DateTime? _lastSkipTime;
-  bool _skipOperationInProgress = false;
-  // Where the skip in progress ends up; presses meanwhile move it, see _skip()
+  // Where the skip in progress ends up, null when none is; presses meanwhile
+  // move it, see _skip()
   int? _skipTarget;
+  bool get _skipping => _skipTarget != null;
 
   // Loads and skips that start playback once their track is ready
   // (_loadQueue() with `play`, _jumpTo()), and whether they still should:
@@ -223,8 +224,11 @@ class AudioPlayerService extends ChangeNotifier {
   @visibleForTesting
   bool get needsSourceReload => _needsSourceReload;
 
-  /// Whether a skip is being carried out; the UI disables the skip buttons.
-  bool get isSkipOperationInProgress => _skipOperationInProgress;
+  /// Whether a skip is being carried out. Nothing in the UI depends on it:
+  /// the skip buttons stay enabled, a press moves the skip's target, see
+  /// _skip().
+  @visibleForTesting
+  bool get isSkipOperationInProgress => _skipping;
 
   PlaybackState get playbackState => _playbackState;
   List<Song> get playlist => _playlist;
@@ -936,9 +940,7 @@ class AudioPlayerService extends ChangeNotifier {
     // on) loads that one; this one was left already. Covered by its test in
     // skip_operations_test.dart only: no randomized run reaches it.
     final skipTarget = _skipTarget;
-    if (_skipOperationInProgress &&
-        skipTarget != null &&
-        skipTarget != failedIndex) {
+    if (skipTarget != null && skipTarget != failedIndex) {
       _log.info('A skip to index $skipTarget goes on past the failed one');
       return;
     }
@@ -1108,8 +1110,7 @@ class AudioPlayerService extends ChangeNotifier {
   /// the first track; otherwise goes back a track.
   Future<void> previous() => _skip('previous', (from) {
     // Not during a skip: that's a press to go back further
-    final restart =
-        !_skipOperationInProgress && _currentPosition > _restartThreshold;
+    final restart = !_skipping && _currentPosition > _restartThreshold;
     return restart ? from : max(from - 1, 0);
   });
 
@@ -1128,7 +1129,7 @@ class AudioPlayerService extends ChangeNotifier {
       _log.fine('[$source] Skip ignored');
       return;
     }
-    if (_skipOperationInProgress) {
+    if (_skipping) {
       _log.fine('[$source] Skip in progress, continuing to index $target');
       _skipTarget = target;
       return;
@@ -1136,7 +1137,6 @@ class AudioPlayerService extends ChangeNotifier {
 
     final playlist = _playlist;
     _skipTarget = target;
-    _skipOperationInProgress = true;
     notifyListeners();
     try {
       int? reached;
@@ -1153,7 +1153,6 @@ class AudioPlayerService extends ChangeNotifier {
       _onLoadFailed('[$source] Failed to play song', e);
     } finally {
       _skipTarget = null;
-      _skipOperationInProgress = false;
       notifyListeners();
     }
   }
