@@ -844,7 +844,10 @@ class AudioPlayerService extends ChangeNotifier {
     if (changed() || _stopEnds(move)) return;
 
     final index = move.index;
-    final load = _needsLoad;
+    // After a password change the items' URLs carry the old one: a seek to
+    // an item that isn't cached would fail, so the queue is loaded again
+    // with new URLs (see credentialsChanged())
+    final load = _needsLoad || _sourcesStale;
     // An error that arrived before this call is superseded by it: the
     // player loads or seeks anew. A track that failed while the target's
     // tags were read is what makes the player idle, so this loads.
@@ -898,6 +901,14 @@ class AudioPlayerService extends ChangeNotifier {
     // Thrown by setAudioSources() and also reported on errorStream, or
     // taken as the target's failure here: handled once, by the move
     _heldError = null;
+    if (error != null && _sourcesStale) {
+      // The password changed while the call ran, so the item may have
+      // failed for its old one: the next step loads the queue again with
+      // new URLs. Once per change, as the load makes them current.
+      _log.info('Index $index failed with outdated URLs, loading again');
+      move.issued = false;
+      return;
+    }
     if (error != null) {
       _log.warning('Could not load index $index', error);
       _failedItem = (generation: _generation, index: index);

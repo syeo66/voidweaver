@@ -14,6 +14,11 @@
 // moment it was restarted. That also leaves out a track ending right after
 // a seek near its end, which the rules below therefore don't cover.
 //
+// Besides the controls and player events, a run can start with a restored
+// queue (restorePlaybackState(), which the first actions overlap), start an
+// album or a single song, and change the password: the stream URLs of the
+// player's items then carry an outdated one, and fail unless cached.
+//
 // A failure prints its seed and the actions. Replay one, with the service's
 // log lines between the actions:
 //   flutter test test/services/playback_random_actions_test.dart \
@@ -29,6 +34,7 @@ import 'package:logging/logging.dart';
 import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/audio_player_service.dart';
+import 'package:voidweaver/services/playback_persistence.dart';
 import 'package:voidweaver/services/replaygain_reader.dart';
 import 'package:voidweaver/services/scrobble_queue.dart';
 import 'package:voidweaver/services/settings_service.dart';
@@ -55,7 +61,14 @@ const _restartThreshold = Duration(seconds: 3);
 /// press the debounce may have dropped).
 enum _Intent { unknown, play, pause }
 
-String _urlFor(String id) => 'https://music.test/rest/stream?id=$id';
+/// The stream URL of the song [id], made while [password] was current (the
+/// `p` parameter stands in for the token and salt)
+String _urlFor(String id, int password) =>
+    'https://music.test/rest/stream?id=$id&p=$password';
+
+/// The song id, and the password, of a URL made by [_urlFor]
+String _idOf(String url) => Uri.parse(url).queryParameters['id']!;
+int _passwordOf(String url) => int.parse(Uri.parse(url).queryParameters['p']!);
 
 final _titleInError = RegExp(r'"Title ([^"]+)"');
 
@@ -75,6 +88,49 @@ class _Stats {
   int pauseChecked = 0;
   int playChecked = 0;
   int failureChecked = 0;
+  int restores = 0;
+  int quietRestoreFailures = 0;
+  int passwordChanges = 0;
+  int songStarts = 0;
+  // Loads of an item that failed only because its URL carries an outdated
+  // password
+  int staleFailures = 0;
+}
+
+/// Holds the saved queue in memory, and hands it to [loadPlaybackState]
+/// once [loaded] completes (a slow read at startup). Saves are dropped.
+class _FakePersistence implements PlaybackPersistenceService {
+  _FakePersistence(this.saved);
+
+  final PersistedPlaybackState? saved;
+  final loaded = Completer<void>();
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<PersistedPlaybackState?> loadPlaybackState() async {
+    await loaded.future;
+    return saved;
+  }
+
+  @override
+  Future<void> savePlaybackState(PersistedPlaybackState state) async {}
+
+  @override
+  void queueChanged() {}
+
+  @override
+  void schedulePositionSave(PersistedPlaybackState state) {}
+
+  @override
+  Future<void> clearPlaybackState() async {}
+
+  @override
+  void flushPendingPositionSave() {}
+
+  @override
+  void dispose() {}
 }
 
 /// Hands what the service queues to [onNowPlaying] and [onSubmission], when
@@ -128,7 +184,30 @@ class _Run {
   var lastSeekAt = DateTime(2026);
   var seenSeeks = 0;
 
-  // Every item the player made current, by URL
+  // The current password: URLs made with an earlier one fail, unless their
+  // song is cached
+  var password = 0;
+  // Songs (by id) whose URLs fail to load, as with the network down for them
+  final failingSongs = <String>{};
+  // Songs that had a reason to fail: in failingSongs at some point, or a
+  // load error while the player was on them. A failure reported for any
+  // other song came from the outdated password alone, which the service
+  // handles by loading the queue again with new URLs. Only grows (a song
+  // stays in it after its network comes back): deliberately conservative,
+  // so the rule never flags a report that has another explanation.
+  final broken = <String>{};
+
+  // The restore at the start of the run, if any: in progress, whether Play
+  // was pressed while it was (with a queue to play), and the failure it
+  // kept quiet (the player's failure count then)
+  _FakePersistence? persistence;
+  var restoring = false;
+  var playDuringRestore = false;
+  int? quietFailure;
+  // The step before which the saved queue has been read
+  var restoreReadAt = 0;
+
+  // Every song the player made current, by id
   final started = <String>{};
 
   // Plays of each song (by id) so far: each time it became the player's
@@ -171,11 +250,15 @@ class _Run {
         : ['seed $seed:', ...problems, '', 'actions:', ...log];
   }
 
+  late final _Stats stats;
+
   Future<void> _run(_Stats stats) async {
+    this.stats = stats;
     SharedPreferences.setMockInitialValues({});
     final api = newMockApi();
     when(api.getStreamUrl(any)).thenAnswer(
-      (invocation) => _urlFor(invocation.positionalArguments.first as String),
+      (invocation) =>
+          _urlFor(invocation.positionalArguments.first as String, password),
     );
     when(api.readReplayGain(any))
         .thenAnswer((_) async => const ReplayGainData());
@@ -201,7 +284,14 @@ class _Run {
     ).thenReturn(1.0);
 
     cache = FakeAudioCache()..reachable = random.nextBool();
-    player = MockAudioPlayer(isCached: cache.isCachedKey);
+    player = MockAudioPlayer(isCached: cache.isCachedKey)
+      ..failsUrl = (url) {
+        final song = _idOf(url);
+        if (failingSongs.contains(song)) return true;
+        if (_passwordOf(url) == password) return false;
+        if (!cache.cached.contains(song)) stats.staleFailures++;
+        return true;
+      };
     player.onSeekWithinItem = (position) {
       final song = _currentItemSong;
       if (position != Duration.zero || song == null) return;
@@ -214,11 +304,11 @@ class _Run {
     final commands = player.commandStream.listen(_onCommand);
     final indexes = player.currentIndexStream.listen((index) {
       if (index != null && index < player.sequence.length) {
-        final url = '${player.sequence[index].uri}';
-        started.add(url);
+        final song = _idOf('${player.sequence[index].uri}');
+        started.add(song);
         rewound = null;
         // The item the event reports: the player may have moved on since
-        _countPlay(Uri.parse(url).queryParameters['id']!);
+        _countPlay(song);
       }
     });
     final states = player.playerStateStream.listen((state) {
@@ -227,11 +317,15 @@ class _Run {
       }
     });
 
+    // Before the service: its draws come first for every seed
+    if (random.nextInt(3) == 0) _prepareRestore(stats);
+
     service = AudioPlayerService(
       api,
       settings,
       audioPlayer: player,
       audioCache: cache,
+      persistence: persistence,
       clock: () => now,
       scrobbleQueue: _RecordingScrobbleQueue(
         api,
@@ -243,12 +337,16 @@ class _Run {
     );
     final errors = service.playbackErrors.listen(_onPlaybackError);
 
+    if (persistence != null) _startRestore();
     for (var i = 0; i < _steps; i++) {
+      if (i == restoreReadAt) _readSavedQueue();
       await _step();
     }
 
-    // Settle: slow seeks and loads finish, buffering ends
+    // Settle: the saved queue is read, slow seeks and loads finish,
+    // buffering ends
     log.add('-- settle --');
+    _readSavedQueue();
     player.seekGate?.complete();
     player.seekGate = null;
     player.loadGate?.complete();
@@ -291,6 +389,89 @@ class _Run {
     }
   }
 
+  // The restore
+
+  /// Saves a queue for the restore at the start of the run: some of its
+  /// songs fail to load, some are cached.
+  void _prepareRestore(_Stats stats) {
+    stats.restores++;
+    final count = 1 + random.nextInt(5);
+    final songs = [for (var i = 0; i < count; i++) _song('r-s$i')];
+    final index = random.nextInt(count);
+    final position = Duration(seconds: random.nextInt(170));
+    for (final song in songs) {
+      switch (random.nextInt(4)) {
+        case 0:
+          failingSongs.add(song.id);
+          broken.add(song.id);
+        case 1:
+          cache.cached.add(song.id);
+      }
+    }
+    restoreReadAt = random.nextInt(4);
+    persistence = _FakePersistence(
+      PersistedPlaybackState(
+        playlist: songs,
+        currentIndex: index,
+        currentPosition: position,
+        isPlaying: random.nextBool(),
+        lastUpdated: now,
+        playlistSource: random.nextBool() ? 'album' : 'random',
+        sourceId: 'r',
+      ),
+    );
+    log.add(
+      'saved queue: $count songs, index $index at $position; '
+      'failing $failingSongs, cached ${cache.cached}; '
+      'read before step $restoreReadAt',
+    );
+  }
+
+  /// Restores the saved queue, as at startup, without waiting for it: the
+  /// first actions overlap it.
+  void _startRestore() {
+    log.add('restorePlaybackState');
+    restoring = true;
+    // A restored queue waits for Play
+    intent = _Intent.pause;
+    unawaited(
+      service.restorePlaybackState().then(
+        _onRestored,
+        onError: (Object e) {
+          problems.add('restorePlaybackState threw $e');
+        },
+      ),
+    );
+  }
+
+  void _readSavedQueue() {
+    final loaded = persistence?.loaded;
+    if (loaded == null || loaded.isCompleted) return;
+    log.add('(the saved queue has been read)');
+    loaded.complete();
+  }
+
+  // A load error the steps caused while the restore ran, which the model
+  // can't tell from the restore's own failure
+  var errorDuringRestore = false;
+
+  /// The restore is done. If it ended on a track that failed, without Play
+  /// pressed while it ran, the failure stays quiet: no report, the queue
+  /// shows paused, and play() loads it again (see restorePlaybackState()).
+  void _onRestored(bool restored) {
+    restoring = false;
+    log.add('  -> restorePlaybackState: $restored');
+    if (restored &&
+        !playDuringRestore &&
+        !errorDuringRestore &&
+        player.processingState == ProcessingState.idle &&
+        player.idleCause == 'error') {
+      _noteFailures();
+      quietFailure = player.failures;
+      stats.quietRestoreFailures++;
+    }
+  }
+
   void _onSubmission(String song) {
     final count = submissions[song] = (submissions[song] ?? 0) + 1;
     log.add('  -> scrobbled $song');
@@ -322,10 +503,11 @@ class _Run {
     disturbed = _hasFailingTrack(queue ?? service.playlist);
   }
 
+  /// Whether [songs] has one that can't be played. Not a song whose item
+  /// only carries an outdated password: the service loads the queue again
+  /// with new URLs for that.
   bool _hasFailingTrack(List<Song> songs) => songs.any(
-    (song) =>
-        player.failingUrls.contains(_urlFor(song.id)) &&
-        !cache.cached.contains(song.id),
+    (song) => failingSongs.contains(song.id) && !cache.cached.contains(song.id),
   );
 
   /// Whether a skip press now gets through the debounce, or null if the
@@ -381,6 +563,9 @@ class _Run {
   void _onPress(SystemCommandType type) {
     switch (type) {
       case SystemCommandType.play:
+        // Does nothing without a queue (e.g. a restore still reading it)
+        if (service.playlist.isEmpty) break;
+        if (restoring) playDuringRestore = true;
         _setIntent(_Intent.play);
         // Replays a song rewound after the end of the queue
         final song = rewound;
@@ -405,9 +590,8 @@ class _Run {
   /// the service's current track (see _onPlayerCompleted()); otherwise it
   /// looks again after the change, and the model can't tell.
   void _onQueueEnd() {
-    final urls = [for (final song in service.playlist) _urlFor(song.id)];
     final onCurrentTrack =
-        _listEquals(player.sequenceSources, urls) &&
+        _holdsPlaylist(service.playlist) &&
         player.currentIndex == service.currentIndex;
     if (service.pendingPlayerOps == 0 && onCurrentTrack) {
       log.add('  (the queue ended: the service pauses)');
@@ -430,10 +614,21 @@ class _Run {
     final id = _titleInError.firstMatch(message)?.group(1);
     if (id == null) {
       problems.add('an error names no track: $message');
-    } else if (!started.contains(_urlFor(id))) {
+    } else if (!started.contains(id)) {
       problems.add('an error names a track that never started: $message');
+    } else if (!broken.contains(id)) {
+      problems.add(
+        'an error for $id, which only had an outdated password: $message',
+      );
     }
   }
+
+  /// Whether the player's sequence is made from [songs], with whatever
+  /// password
+  bool _holdsPlaylist(List<Song> songs) => _listEquals(
+    [for (final url in player.sequenceSources) _idOf(url)],
+    [for (final song in songs) song.id],
+  );
 
   // The actions
 
@@ -557,6 +752,8 @@ class _Run {
           player.processingState != ProcessingState.idle) {
         log.add('player: load error');
         disturbed = true;
+        broken.add(_currentItemSong!);
+        if (restoring) errorDuringRestore = true;
         player.simulateLoadError();
       }
     } else if (roll < 78) {
@@ -568,12 +765,13 @@ class _Run {
     } else if (roll < 81) {
       if (player.sequence.isNotEmpty) {
         final i = random.nextInt(player.sequence.length);
-        final url = '${player.sequence[i].uri}';
-        if (player.failingUrls.remove(url)) {
-          log.add('network: $url loads again');
+        final song = _idOf('${player.sequence[i].uri}');
+        if (failingSongs.remove(song)) {
+          log.add('network: $song loads again');
         } else {
-          log.add('network: $url fails');
-          player.failingUrls.add(url);
+          log.add('network: $song fails');
+          failingSongs.add(song);
+          broken.add(song);
           if (_hasFailingTrack(service.playlist)) disturbed = true;
         }
       }
@@ -597,6 +795,19 @@ class _Run {
         player.loadGate = null;
         lastSeekAt = now;
       }
+    } else if (roll < 93) {
+      // Changed on the server and entered in the app: the URLs of the
+      // player's items carry the old one from now on
+      password++;
+      stats.passwordChanges++;
+      log.add('password changed (to $password)');
+      service.credentialsChanged();
+    } else if (roll < 96) {
+      final id = 's${++albums}';
+      final song = _song(id);
+      stats.songStarts++;
+      _setIntent(_Intent.play, queue: [song]);
+      _press('playSong($id)', () => service.playSong(song), mayFail: true);
     }
 
     // Time between this and the next action: none (the actions overlap),
@@ -645,8 +856,7 @@ class _Run {
         );
       }
       if (player.processingState != ProcessingState.idle) {
-        final urls = [for (final song in playlist) _urlFor(song.id)];
-        if (!_listEquals(player.sequenceSources, urls)) {
+        if (!_holdsPlaylist(playlist)) {
           problem(
             'the player holds ${player.sequenceSources}, not the playlist',
           );
@@ -678,16 +888,27 @@ class _Run {
     }
 
     // A failure nothing superseded: playback stopped on it, and it was
-    // reported once
+    // reported once. Unless the restore failed quietly: then it shows
+    // paused, waiting for Play, and nothing was reported.
     _noteFailures();
     if (player.processingState == ProcessingState.idle &&
         player.idleCause == 'error') {
       stats.failureChecked++;
-      if (service.playbackState != PlaybackState.stopped) {
-        problem('a failure left the state at ${service.playbackState}');
+      final quiet = quietFailure == player.failures;
+      final state = quiet ? PlaybackState.paused : PlaybackState.stopped;
+      if (service.playbackState != state) {
+        problem(
+          '${quiet ? 'the restore\'s quiet failure' : 'a failure'} left '
+          'the state at ${service.playbackState}',
+        );
       }
       final count = reports - reportsAtFailure;
-      if (count != 1) problem('the last failure was reported $count times');
+      if (count != (quiet ? 0 : 1)) {
+        problem(
+          '${quiet ? 'the restore\'s quiet failure' : 'the last failure'} '
+          'was reported $count times',
+        );
+      }
     }
 
     stats.runs++;
@@ -726,7 +947,11 @@ void main() {
     final summary =
         '${stats.runs} runs; Pause/Stop rule checked in '
         '${stats.pauseChecked}, Play rule in ${stats.playChecked}, '
-        'failure rule in ${stats.failureChecked}';
+        'failure rule in ${stats.failureChecked}; '
+        '${stats.restores} restores (${stats.quietRestoreFailures} failed '
+        'quietly), ${stats.passwordChanges} password changes '
+        '(${stats.staleFailures} item loads failed only for an outdated URL), '
+        '${stats.songStarts} single songs';
     // ignore: avoid_print
     if (_runsOverride > 0) print(summary);
     if (_seedOverride < 0) {
@@ -739,6 +964,21 @@ void main() {
         greaterThan(stats.runs ~/ 20),
         reason: summary,
       );
+      // And the paths besides the controls are taken often enough: a third
+      // of the runs restore (some failing quietly), and items fail for an
+      // outdated password
+      expect(stats.restores, greaterThan(stats.runs ~/ 5), reason: summary);
+      expect(
+        stats.quietRestoreFailures,
+        greaterThan(stats.runs ~/ 100),
+        reason: summary,
+      );
+      expect(
+        stats.staleFailures,
+        greaterThan(stats.runs ~/ 20),
+        reason: summary,
+      );
+      expect(stats.songStarts, greaterThan(stats.runs ~/ 2), reason: summary);
     }
   }, timeout: const Timeout(Duration(minutes: 20)));
 }

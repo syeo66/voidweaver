@@ -992,6 +992,60 @@ void main() {
       expect(player.sequenceSources.last, urlWithPassword('s3'));
     });
 
+    test('a skip loads the queue again with the new URLs', () async {
+      cache.reachable = false;
+      final errors = <String>[];
+      service.playbackErrors.listen(errors.add);
+      await service.playAlbum(albumOf(3));
+      await Future<void>.delayed(pastSkipDebounce);
+
+      player.failingUrls.addAll([urlWithPassword('s2'), urlWithPassword('s3')]);
+      password = 'new';
+      service.credentialsChanged();
+      // Not a seek within the old sequence, whose item for s2 would fail
+      await service.next();
+      await pumpEventQueue();
+
+      expect(errors, isEmpty);
+      expect(player.loadedSources.last, urlWithPassword('s2'));
+      expect(player.sequenceSources, [
+        urlWithPassword('s1'),
+        urlWithPassword('s2'),
+        urlWithPassword('s3'),
+      ]);
+      expect(service.currentIndex, 1);
+      expect(player.playing, isTrue);
+      expect(service.playbackState, PlaybackState.playing);
+    });
+
+    test('a skip whose seek fails after the password changed loads the queue '
+        'again', () async {
+      cache.reachable = false;
+      final errors = <String>[];
+      service.playbackErrors.listen(errors.add);
+      await service.playAlbum(albumOf(3));
+      await Future<void>.delayed(pastSkipDebounce);
+      player.seekGate = Completer();
+
+      // The seek to s2 is under way with the old URL when the password
+      // changes; it fails once the gate opens
+      final skipping = service.next();
+      await pumpEventQueue();
+      player.failingUrls.addAll([urlWithPassword('s2'), urlWithPassword('s3')]);
+      password = 'new';
+      service.credentialsChanged();
+      player.seekGate!.complete();
+      player.seekGate = null;
+      await skipping;
+      await pumpEventQueue();
+
+      expect(errors, isEmpty);
+      expect(player.loadedSources.last, urlWithPassword('s2'));
+      expect(service.currentIndex, 1);
+      expect(player.playing, isTrue);
+      expect(service.playbackState, PlaybackState.playing);
+    });
+
     test('downloads the upcoming tracks again with the new password', () async {
       // Refused with the old password until the downloads give up
       cache.failing.addAll(['s2', 's3']);

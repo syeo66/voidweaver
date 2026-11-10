@@ -31,6 +31,10 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
   /// player, items whose cache key is cached ([isCached]) still play.
   final Set<String> failingUrls = {};
 
+  /// Also fail to load, for URLs it returns true for (e.g. one carrying an
+  /// outdated password). Cached items still play, as with [failingUrls].
+  bool Function(String url)? failsUrl;
+
   /// URLs whose load completes normally but leaves the player idle, as when
   /// the item fails right after it's ready and its error event reaches Dart
   /// before the load's result, while the service ignores errors
@@ -155,9 +159,11 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
     _stateController.add(_currentPlayerState);
   }
 
-  bool _fails(int index) =>
-      failingUrls.contains(_describe(_sequence[index])) &&
-      !isCached(_sequence[index].cacheKey);
+  bool _fails(int index) {
+    final url = _describe(_sequence[index]);
+    return (failingUrls.contains(url) || (failsUrl?.call(url) ?? false)) &&
+        !isCached(_sequence[index].cacheKey);
+  }
 
   /// Makes the item at [index] the current one, starting at [position].
   void _moveTo(int index, Duration position) {
