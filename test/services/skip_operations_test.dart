@@ -830,6 +830,33 @@ void main() {
       expect(player.position, const Duration(seconds: 60));
     });
 
+    test('a second seek while the first one after a slow skip runs is '
+        'carried out too', () async {
+      await service.playAlbum(album(3));
+      player.seekGate = Completer();
+
+      final skipping = service.next();
+      await settle();
+      final first = service.seekTo(const Duration(seconds: 60));
+      Future<void>? second;
+      player.onSeekWithinItem = (position) {
+        if (position == const Duration(seconds: 60)) {
+          second = service.seekTo(const Duration(seconds: 90));
+        }
+      };
+      player.seekGate!.complete();
+      await skipping;
+      await first;
+      await second;
+
+      expect(player.seeks, [
+        const Duration(seconds: 60),
+        const Duration(seconds: 90),
+      ]);
+      expect(player.position, const Duration(seconds: 90));
+      expect(service.currentPosition, const Duration(seconds: 90));
+    });
+
     test('before a new queue is loaded moves where it starts', () async {
       final reading = Completer<ReplayGainData>();
       when(mockApi.readReplayGain(any)).thenAnswer((_) => reading.future);

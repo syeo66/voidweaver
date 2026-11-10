@@ -911,8 +911,12 @@ class AudioPlayerService extends ChangeNotifier {
       return;
     }
 
-    final seekAfter = move.seekAfter;
-    if (seekAfter != null) {
+    // Again for a seek that came while the one before ran
+    for (
+      var seekAfter = move.seekAfter;
+      seekAfter != null;
+      seekAfter = move.seekAfter
+    ) {
       move.seekAfter = null;
       try {
         await _audioPlayer.seek(seekAfter);
@@ -959,11 +963,18 @@ class AudioPlayerService extends ChangeNotifier {
         _onLoadFailed('Failed to play ${move.description}', failure);
         move.complete(_MoveResult.failed);
       case _OnFailure.quiet:
-        _log.warning(
-          'Could not load ${move.description}, will retry on play',
-          failure,
-        );
+        // play() loads it again where it was meant to start
         _pendingResumePosition = move.position;
+        if (_playPending) {
+          // Play was pressed while it loaded: the user is told, as after
+          // any other Play
+          _onLoadFailed('Failed to play ${move.description}', failure);
+        } else {
+          _log.warning(
+            'Could not load ${move.description}, will retry on play',
+            failure,
+          );
+        }
         move.complete(_MoveResult.failed);
     }
   }
