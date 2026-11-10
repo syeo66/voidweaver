@@ -1033,6 +1033,42 @@ void main() {
       expect(service.startsInProgress, 0);
     });
 
+    test('stop during a slow album load stays stopped', () async {
+      player.loadGate = Completer();
+      final starting = service.playAlbum(albumOf(2));
+      await pumpEventQueue();
+      final loads = player.loadedSources.length;
+
+      await service.stop();
+      await starting;
+      player.loadGate!.complete();
+      await pumpEventQueue();
+
+      // Not loaded again (paused), which would bring the notification back
+      expect(player.loadedSources, hasLength(loads));
+      expect(player.processingState, ProcessingState.idle);
+      expect(service.playbackState, PlaybackState.stopped);
+      expect(service.startsInProgress, 0);
+
+      // Play loads it
+      await service.play();
+      await pumpEventQueue();
+      expect(player.playing, isTrue);
+      expect(service.playbackState, PlaybackState.playing);
+    });
+
+    test('a start item that breaks right after its load is reported, not '
+        'loaded again', () async {
+      player.breakAfterLoad.add(urlFor('s1'));
+
+      await expectLater(service.playAlbum(albumOf(1)), throwsA(anything));
+      await pumpEventQueue();
+
+      expect(player.loadedSources, hasLength(1));
+      expect(service.playbackState, PlaybackState.stopped);
+      expect(service.startsInProgress, 0);
+    });
+
     test('play after a stop and a skip during the slow load plays', () async {
       await service.playAlbum(albumOf(3));
       await Future<void>.delayed(pastSkipDebounce);

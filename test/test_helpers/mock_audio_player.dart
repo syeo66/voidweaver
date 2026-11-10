@@ -31,6 +31,11 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
   /// player, items whose cache key is cached ([isCached]) still play.
   final Set<String> failingUrls = {};
 
+  /// URLs whose load completes normally but leaves the player idle, as when
+  /// the item fails right after it's ready and its error event reaches Dart
+  /// before the load's result, while the service ignores errors
+  final Set<String> breakAfterLoad = {};
+
   /// Whether the content for a cache key is cached, see [AudioSource.cacheKey]
   final bool Function(String? cacheKey) isCached;
 
@@ -166,8 +171,8 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
 
   /// The item at the current index failed to load: the player reports the
   /// error and goes idle.
-  void _failCurrent() {
-    final error = PlayerException(0, 'Source error', _currentIndex);
+  void _failCurrent([int? index]) {
+    final error = PlayerException(0, 'Source error', index ?? _currentIndex);
     failures++;
     _setState(playing, ProcessingState.idle);
     idleCause = 'error';
@@ -204,6 +209,12 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
       _setState(playing, ProcessingState.idle);
       idleCause = 'error';
       throw PlayerException(0, 'Network unreachable', index);
+    }
+    if (breakAfterLoad.contains(_describe(_sequence[index]))) {
+      failures++;
+      _setState(playing, ProcessingState.idle);
+      idleCause = 'error';
+      return _duration;
     }
     _setState(playing, ProcessingState.ready);
     return _duration;
@@ -374,7 +385,11 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
 
   /// A load error for the current item, e.g. the network dropping while it
   /// streams.
-  void simulateLoadError() => _failCurrent();
+  ///
+  /// With [index], the error is about that item instead of the current one:
+  /// the error of an item the player has just moved away from, reported
+  /// after the move (it was on its way when the seek was issued).
+  void simulateLoadError({int? index}) => _failCurrent(index);
 
   /// The current item running out of buffered data while it plays.
   void simulateBuffering() => _setState(playing, ProcessingState.buffering);

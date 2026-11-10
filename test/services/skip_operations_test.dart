@@ -538,6 +538,32 @@ void main() {
       expect(service.playbackState, PlaybackState.playing);
     });
 
+    test('the error of the track a skip left, arriving during its seek, '
+        'leaves the skip to load its target', () async {
+      final errors = <String>[];
+      service.playbackErrors.listen(errors.add);
+      await service.playAlbum(album(3));
+      await Future<void>.delayed(pastSkipDebounce);
+      player.seekGate = Completer();
+
+      final skipping = service.next();
+      await pumpEventQueue();
+      // The track being left stalled and fails at the end of its retries;
+      // its error comes while the seek waits
+      player.simulateLoadError(index: 0);
+      player.seekGate!.complete();
+      player.seekGate = null;
+      await skipping;
+      await settle();
+
+      expect(errors, isEmpty);
+      expect(service.currentIndex, 1);
+      expect(player.currentIndex, 1);
+      expect(player.processingState, ProcessingState.ready);
+      expect(player.playing, isTrue);
+      expect(service.playbackState, PlaybackState.playing);
+    });
+
     test('a stop while a skip back reads its target\'s tags isn\'t taken for '
         'the target ending', () async {
       await service.playAlbum(unreadAlbum('u', 3));
