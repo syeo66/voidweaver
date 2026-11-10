@@ -68,9 +68,9 @@ class ErrorHandler {
     for (final reporter in List.of(_reporters)) {
       try {
         reporter.reportError(details);
-      } catch (e) {
+      } catch (e, stack) {
         // Don't let reporter errors crash the app
-        _log.warning('Error reporter failed', e);
+        _log.warning('Error reporter failed', e, stack);
       }
     }
   }

@@ -261,8 +261,8 @@ class AppState extends ChangeNotifier {
       }
       if (!identical(player, _audioPlayerService)) return;
       await player.resumeIfRequested();
-    } catch (e) {
-      _log.warning('Failed to restore playback state', e);
+    } catch (e, stack) {
+      _log.warning('Failed to restore playback state', e, stack);
     }
   }
 

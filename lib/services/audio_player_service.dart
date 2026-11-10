@@ -476,8 +476,8 @@ class AudioPlayerService extends ChangeNotifier {
       );
       notifyListeners();
       return true;
-    } catch (e) {
-      _log.warning('Failed to restore playback state', e);
+    } catch (e, stack) {
+      _log.warning('Failed to restore playback state', e, stack);
       // Clear invalid saved state
       await _persistence.clearPlaybackState();
     }
@@ -752,11 +752,11 @@ class AudioPlayerService extends ChangeNotifier {
         if (move != null) {
           try {
             await _step(move);
-          } catch (e) {
+          } catch (e, stack) {
             // A step doesn't throw (the reads catch their own errors); if
             // one does, the move fails like any other instead of staying
             // stuck at loading
-            _log.severe('Player worker step failed', e);
+            _log.severe('Player worker step failed', e, stack);
             if (!_disposed && identical(move, _move)) {
               _finish(move, failure: e);
             }
@@ -1334,6 +1334,10 @@ class AudioPlayerService extends ChangeNotifier {
       notifyListeners();
     }
     await _audioPlayer.pause();
+    // The position stream saves only while playing, so the position the
+    // pause stopped at is written now, not with the next timed save
+    _schedulePositionSave();
+    _persistence?.flushPendingPositionSave();
   }
 
   /// Stops and releases the loaded track. A load in progress ends without
@@ -1414,6 +1418,8 @@ class AudioPlayerService extends ChangeNotifier {
     final move = _move;
     if (move != null) {
       _currentPosition = position;
+      // The move's end saves only if it starts playback
+      _schedulePositionSave();
       if (!move.issued) {
         move.position = position;
         return Future.value();
@@ -1425,6 +1431,7 @@ class AudioPlayerService extends ChangeNotifier {
       // Nothing loaded to seek in: play() loads it there
       _pendingResumePosition = position;
       _currentPosition = position;
+      _schedulePositionSave();
       return Future.value();
     }
     final generation = _generation;
@@ -1434,6 +1441,9 @@ class AudioPlayerService extends ChangeNotifier {
       // was meant for the track before
       if (generation != _generation || index != _currentIndex) return;
       await _audioPlayer.seek(position);
+      // A seek while paused gets no position update to save it with
+      if (_playbackState != PlaybackState.playing) _currentPosition = position;
+      _schedulePositionSave();
     });
   }
 

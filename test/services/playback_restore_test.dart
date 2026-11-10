@@ -299,6 +299,83 @@ void main() {
       expect(service.playbackState, PlaybackState.playing);
     });
 
+    group('saving the position without playback', () {
+      Future<PlaybackPersistenceService> newPersistence() async {
+        SharedPreferences.setMockInitialValues({});
+        final persistence = PlaybackPersistenceService(
+          directory: storage,
+          positionSaveInterval: const Duration(milliseconds: 20),
+        );
+        await persistence.initialize();
+        return persistence;
+      }
+
+      Future<Duration?> savedPosition() async {
+        // A new instance, as on the next start
+        final reader = PlaybackPersistenceService(directory: storage);
+        await reader.initialize();
+        return (await reader.loadPlaybackState())?.currentPosition;
+      }
+
+      test('a seek while paused is saved', () async {
+        service = AudioPlayerService(
+          mockApi,
+          mockSettingsService,
+          audioPlayer: mockAudioPlayer,
+          persistence: await newPersistence(),
+          clock: mockAudioPlayer.clock,
+        );
+        await service.playSong(song);
+        await service.pause();
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+
+        await service.seekTo(const Duration(seconds: 180));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+
+        expect(await savedPosition(), const Duration(seconds: 180));
+      });
+
+      test('a seek on a queue that is not loaded is saved', () async {
+        service = AudioPlayerService(
+          mockApi,
+          mockSettingsService,
+          audioPlayer: mockAudioPlayer,
+          persistence: await newPersistence(),
+          clock: mockAudioPlayer.clock,
+        );
+        await service.playSong(song);
+        await service.stop();
+        expect(service.needsSourceReload, isTrue);
+
+        await service.seekTo(const Duration(seconds: 90));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+
+        expect(await savedPosition(), const Duration(seconds: 90));
+      });
+
+      test('pausing saves the position it stopped at', () async {
+        // The timed save is far off: only the pause can write it
+        SharedPreferences.setMockInitialValues({});
+        final persistence = PlaybackPersistenceService(directory: storage);
+        await persistence.initialize();
+        service = AudioPlayerService(
+          mockApi,
+          mockSettingsService,
+          audioPlayer: mockAudioPlayer,
+          persistence: persistence,
+          clock: mockAudioPlayer.clock,
+        );
+        await service.playSong(song);
+        mockAudioPlayer.simulatePositionChange(const Duration(seconds: 42));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        await service.pause();
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+
+        expect(await savedPosition(), const Duration(seconds: 42));
+      });
+    });
+
     test(
       'a single song replaces the saved source of the album before it',
       () async {
