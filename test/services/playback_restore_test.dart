@@ -89,6 +89,15 @@ void main() {
       return persistence;
     }
 
+    /// Waits until the player loads a queue (held at its loadGate).
+    Future<void> untilLoading() async {
+      for (var i = 0; i < 500; i++) {
+        if (mockAudioPlayer.loadedSources.isNotEmpty) return;
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      fail('Timed out waiting for the restored queue to load');
+    }
+
     Future<void> restoreAt(Duration position) async {
       service = AudioPlayerService(
         mockApi,
@@ -116,7 +125,9 @@ void main() {
       mockAudioPlayer.loadGate = Completer();
 
       final restoring = service.restorePlaybackState();
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      // Reading the saved state touches the disk: wait for the load itself,
+      // not a fixed time, or Play may come before there is a queue to play
+      await untilLoading();
       await service.play();
       mockAudioPlayer.loadGate!.complete();
       await restoring;
@@ -170,7 +181,9 @@ void main() {
       mockAudioPlayer.loadGate = Completer();
 
       final restoring = service.restorePlaybackState();
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      // Reading the saved state touches the disk: wait for the load itself,
+      // not a fixed time, or Play may come before there is a queue to play
+      await untilLoading();
       await service.play();
       mockAudioPlayer.loadGate!.complete();
       await restoring;
