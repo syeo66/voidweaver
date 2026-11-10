@@ -88,7 +88,9 @@ public final class ErrorDocumentGuardTest {
       FakeHttpSource upstream = new FakeHttpSource("content-type", type);
 
       assertThrows(
-          type, IOException.class, () -> new MediaCache.ErrorDocumentGuard(upstream).open(SPEC));
+          type,
+          MediaCache.ErrorDocumentException.class,
+          () -> new MediaCache.ErrorDocumentGuard(upstream).open(SPEC));
       assertFalse("closed after " + type, upstream.open);
     }
   }
@@ -100,7 +102,9 @@ public final class ErrorDocumentGuardTest {
       FakeHttpSource upstream = new FakeHttpSource("Content-Type", type);
 
       assertThrows(
-          type, IOException.class, () -> new MediaCache.ErrorDocumentGuard(upstream).open(SPEC));
+          type,
+          MediaCache.ErrorDocumentException.class,
+          () -> new MediaCache.ErrorDocumentGuard(upstream).open(SPEC));
       assertFalse("closed after " + type, upstream.open);
     }
   }

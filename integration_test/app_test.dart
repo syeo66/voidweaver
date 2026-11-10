@@ -161,6 +161,29 @@ void main() {
     );
   });
 
+  testWidgets('reports a song the server answers with an error at once', (
+    tester,
+  ) async {
+    final appState = await startAndLogIn(tester);
+    final player = playerOf(appState);
+
+    // A Subsonic error for every stream (HTTP 200 with an XML body), like an
+    // unknown song or a password changed on the server
+    server.failingEndpoints.add('stream');
+    await tester.tap(find.text('First Light'));
+    // Well under the 25 s the player retries a network error for
+    await _pumpUntil(
+      tester,
+      () => find.textContaining('Failed to play album').evaluate().isNotEmpty,
+      'the error',
+      timeout: const Duration(seconds: 10),
+    );
+    expect(player.playbackState, PlaybackState.stopped);
+    expect(player.currentSong?.title, 'Dawn');
+    // Asked once: the server would give the same answer again
+    expect(server.requestsTo('stream').map((r) => r.params['id']), ['s-1']);
+  });
+
   testWidgets('asks for the new password after it changed on the server', (
     tester,
   ) async {

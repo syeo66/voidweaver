@@ -218,10 +218,22 @@ final class MediaCache {
   }
 
   /**
+   * The server answered with a document instead of audio, see {@link ErrorDocumentGuard}: an error
+   * it reported (wrong password, unknown song) or a reverse proxy's page. Asking again gets the same
+   * answer.
+   */
+  static final class ErrorDocumentException extends IOException {
+    ErrorDocumentException(String contentType) {
+      super("Server returned a document (" + contentType + ") instead of audio");
+    }
+  }
+
+  /**
    * Fails requests that the server answers with a document instead of audio: XML or JSON, as
    * Subsonic reports errors (e.g. an unknown song) with status 200, and any text, such as a login
    * or maintenance page of a reverse proxy. Without this, the document would be cached as the
-   * complete song, and count as playable offline until evicted.
+   * complete song, and count as playable offline until evicted. Throws {@link
+   * ErrorDocumentException}, which the player doesn't retry, see {@link LoadErrorPolicy}.
    */
   static final class ErrorDocumentGuard implements DataSource {
     static final class Factory implements DataSource.Factory {
@@ -258,7 +270,7 @@ final class MediaCache {
         for (String value : header.getValue()) {
           if (isDocument(value)) {
             upstream.close();
-            throw new IOException("Server returned a document (" + value + ") instead of audio");
+            throw new ErrorDocumentException(value);
           }
         }
       }
