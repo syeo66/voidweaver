@@ -125,58 +125,13 @@ jobs:
         name: android-apk
         path: build/app/outputs/flutter-apk/app-release.apk
 
-  integration-test:
-    runs-on: ubuntu-latest
-    needs: test
-
-    steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-    - name: Setup Flutter
-      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-      with:
-        flutter-version: '3.47.7'
-        channel: 'stable'
-        # The SDK and the pub cache
-        cache: true
-
-    # Gradle User Home (wrapper, dependencies). The basic provider: the
-    # default one is proprietary.
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
-      with:
-        cache-provider: basic
-
-    - name: Install dependencies
-      run: flutter pub get
-
-    # Hardware acceleration for the emulator
-    - name: Enable KVM
-      run: |
-        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-        sudo udevadm control --reload-rules
-        sudo udevadm trigger --name-match=kvm
-
-    # User flows against the fake Subsonic server, with the real player
-    # (debug build). The release-build checks (tool/emulator_check.sh) run
-    # locally only: in the runner's emulator they failed at the login step.
-    - name: Run integration tests in an emulator
-      uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
-      with:
-        api-level: 35
-        arch: x86_64
-        target: google_apis
-        profile: pixel_6
-        disable-animations: true
-        script: flutter test integration_test
-
   # Publishes the APK as a GitHub release when a version tag is pushed
   # (git tag v1.2.0 && git push origin v1.2.0). Only after everything else
   # passed.
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    needs: [test, build-android, integration-test]
+    needs: [test, build-android]
     permissions:
       contents: write
 

@@ -9,7 +9,7 @@ tool/release.sh 1.3.0-beta.1   # an explicit version
 
 It bumps `version:` in `pubspec.yaml`, commits "release vX.Y.Z", tags it, and after a confirmation pushes `main` and the tag (`--dry-run` only prints the new version). It refuses to run off `main`, with uncommitted changes, or if the tag exists. Pushing goes to all of `origin`'s push URLs; only GitHub runs the workflow. Wait for CI on the pushed commit if you want the checks before the tag; otherwise the tag's own run does them before publishing.
 
-The `release` job in `.github/workflows/flutter.yml` runs after tests, the release build and the integration tests passed. It then:
+The `release` job in `.github/workflows/flutter.yml` runs after tests and the release build passed (the integration tests are not in CI; run them locally before tagging). It then:
 
 - fails if the tag differs from the `version:` in `pubspec.yaml`,
 - fails if the APK is signed with the debug key (`tool/check_apk_signature.sh`),

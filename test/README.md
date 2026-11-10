@@ -30,7 +30,7 @@ It doesn't use `fakeAsync`: awaiting `StreamSubscription.cancel()` on a broadcas
 flutter test integration_test -d emulator-5554   # or: make test-integration
 ```
 
-Each test starts from a fresh install (credentials and SharedPreferences cleared). CI runs them in an emulator. They use a debug build, so they don't replace `tool/emulator_check.sh` (release build, R8, media keys, resumption), which runs locally only, not in CI (see below and [docs/ANDROID.md](../docs/ANDROID.md)).
+Each test starts from a fresh install (credentials and SharedPreferences cleared). CI doesn't run them (they failed more often than not in the runner's emulator), so run them locally after changes to playback, login or the screens they touch. They use a debug build, so they don't replace `tool/emulator_check.sh` (release build, R8, media keys, resumption), which also runs locally only (see below and [docs/ANDROID.md](../docs/ANDROID.md)).
 
 ## Fake Subsonic server
 
