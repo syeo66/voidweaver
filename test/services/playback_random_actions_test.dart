@@ -97,6 +97,8 @@ class _Stats {
   int pauseChecked = 0;
   int playChecked = 0;
   int failureChecked = 0;
+  // Of the failure rule's checks, those of a queue the playlist replaced
+  int replacedFailureChecked = 0;
   int restores = 0;
   int quietRestoreFailures = 0;
   int passwordChanges = 0;
@@ -907,10 +909,14 @@ class _Run {
 
     // A failure nothing superseded: playback stopped on it, and it was
     // reported once. Unless the restore failed quietly: then it shows
-    // paused, waiting for Play, and nothing was reported.
+    // paused, waiting for Play, and nothing was reported. A failure of a
+    // queue the playlist replaced (stop() ended the new one's load before it
+    // reached the player) is the service's to ignore: it isn't playing or
+    // loading, and play() loads the playlist.
     _noteFailures();
     if (player.processingState == ProcessingState.idle &&
-        player.idleCause == 'error') {
+        player.idleCause == 'error' &&
+        _holdsPlaylist(playlist)) {
       stats.failureChecked++;
       final quiet = quietFailure == player.failures;
       final state = quiet ? PlaybackState.paused : PlaybackState.stopped;
@@ -926,6 +932,25 @@ class _Run {
           '${quiet ? 'the restore\'s quiet failure' : 'the last failure'} '
           'was reported $count times',
         );
+      }
+    } else if (player.processingState == ProcessingState.idle &&
+        player.idleCause == 'error') {
+      stats.replacedFailureChecked++;
+      if (service.playbackState == PlaybackState.playing ||
+          service.playbackState == PlaybackState.loading) {
+        problem(
+          'a replaced queue\'s failure left the state at '
+          '${service.playbackState}',
+        );
+      }
+      if (!service.needsSourceReload) {
+        problem('on a replaced queue\'s failure, but Play wouldn\'t load');
+      }
+      // Not at all if it failed after the replacement, once if before (and
+      // stop() then ended the new queue's load): the model can't tell which
+      final count = reports - reportsAtFailure;
+      if (count > 1) {
+        problem('a replaced queue\'s failure was reported $count times');
       }
     }
 
@@ -965,7 +990,8 @@ void main() {
     final summary =
         '${stats.runs} runs; Pause/Stop rule checked in '
         '${stats.pauseChecked}, Play rule in ${stats.playChecked}, '
-        'failure rule in ${stats.failureChecked}; '
+        'failure rule in ${stats.failureChecked} (on a replaced queue in '
+        '${stats.replacedFailureChecked}); '
         '${stats.restores} restores (${stats.quietRestoreFailures} failed '
         'quietly), ${stats.passwordChanges} password changes '
         '(${stats.staleFailures} item loads failed only for an outdated URL), '
