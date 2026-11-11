@@ -27,7 +27,7 @@ It doesn't use `fakeAsync`: awaiting `StreamSubscription.cancel()` on a broadcas
 
 ## Integration tests
 
-`integration_test/` runs user flows of the whole app on a device or emulator: log in, play an album to its end (scrobbles included), random songs and the player controls, a song the server answers with an error (reported at once, not retried), and a password changed on the server. They run against `FakeSubsonicServer`, which runs inside the app, with the real player (Media3 ExoPlayer and its media session) streaming from it.
+`integration_test/` runs user flows of the whole app on a device or emulator: log in, play an album to its end (scrobbles included), random songs and the player controls, a song the server answers with an error (reported at once, not retried), a password changed on the server, the queue and position restored after the app is closed and started again (in the same process, see `restart()`), cached tracks playing on after the server is gone, and skips pressed while the album is still loading (the player lands on the last track asked for, and the songs skipped over aren't scrobbled). They run against `FakeSubsonicServer`, which runs inside the app, with the real player (Media3 ExoPlayer and its media session) streaming from it.
 
 ```bash
 flutter test integration_test -d emulator-5554   # or: make test-integration
@@ -46,7 +46,7 @@ GitHub emails a failed scheduled run to whoever last changed the workflow's `cro
 
 ## Fake Subsonic server
 
-`test_helpers/fake_subsonic_server.dart` is a Subsonic server over HTTPS on localhost that answers like Navidrome (XML, errors as HTTP 200 with `status="failed"`, token auth): three albums of 4-second WAV tones, random songs, artists, search, scan status, scrobbles (recorded in `scrobbles`), cover art, and range requests for `stream` and `download`. Every request is recorded in `requests`; change `password` to simulate a password changed on the server, and set `downloadsEnabled = false` to refuse `download` like Navidrome with downloads disabled.
+`test_helpers/fake_subsonic_server.dart` is a Subsonic server over HTTPS on localhost that answers like Navidrome (XML, errors as HTTP 200 with `status="failed"`, token auth): three albums of 4-second WAV tones, random songs, artists, search, scan status, scrobbles (recorded in `scrobbles`), cover art, and range requests for `stream` and `download`. Every request is recorded in `requests`; change `password` to simulate a password changed on the server, set `downloadsEnabled = false` to refuse `download` like Navidrome with downloads disabled, and set `streamDelay` to make `stream` wait before it answers (to act on a load that's still pending). `close()` stops it, like a server the app can't reach any more.
 
 Clients have to trust its certificate: set `HttpOverrides.global = FakeSubsonicServer.httpOverrides` (in host tests after `TestWidgetsFlutterBinding.ensureInitialized()`, whose own overrides fail every request). Debug builds of the app trust it for localhost only (`android/app/src/fakeServer/res/xml/network_security_config.xml`), so ExoPlayer can stream from it; the release APK doesn't (`tool/check_release_apk.sh` checks).
 

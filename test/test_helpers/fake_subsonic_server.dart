@@ -112,6 +112,11 @@ class FakeSubsonicServer {
   /// connection error.
   final Set<String> failingEndpoints = {};
 
+  /// How long `stream` waits before it answers, to keep a load pending
+  /// while a test acts on it. Applies to requests that arrive while it's
+  /// set. `download` isn't delayed.
+  Duration streamDelay = Duration.zero;
+
   /// Every request answered, oldest first
   final List<FakeRequest> requests = [];
 
@@ -207,6 +212,9 @@ class FakeSubsonicServer {
         case 'scrobble':
           return _scrobble(response, params);
         case 'stream':
+          if (streamDelay > Duration.zero) {
+            await Future<void>.delayed(streamDelay);
+          }
           return _stream(request, params['id']);
         case 'download':
           if (!downloadsEnabled) {

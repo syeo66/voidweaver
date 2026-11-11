@@ -11,9 +11,19 @@ class _FakePlayer extends Mock implements AudioPlayerService {
 
   @override
   Stream<String> get playbackErrors => errors.stream;
+
+  @override
+  void dispose() => unawaited(errors.close());
 }
 
 void main() {
+  /// A player that's released at the end of the test, like the app's
+  _FakePlayer newPlayer() {
+    final player = _FakePlayer();
+    addTearDown(player.dispose);
+    return player;
+  }
+
   Future<void> pump(WidgetTester tester, AudioPlayerService? player) =>
       tester.pumpWidget(
         MaterialApp(
@@ -25,7 +35,7 @@ void main() {
       );
 
   testWidgets('shows a playback error as a snack bar', (tester) async {
-    final player = _FakePlayer();
+    final player = newPlayer();
     await pump(tester, player);
 
     player.errors.add('Could not play "Song": Cannot reach server.');
@@ -38,7 +48,7 @@ void main() {
   });
 
   testWidgets('a new error replaces the one before', (tester) async {
-    final player = _FakePlayer();
+    final player = newPlayer();
     await pump(tester, player);
 
     player.errors.add('first');
@@ -51,8 +61,8 @@ void main() {
   });
 
   testWidgets('follows the player of a new login', (tester) async {
-    final old = _FakePlayer();
-    final current = _FakePlayer();
+    final old = newPlayer();
+    final current = newPlayer();
     await pump(tester, old);
     await pump(tester, current);
 

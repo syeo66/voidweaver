@@ -8,6 +8,3 @@
 ## Reliability
 - [ ] Handle self-signed certificates
 - [ ] Crash reporting
-
-## Tests
-- [ ] More integration flows: offline (cached tracks), skips during loads, playback restore after a restart

@@ -26,10 +26,19 @@ jobs:
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
     
+    # The SDK version is in .flutter-version, so one line moves every job
+    - name: Read the Flutter version
+      id: flutter
+      run: |
+        version=$(tr -d '[:space:]' < .flutter-version)
+        # Empty would install the latest stable
+        test -n "$version"
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+
     - name: Setup Flutter
       uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
       with:
-        flutter-version: '3.47.7'
+        flutter-version: ${{ steps.flutter.outputs.version }}
         channel: 'stable'
         # The SDK and the pub cache
         cache: true
@@ -72,10 +81,19 @@ jobs:
         # Full history: the build number is the commit count
         fetch-depth: 0
     
+    # The SDK version is in .flutter-version, so one line moves every job
+    - name: Read the Flutter version
+      id: flutter
+      run: |
+        version=$(tr -d '[:space:]' < .flutter-version)
+        # Empty would install the latest stable
+        test -n "$version"
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+
     - name: Setup Flutter
       uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
       with:
-        flutter-version: '3.47.7'
+        flutter-version: ${{ steps.flutter.outputs.version }}
         channel: 'stable'
         # The SDK and the pub cache
         cache: true
