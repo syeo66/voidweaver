@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/app_state.dart';
 
 import '../test_helpers/saved_credentials.dart';
+import '../test_helpers/waiting.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -38,11 +39,8 @@ void main() {
     await appState.initialize();
   });
 
-  Future<void> albumsLoaded() async {
-    while (appState.isLoading) {
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    }
-  }
+  Future<void> albumsLoaded() =>
+      pumpUntil(() => !appState.isLoading, reason: 'the albums to load');
 
   test('starts with saved credentials before the albums have loaded', () async {
     expect(appState.isConfigured, isTrue);
@@ -67,7 +65,9 @@ void main() {
     appState.addListener(() => notified = true);
     expect(appState.isLoading, isFalse);
 
-    // Longer than the load takes to fail
+    // Longer than the load takes to fail. Nothing shows that the dropped load
+    // ended; too short a wait could only let the check pass (see
+    // test/README.md).
     await Future<void>.delayed(const Duration(seconds: 3));
     expect(notified, isFalse);
     expect(appState.albumError, isNull);

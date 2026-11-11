@@ -1,14 +1,17 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/audio_player_service.dart';
 import 'package:voidweaver_player/voidweaver_player.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 import 'package:voidweaver/services/settings_service.dart';
 import 'package:voidweaver/services/replaygain_reader.dart';
+import 'package:voidweaver/services/scrobble_queue.dart';
 
 import '../test_helpers/mock_api.dart';
 import '../test_helpers/mocks.mocks.dart';
 import '../test_helpers/mock_audio_player.dart';
+import '../test_helpers/waiting.dart';
 
 void main() {
   group('Scrobble Tests', () {
@@ -16,6 +19,17 @@ void main() {
     late MockSubsonicApi mockApi;
     late MockSettingsService mockSettingsService;
     late MockAudioPlayer mockAudioPlayer;
+    late ScrobbleQueue scrobbleQueue;
+
+    /// Lets the service act on what the player reported, and the scrobble
+    /// queue send what it got (100 ms apart)
+    Future<void> settle() => pumpUntil(
+      () =>
+          audioPlayerService.pendingPlayerOps == 0 &&
+          audioPlayerService.startsInProgress == 0 &&
+          scrobbleQueue.queueSize == 0,
+      reason: 'the player and the scrobble queue to be done',
+    );
 
     setUpAll(() {
       TestWidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +39,8 @@ void main() {
       mockApi = newMockApi();
       mockSettingsService = MockSettingsService();
       mockAudioPlayer = MockAudioPlayer();
+      SharedPreferences.setMockInitialValues({});
+      scrobbleQueue = ScrobbleQueue(mockApi);
 
       // Mock settings service methods
       when(mockSettingsService.replayGainMode).thenReturn(ReplayGainMode.off);
@@ -52,6 +68,7 @@ void main() {
         mockApi,
         mockSettingsService,
         audioPlayer: mockAudioPlayer,
+        scrobbleQueue: scrobbleQueue,
         clock: mockAudioPlayer.clock,
       );
     });
@@ -82,7 +99,7 @@ void main() {
       await audioPlayerService.playAlbum(album);
 
       // Wait for async operations to complete
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       // Verify now playing notification was sent
       verify(mockApi.scrobbleNowPlaying('song1')).called(1);
@@ -110,14 +127,14 @@ void main() {
 
       // Play the album
       await audioPlayerService.playAlbum(album);
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       // Reset the mock to clear the nowPlaying call
       clearInteractions(mockApi);
 
       // Simulate playback to 50% (2 minutes)
       mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 120));
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       // Verify scrobble was submitted
       verify(
@@ -149,7 +166,7 @@ void main() {
 
         // Play the album
         await audioPlayerService.playAlbum(album);
-        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await settle();
 
         // Reset the mock to clear the nowPlaying call
         clearInteractions(mockApi);
@@ -157,7 +174,7 @@ void main() {
         // Simulate playback to 2 minutes (which is > 50% for a 3-minute song)
         // So the 2-minute rule should trigger first
         mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 120));
-        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await settle();
 
         // Verify scrobble was submitted
         verify(
@@ -188,14 +205,14 @@ void main() {
 
       // Play the album
       await audioPlayerService.playAlbum(album);
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       // Reset the mock to clear the nowPlaying call
       clearInteractions(mockApi);
 
       // Simulate playback to only 1 minute (less than 2 minutes and less than 50%)
       mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 60));
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       // Verify scrobble was NOT submitted
       verifyNever(
@@ -225,21 +242,21 @@ void main() {
 
       // Play the album
       await audioPlayerService.playAlbum(album);
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       // Reset the mock to clear the nowPlaying call
       clearInteractions(mockApi);
 
       // Simulate playback past 50%
       mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 120));
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       // Continue playback (simulate more position updates)
       mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 130));
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 140));
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       // Verify scrobble was submitted only once
       verify(
@@ -276,18 +293,18 @@ void main() {
         when(mockSettingsService.scrobbleThresholdPercent).thenReturn(100.0);
         mockAudioPlayer.simulateDurationChange(const Duration(seconds: 180));
         await audioPlayerService.playAlbum(threeMinuteAlbum());
-        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await settle();
         clearInteractions(mockApi);
 
         // The last position update comes shortly before the end
         mockAudioPlayer.simulatePlayingTo(const Duration(milliseconds: 179800));
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await settle();
         verifyNever(
           mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')),
         );
 
         mockAudioPlayer.simulateCompletion();
-        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await settle();
 
         verify(
           mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
@@ -298,17 +315,17 @@ void main() {
     test('should NOT scrobble a song seeked to its end', () async {
       mockAudioPlayer.simulateDurationChange(const Duration(seconds: 180));
       await audioPlayerService.playAlbum(threeMinuteAlbum());
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
       clearInteractions(mockApi);
 
       mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 30));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await settle();
       await audioPlayerService.seekTo(const Duration(seconds: 175));
       mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 178));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await settle();
 
       mockAudioPlayer.simulateCompletion();
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       verifyNever(
         mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
@@ -320,7 +337,7 @@ void main() {
       () async {
         mockAudioPlayer.simulateDurationChange(const Duration(seconds: 180));
         await audioPlayerService.playAlbum(threeMinuteAlbum());
-        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await settle();
         clearInteractions(mockApi);
 
         mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 10));
@@ -329,12 +346,12 @@ void main() {
           SystemCommandType.seek,
           const Duration(seconds: 150),
         );
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await settle();
         mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 155));
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await settle();
 
         await audioPlayerService.next();
-        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await settle();
 
         verifyNever(
           mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
@@ -345,21 +362,21 @@ void main() {
     test('should count playback after a seek toward the threshold', () async {
       mockAudioPlayer.simulateDurationChange(const Duration(seconds: 180));
       await audioPlayerService.playAlbum(threeMinuteAlbum());
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
       clearInteractions(mockApi);
 
       mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 40));
       await audioPlayerService.seekTo(const Duration(seconds: 100));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await settle();
       // 40 s before the seek and 50 s after it: 50% of 3 minutes
       mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 149));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await settle();
       verifyNever(
         mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')),
       );
 
       mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 150));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await settle();
 
       verify(
         mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
@@ -397,14 +414,14 @@ void main() {
 
         // Play the album
         await audioPlayerService.playAlbum(album);
-        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await settle();
 
         // Reset the mock to clear the nowPlaying call
         clearInteractions(mockApi);
 
         // Simulate playback to 50%
         mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 120));
-        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await settle();
 
         // Verify first scrobble was submitted
         verify(
@@ -414,7 +431,7 @@ void main() {
         // Now manually skip to next song
         clearInteractions(mockApi);
         await audioPlayerService.next();
-        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await settle();
 
         // Verify nowPlaying was sent for the next song, but no additional scrobble
         // for song1 (already scrobbled)
@@ -447,12 +464,12 @@ void main() {
 
       // Play first album
       await audioPlayerService.playAlbum(album1);
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       // Reset and simulate playback to trigger scrobble
       clearInteractions(mockApi);
       mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 120));
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       // Verify scrobble
       verify(
@@ -478,7 +495,7 @@ void main() {
       // Play second album
       clearInteractions(mockApi);
       await audioPlayerService.playAlbum(album2);
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       // Verify nowPlaying was sent
       verify(mockApi.scrobbleNowPlaying('song1')).called(1);
@@ -486,7 +503,7 @@ void main() {
       // Simulate playback to 50% again
       clearInteractions(mockApi);
       mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 120));
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       // Verify scrobble was submitted AGAIN (because tracking was reset)
       verify(
@@ -516,7 +533,7 @@ void main() {
 
       // Play the album
       await audioPlayerService.playAlbum(album);
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       // Reset the mock
       clearInteractions(mockApi);
@@ -524,7 +541,7 @@ void main() {
       // Simulate playback to 2 minutes (which meets the 2-minute criteria)
       // Note: For songs longer than 4 minutes, the 2-minute rule applies first
       mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 120));
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       // Should scrobble at 2 minutes (whichever comes first: 50% or 2 minutes)
       verify(
@@ -557,7 +574,7 @@ void main() {
 
       // Play the album
       await audioPlayerService.playAlbum(album);
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       // Verify now playing was called when song started
       verify(mockApi.scrobbleNowPlaying('song1')).called(1);
@@ -567,7 +584,7 @@ void main() {
 
       // Simulate playback to trigger scrobble
       mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 120));
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       // Verify scrobble submission was called when criteria was met
       verify(
@@ -604,14 +621,14 @@ void main() {
 
       // Play the album
       await audioPlayerService.playAlbum(album);
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       // Reset to check scrobble submission
       clearInteractions(mockApi);
 
       // Trigger completion to scrobble
       mockAudioPlayer.simulateCompletion();
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await settle();
 
       // Verify scrobble was called and capture the timestamp
       final verification = verify(

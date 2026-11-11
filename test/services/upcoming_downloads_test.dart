@@ -9,6 +9,7 @@ import 'package:voidweaver/services/upcoming_downloads.dart';
 import '../test_helpers/fake_audio_cache.dart';
 import '../test_helpers/mock_api.dart';
 import '../test_helpers/mocks.mocks.dart';
+import '../test_helpers/waiting.dart';
 
 void main() {
   late MockSubsonicApi api;
@@ -32,12 +33,10 @@ void main() {
   bool always() => true;
 
   /// Waits until the download of [id] has been attempted [times] times.
-  Future<void> untilAttempted(String id, int times) async {
-    for (var i = 0; i < 500 && (cache.attempts[id] ?? 0) < times; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 1));
-    }
-    expect(cache.attempts[id], greaterThanOrEqualTo(times));
-  }
+  Future<void> untilAttempted(String id, int times) => pumpUntil(
+    () => (cache.attempts[id] ?? 0) >= times,
+    reason: '$times attempts to download $id',
+  );
 
   setUp(() {
     api = newMockApi();
@@ -236,12 +235,8 @@ void main() {
   group('the download in progress', () {
     setUp(() => cache.gate = Completer<void>());
 
-    Future<void> untilWaiting(String id) async {
-      for (var i = 0; i < 500 && !cache.isWaiting(id); i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 1));
-      }
-      expect(cache.isWaiting(id), isTrue);
-    }
+    Future<void> untilWaiting(String id) =>
+        pumpUntil(() => cache.isWaiting(id), reason: 'the download of $id');
 
     test('is cancelled when another playlist starts', () async {
       final first = downloads.start(songs(5), 1, isCurrent: always);

@@ -9,6 +9,8 @@ import 'package:shared_preferences_platform_interface/shared_preferences_platfor
 import 'package:voidweaver/main.dart';
 import 'package:voidweaver/services/app_state.dart';
 
+import 'test_helpers/waiting.dart';
+
 void main() {
   testWidgets('App can be instantiated without errors', (
     WidgetTester tester,
@@ -46,16 +48,11 @@ void main() {
     SharedPreferences.setMockInitialValues({'themeMode': ThemeMode.dark.index});
     await tester.pumpWidget(const MyApp());
     // Initialization does real I/O, so let it run outside the fake clock
-    for (
-      var i = 0;
-      i < 50 && find.byType(CircularProgressIndicator).evaluate().isNotEmpty;
-      i++
-    ) {
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 20)),
-      );
-      await tester.pump();
-    }
+    await pumpFramesUntil(
+      tester,
+      () => find.byType(CircularProgressIndicator).evaluate().isEmpty,
+      reason: 'the app to be initialized',
+    );
 
     ThemeMode themeMode() =>
         tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode!;
@@ -79,17 +76,17 @@ void main() {
     final working = SharedPreferencesStorePlatform.instance;
     SharedPreferencesStorePlatform.instance = _FailingStore(working);
 
-    Future<void> settle() async {
-      for (var i = 0; i < 10; i++) {
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)),
-        );
-        await tester.pump();
-      }
-    }
+    bool loading() =>
+        find.byType(CircularProgressIndicator).evaluate().isNotEmpty;
+    bool offersRetry() => find.text('Try again').evaluate().isNotEmpty;
 
     await tester.pumpWidget(const MyApp());
-    await settle();
+    // Initialization does real I/O, so let it run outside the fake clock
+    await pumpFramesUntil(
+      tester,
+      () => !loading() && offersRetry(),
+      reason: 'the retry to be offered',
+    );
 
     expect(find.text('Try again'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
@@ -97,7 +94,11 @@ void main() {
     // The storage works again
     SharedPreferencesStorePlatform.instance = working;
     await tester.tap(find.text('Try again'));
-    await settle();
+    await pumpFramesUntil(
+      tester,
+      () => !loading() && !offersRetry(),
+      reason: 'the app to be initialized',
+    );
 
     expect(find.text('Try again'), findsNothing);
     expect(

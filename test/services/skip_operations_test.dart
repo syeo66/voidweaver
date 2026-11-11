@@ -9,12 +9,14 @@ import 'package:voidweaver/services/network_errors.dart';
 import 'package:voidweaver/services/settings_service.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 import 'package:voidweaver/services/replaygain_reader.dart';
+import 'package:voidweaver/services/scrobble_queue.dart';
 import 'package:voidweaver_player/voidweaver_player.dart';
 
 import '../test_helpers/fake_audio_cache.dart';
 import '../test_helpers/mock_audio_player.dart';
 import '../test_helpers/mock_api.dart';
 import '../test_helpers/mocks.mocks.dart';
+import '../test_helpers/waiting.dart';
 
 void main() {
   // Skips within this window of the previous one are ignored by the service
@@ -24,6 +26,7 @@ void main() {
   late MockSettingsService mockSettings;
   late MockAudioPlayer player;
   late FakeAudioCache cache;
+  late ScrobbleQueue scrobbleQueue;
   // Whether the fake server delivers audio; off, preloads of upcoming
   // tracks fail as if the network were down
   late AudioPlayerService service;
@@ -68,7 +71,18 @@ void main() {
   );
 
   /// Lets the service react to player events emitted on broadcast streams.
-  Future<void> settle() => Future.delayed(const Duration(milliseconds: 20));
+  /// The fake player needs no real time, so the event queue is enough.
+  Future<void> settle() => pumpEventQueue();
+
+  /// Lets the scrobble queue send what it got, 100 ms apart
+  Future<void> scrobblesSent() => pumpUntil(
+    () => service.pendingPlayerOps == 0 && scrobbleQueue.queueSize == 0,
+    reason: 'the scrobble queue to be sent',
+  );
+
+  /// Moves the service's clock past the window in which it ignores a skip
+  /// after another
+  void afterSkipDebounce() => player.now = player.now.add(pastSkipDebounce);
 
   setUpAll(() {
     TestWidgetsFlutterBinding.ensureInitialized();
@@ -81,6 +95,7 @@ void main() {
     mockSettings = MockSettingsService();
     cache = FakeAudioCache()..reachable = false;
     player = MockAudioPlayer(isCached: cache.isCachedKey);
+    scrobbleQueue = ScrobbleQueue(mockApi);
 
     when(mockSettings.replayGainMode).thenReturn(ReplayGainMode.off);
     when(mockSettings.replayGainPreamp).thenReturn(0.0);
@@ -109,6 +124,8 @@ void main() {
       mockSettings,
       audioPlayer: player,
       audioCache: cache,
+      scrobbleQueue: scrobbleQueue,
+      clock: player.clock,
     );
   });
 
@@ -152,7 +169,7 @@ void main() {
   group('next()', () {
     test('loads and plays the following track', () async {
       await service.playAlbum(album(3));
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
 
       await service.next();
 
@@ -174,9 +191,11 @@ void main() {
 
     test('ignores a second skip within the debounce window', () async {
       await service.playAlbum(album(3));
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
 
       await service.next();
+      // Within the window (100 ms), but not at the same instant
+      player.now = player.now.add(const Duration(milliseconds: 50));
       await service.next();
 
       expect(service.currentIndex, 1);
@@ -187,9 +206,9 @@ void main() {
       player.seekGate = Completer();
 
       final skipping = service.next();
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
       unawaited(service.next());
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
       unawaited(service.next());
       expect(service.currentIndex, 1);
       expect(service.isSkipOperationInProgress, isTrue);
@@ -209,7 +228,7 @@ void main() {
         player.seekGate = Completer();
 
         final skipping = service.next();
-        await Future<void>.delayed(pastSkipDebounce);
+        afterSkipDebounce();
         unawaited(service.next());
         await service.pause();
         player.seekGate!.complete();
@@ -228,7 +247,7 @@ void main() {
       player.seekGate = Completer();
 
       final skipping = service.next();
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
       unawaited(service.next());
       await service.pause();
       await service.play();
@@ -247,7 +266,7 @@ void main() {
         player.seekGate = Completer();
 
         final skipping = service.next();
-        await Future<void>.delayed(pastSkipDebounce);
+        afterSkipDebounce();
         unawaited(service.next());
         await service.stop();
         player.seekGate!.complete();
@@ -331,7 +350,7 @@ void main() {
 
       final skipping = service.next();
       for (var i = 0; i < 3; i++) {
-        await Future<void>.delayed(pastSkipDebounce);
+        afterSkipDebounce();
         unawaited(service.next());
       }
       player.seekGate!.complete();
@@ -345,7 +364,7 @@ void main() {
       'a skip while a new album is still being prepared moves within it',
       () async {
         await service.playAlbum(album(3));
-        await Future<void>.delayed(pastSkipDebounce);
+        afterSkipDebounce();
         // The new album's songs have no ReplayGain from the server, so its
         // load reads the start track's tags before handing the sequence to
         // the player; until then the player still holds the old album
@@ -433,9 +452,7 @@ void main() {
         final skipping = service.next();
         player.loadGate!.complete();
         await skipping;
-        await settle();
-        // The scrobble queue sends requests asynchronously, 100 ms apart
-        await Future<void>.delayed(const Duration(milliseconds: 500));
+        await scrobblesSent();
 
         // The load didn't announce the skip's target as playing
         verifyNever(mockApi.scrobbleNowPlaying('s2'));
@@ -449,7 +466,7 @@ void main() {
       'Previous while a new album is still being prepared starts it',
       () async {
         await service.playAlbum(album(3));
-        await Future<void>.delayed(pastSkipDebounce);
+        afterSkipDebounce();
         final gainRead = Completer<ReplayGainData>();
         when(mockApi.readReplayGain(any)).thenAnswer((_) => gainRead.future);
 
@@ -479,7 +496,7 @@ void main() {
       'a pause after a skip while a new album is being prepared holds',
       () async {
         await service.playAlbum(album(3));
-        await Future<void>.delayed(pastSkipDebounce);
+        afterSkipDebounce();
         final gainRead = Completer<ReplayGainData>();
         when(mockApi.readReplayGain(any)).thenAnswer((_) => gainRead.future);
 
@@ -533,7 +550,7 @@ void main() {
       final errors = <String>[];
       service.playbackErrors.listen(errors.add);
       await service.playAlbum(album(3));
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
       player.seekGate = Completer();
       player.failingUrls.add(urlFor('s2'));
 
@@ -556,12 +573,12 @@ void main() {
       final errors = <String>[];
       service.playbackErrors.listen(errors.add);
       await service.playAlbum(album(3));
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
       player.seekGate = Completer();
       player.failingUrls.add(urlFor('s2'));
 
       final skipping = service.next();
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
       unawaited(service.next());
       // Paused, s2's failure would otherwise stop playback on it at once
       await service.pause();
@@ -583,7 +600,7 @@ void main() {
       service.playbackErrors.listen(errors.add);
       final songs = unreadAlbum('u', 3);
       await service.playAlbum(songs);
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
       final gainRead = Completer<ReplayGainData>();
       when(mockApi.readReplayGain('u-2')).thenAnswer((_) => gainRead.future);
 
@@ -609,7 +626,7 @@ void main() {
       final errors = <String>[];
       service.playbackErrors.listen(errors.add);
       await service.playAlbum(album(3));
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
       player.seekGate = Completer();
 
       final skipping = service.next();
@@ -633,10 +650,10 @@ void main() {
     test('a stop while a skip back reads its target\'s tags isn\'t taken for '
         'the target ending', () async {
       await service.playAlbum(unreadAlbum('u', 3));
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
       await service.next();
       await settle();
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
       final gainRead = Completer<ReplayGainData>();
       when(mockApi.readReplayGain('u-1')).thenAnswer((_) => gainRead.future);
       clearInteractions(mockApi);
@@ -646,9 +663,7 @@ void main() {
       await service.stop();
       gainRead.complete(const ReplayGainData());
       await skipping;
-      await settle();
-      // The scrobble queue sends requests asynchronously, 100 ms apart
-      await Future<void>.delayed(const Duration(milliseconds: 500));
+      await scrobblesSent();
 
       verifyNever(
         mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')),
@@ -692,10 +707,10 @@ void main() {
 
     test('allows another skip once the debounce window has passed', () async {
       await service.playAlbum(album(3));
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
 
       await service.next();
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
       await service.next();
 
       expect(service.currentIndex, 2);
@@ -706,7 +721,7 @@ void main() {
       cache.cached.add('s3');
 
       await service.playAlbum(album(3));
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
       player.failingUrls.add(urlFor('s2'));
 
       await service.next();
@@ -720,7 +735,7 @@ void main() {
 
     test('stops on a track that can\'t load when nothing later can', () async {
       await service.playAlbum(album(2));
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
       player.failingUrls.add(urlFor('s2'));
 
       await service.next();
@@ -748,9 +763,9 @@ void main() {
 
     test('restarts a track that has played for a few seconds', () async {
       await service.playAlbum(album(3));
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
       await service.next();
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
       player.simulatePositionChange(const Duration(seconds: 10));
       await settle();
 
@@ -769,8 +784,7 @@ void main() {
       await settle();
 
       await service.previous();
-      // The scrobble queue sends requests asynchronously, 100 ms apart
-      await Future<void>.delayed(const Duration(milliseconds: 500));
+      await scrobblesSent();
 
       verify(mockApi.scrobbleNowPlaying('s1')).called(2);
     });
@@ -783,7 +797,7 @@ void main() {
       // A late position update of the track being skipped
       player.simulatePositionChange(const Duration(seconds: 10));
       await settle();
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
       unawaited(service.previous());
       player.seekGate!.complete();
       await skipping;
@@ -794,9 +808,9 @@ void main() {
 
     test('goes back to the preceding track', () async {
       await service.playAlbum(album(3));
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
       await service.next();
-      await Future<void>.delayed(pastSkipDebounce);
+      afterSkipDebounce();
 
       await service.previous();
 
@@ -836,7 +850,7 @@ void main() {
 
       player.simulateCompletion();
       player.simulateCompletion();
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await scrobblesSent();
 
       verify(mockApi.scrobbleSubmission('s1', playedAt: anyNamed('playedAt')))
           .called(1);
@@ -870,8 +884,7 @@ void main() {
       await service.playAlbum(album(2));
 
       player.simulateCompletion();
-      // The scrobble queue sends requests asynchronously
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await scrobblesSent();
 
       verify(mockApi.scrobbleSubmission('s1', playedAt: anyNamed('playedAt')))
           .called(1);

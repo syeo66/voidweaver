@@ -167,6 +167,8 @@ void main() {
       );
 
       await service.getWithRetry(uri);
+      // Past the timeout. Nothing shows an abort that didn't happen; too
+      // short a wait could only let the check pass (see test/README.md).
       await Future<void>.delayed(const Duration(milliseconds: 80));
 
       expect(aborted, isFalse);

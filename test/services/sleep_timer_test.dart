@@ -7,6 +7,7 @@ import 'package:voidweaver_player/voidweaver_player.dart';
 import '../test_helpers/mock_api.dart';
 import '../test_helpers/mocks.mocks.dart';
 import '../test_helpers/mock_audio_player.dart';
+import '../test_helpers/waiting.dart';
 
 void main() {
   group('Sleep Timer Tests', () {
@@ -137,8 +138,10 @@ void main() {
       audioPlayerService.startSleepTimer(duration);
       expect(audioPlayerService.isSleepTimerActive, true);
 
-      // Wait for timer to complete
-      await Future<void>.delayed(const Duration(milliseconds: 150));
+      await pumpUntil(
+        () => !audioPlayerService.isSleepTimerActive,
+        reason: 'the timer to expire',
+      );
 
       // Verify timer completed and is no longer active
       expect(audioPlayerService.isSleepTimerActive, false);
@@ -173,10 +176,12 @@ void main() {
       });
 
       service.startSleepTimer(const Duration(milliseconds: 10));
+      await pumpUntil(
+        () => !service.isSleepTimerActive,
+        reason: 'the timer to expire',
+      );
       // An unhandled error from pause() would fail the test
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-
-      expect(service.isSleepTimerActive, false);
+      await pumpEventQueue();
     });
 
     group('fade out', () {

@@ -6,6 +6,7 @@ import 'package:voidweaver/models/album_list_type.dart';
 import 'package:voidweaver/services/app_state.dart';
 
 import '../test_helpers/saved_credentials.dart';
+import '../test_helpers/waiting.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -32,11 +33,10 @@ void main() {
   });
 
   /// Waits for a running sync to fail, so it doesn't outlive the test.
-  Future<void> syncFinished() async {
-    while (appState.syncStatus == SyncStatus.syncing) {
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    }
-  }
+  Future<void> syncFinished() => pumpUntil(
+    () => appState.syncStatus != SyncStatus.syncing,
+    reason: 'the sync to finish',
+  );
 
   test('a due sync runs when the app is shown again', () async {
     appState.setVisible(false);

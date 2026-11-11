@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,13 +10,20 @@ import 'package:voidweaver/services/subsonic_api.dart';
 
 import '../test_helpers/mock_api.dart';
 import '../test_helpers/mocks.mocks.dart';
+import '../test_helpers/waiting.dart';
 
+// In fake time: the queue's timers (100 ms between requests, the retries)
+// fire only when a test moves the clock, so no test waits real time and the
+// retry delays can be checked exactly.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('ScrobbleQueue Tests', () {
     late MockSubsonicApi mockApi;
     late ScrobbleQueue scrobbleQueue;
+
+    /// Lets the queue send what it can. Well short of the first retry (30 s).
+    void settle(FakeAsync async) => async.elapse(const Duration(seconds: 1));
 
     setUp(() async {
       mockApi = newMockApi();
@@ -27,76 +35,84 @@ void main() {
       scrobbleQueue.dispose();
     });
 
-    test('should initialize with empty queue', () async {
-      await scrobbleQueue.initialize();
+    testInFakeTime('should initialize with empty queue', (async) {
+      awaitFake(async, scrobbleQueue.initialize());
       expect(scrobbleQueue.queueSize, 0);
     });
 
-    test('should queue now playing notification', () async {
+    testInFakeTime('should queue now playing notification', (async) {
       when(mockApi.scrobbleNowPlaying(any))
           .thenAnswer((_) => Future.delayed(const Duration(milliseconds: 100)));
-      await scrobbleQueue.initialize();
+      awaitFake(async, scrobbleQueue.initialize());
 
-      await scrobbleQueue.queueNowPlaying('song1');
+      awaitFake(async, scrobbleQueue.queueNowPlaying('song1'));
 
       expect(scrobbleQueue.queueSize, 1);
     });
 
-    test('should queue scrobble submission', () async {
+    testInFakeTime('should queue scrobble submission', (async) {
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) => Future.delayed(const Duration(milliseconds: 100)));
-      await scrobbleQueue.initialize();
+      awaitFake(async, scrobbleQueue.initialize());
 
-      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
 
       expect(scrobbleQueue.queueSize, 1);
     });
 
-    test('counts only submissions as pending plays', () async {
+    testInFakeTime('counts only submissions as pending plays', (async) {
       when(mockApi.scrobbleNowPlaying(any))
           .thenAnswer((_) => Future.delayed(const Duration(milliseconds: 100)));
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) => Future.delayed(const Duration(milliseconds: 100)));
-      await scrobbleQueue.initialize();
+      awaitFake(async, scrobbleQueue.initialize());
 
-      await scrobbleQueue.queueNowPlaying('song1');
-      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
-      await scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now());
+      awaitFake(async, scrobbleQueue.queueNowPlaying('song1'));
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now()),
+      );
 
       expect(scrobbleQueue.queueSize, 3);
       expect(scrobbleQueue.pendingSubmissions, 2);
     });
 
-    test('should process now playing request successfully', () async {
+    testInFakeTime('should process now playing request successfully', (async) {
       when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {});
 
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueNowPlaying('song1');
-
-      // Wait for processing
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(async, scrobbleQueue.queueNowPlaying('song1'));
+      settle(async);
 
       verify(mockApi.scrobbleNowPlaying('song1')).called(1);
       expect(scrobbleQueue.queueSize, 0);
     });
 
-    test('should process submission request successfully', () async {
+    testInFakeTime('should process submission request successfully', (async) {
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) async {});
 
-      await scrobbleQueue.initialize();
+      awaitFake(async, scrobbleQueue.initialize());
       final timestamp = DateTime.now();
-      await scrobbleQueue.queueSubmission('song1', playedAt: timestamp);
-
-      // Wait for processing
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song1', playedAt: timestamp),
+      );
+      settle(async);
 
       verify(mockApi.scrobbleSubmission('song1', playedAt: timestamp))
           .called(1);
       expect(scrobbleQueue.queueSize, 0);
     });
 
-    test('should retry failed submissions', () async {
+    testInFakeTime('should retry failed submissions', (async) {
       var callCount = 0;
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) async {
@@ -106,46 +122,60 @@ void main() {
             }
           });
 
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
+      settle(async);
       expect(scrobbleQueue.queueSize, 1);
 
-      await scrobbleQueue.processQueue();
+      awaitFake(async, scrobbleQueue.processQueue());
       expect(scrobbleQueue.queueSize, 1);
 
-      await scrobbleQueue.processQueue();
+      awaitFake(async, scrobbleQueue.processQueue());
       verify(
         mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
       ).called(3);
       expect(scrobbleQueue.queueSize, 0);
     });
 
-    test('should not retry right away after a failure', () async {
+    testInFakeTime('should not retry right away after a failure', (async) {
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenThrow(Exception('Network error'));
 
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
-      await Future<void>.delayed(const Duration(seconds: 1));
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
+      async.elapse(const Duration(seconds: 29));
 
       // Retried by the 30 s timer, not in a loop
       verify(
         mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
       ).called(1);
       expect(scrobbleQueue.queueSize, 1);
+
+      async.elapse(const Duration(seconds: 1));
+      verify(
+        mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
+      ).called(1);
     });
 
-    test(
+    testInFakeTime(
       'should keep a submission through repeated network failures',
-      () async {
+      (async) {
         when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
             .thenThrow(Exception('Network error'));
 
-        await scrobbleQueue.initialize();
-        await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
+        awaitFake(async, scrobbleQueue.initialize());
+        awaitFake(
+          async,
+          scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now()),
+        );
         for (var i = 0; i < 10; i++) {
-          await scrobbleQueue.processQueue();
+          awaitFake(async, scrobbleQueue.processQueue());
         }
 
         // Only dropped once it's older than 7 days
@@ -153,7 +183,9 @@ void main() {
       },
     );
 
-    test('should keep later requests behind a failed submission', () async {
+    testInFakeTime('should keep later requests behind a failed submission', (
+      async,
+    ) {
       final sent = <String>[];
       var online = false;
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
@@ -162,10 +194,16 @@ void main() {
             sent.add(invocation.positionalArguments[0] as String);
           });
 
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
-      await scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now());
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now()),
+      );
+      settle(async);
 
       // song2 wasn't tried while song1 was failing
       verifyNever(
@@ -174,32 +212,40 @@ void main() {
       expect(scrobbleQueue.queueSize, 2);
 
       online = true;
-      await scrobbleQueue.processQueue();
+      awaitFake(async, scrobbleQueue.processQueue());
       expect(sent, ['song1', 'song2']);
       expect(scrobbleQueue.queueSize, 0);
     });
 
-    test('should drop a now playing notification that fails', () async {
+    testInFakeTime('should drop a now playing notification that fails', (
+      async,
+    ) {
       when(mockApi.scrobbleNowPlaying(any))
           .thenThrow(Exception('Network error'));
 
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueNowPlaying('song1');
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(async, scrobbleQueue.queueNowPlaying('song1'));
+      settle(async);
 
       expect(scrobbleQueue.queueSize, 0);
     });
 
-    test('should drop a submission the server rejects', () async {
+    testInFakeTime('should drop a submission the server rejects', (async) {
       when(mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')))
           .thenThrow(const SubsonicException(70, 'Song not found'));
       when(mockApi.scrobbleSubmission('song2', playedAt: anyNamed('playedAt')))
           .thenAnswer((_) async {});
 
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
-      await scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now());
-      await Future<void>.delayed(const Duration(milliseconds: 500));
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now()),
+      );
+      settle(async);
 
       verify(
         mockApi.scrobbleSubmission('song2', playedAt: anyNamed('playedAt')),
@@ -207,22 +253,25 @@ void main() {
       expect(scrobbleQueue.queueSize, 0);
     });
 
-    test(
+    testInFakeTime(
       'should keep a submission refused because of the credentials',
-      () async {
+      (async) {
         when(
           mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')),
         ).thenThrow(const SubsonicException(40, 'Wrong username or password'));
 
-        await scrobbleQueue.initialize();
-        await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
-        await Future<void>.delayed(const Duration(milliseconds: 300));
+        awaitFake(async, scrobbleQueue.initialize());
+        awaitFake(
+          async,
+          scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now()),
+        );
+        settle(async);
 
         expect(scrobbleQueue.queueSize, 1);
       },
     );
 
-    test('should drop requests older than 7 days', () async {
+    testInFakeTime('should drop requests older than 7 days', (async) {
       SharedPreferences.setMockInitialValues({
         'scrobble_queue': jsonEncode([
           ScrobbleRequest(
@@ -234,8 +283,8 @@ void main() {
         ]),
       });
 
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.processQueue();
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(async, scrobbleQueue.processQueue());
 
       verifyNever(
         mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')),
@@ -243,7 +292,7 @@ void main() {
       expect(scrobbleQueue.queueSize, 0);
     });
 
-    test('drops only the entries it cannot read', () async {
+    testInFakeTime('drops only the entries it cannot read', (async) {
       final playedAt = DateTime(2026, 11, 1, 22);
       SharedPreferences.setMockInitialValues({
         'scrobble_queue': jsonEncode([
@@ -261,33 +310,38 @@ void main() {
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) async {});
 
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.processQueue();
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(async, scrobbleQueue.processQueue());
 
       verify(mockApi.scrobbleSubmission('song1', playedAt: playedAt)).called(1);
       expect(scrobbleQueue.queueSize, 0);
     });
 
-    test('saves only submissions', () async {
+    testInFakeTime('saves only submissions', (async) {
       final online = Completer<void>();
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) => online.future);
       when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {});
 
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
       // Behind the submission that's still being sent
-      await scrobbleQueue.queueNowPlaying('song2');
-      await Future<void>.delayed(Duration.zero);
+      awaitFake(async, scrobbleQueue.queueNowPlaying('song2'));
+      async.flushMicrotasks();
       expect(scrobbleQueue.queueSize, 2);
 
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = awaitFake(async, SharedPreferences.getInstance());
       final saved = jsonDecode(prefs.getString('scrobble_queue')!) as List;
       expect(saved, [containsPair('songId', 'song1')]);
       online.complete();
     });
 
-    test('drops now playing requests saved by older versions', () async {
+    testInFakeTime('drops now playing requests saved by older versions', (
+      async,
+    ) {
       SharedPreferences.setMockInitialValues({
         'scrobble_queue': jsonEncode([
           ScrobbleRequest(
@@ -306,8 +360,8 @@ void main() {
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) async {});
 
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.processQueue();
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(async, scrobbleQueue.processQueue());
 
       verifyNever(mockApi.scrobbleNowPlaying(any));
       verify(
@@ -315,7 +369,7 @@ void main() {
       ).called(1);
     });
 
-    test('should persist queue to storage', () async {
+    testInFakeTime('should persist queue to storage', (async) {
       // Make API calls slow so we can queue multiple items
       when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {
         await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -327,22 +381,28 @@ void main() {
             throw Exception('Network error');
           });
 
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
-      await scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now());
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now()),
+      );
 
       // Wait for processing attempt
-      await Future<void>.delayed(const Duration(milliseconds: 500));
+      settle(async);
 
       // Verify queue was persisted
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = awaitFake(async, SharedPreferences.getInstance());
       final queueJson = prefs.getString('scrobble_queue');
       expect(queueJson, isNotNull);
       expect(queueJson, contains('song1'));
       expect(queueJson, contains('song2'));
     });
 
-    test('should restore queue from storage', () async {
+    testInFakeTime('should restore queue from storage', (async) {
       // Make API calls slow so we can queue multiple items
       when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {
         await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -355,12 +415,18 @@ void main() {
           });
 
       // Create and queue requests
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
-      await scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now());
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now()),
+      );
 
       // Wait for processing attempt (will fail)
-      await Future<void>.delayed(const Duration(milliseconds: 500));
+      settle(async);
 
       final originalQueueSize = scrobbleQueue.queueSize;
       expect(originalQueueSize, 2);
@@ -369,7 +435,7 @@ void main() {
       scrobbleQueue.dispose();
 
       final newQueue = ScrobbleQueue(mockApi);
-      await newQueue.initialize();
+      awaitFake(async, newQueue.initialize());
 
       // Queue should be restored
       expect(newQueue.queueSize, originalQueueSize);
@@ -377,7 +443,7 @@ void main() {
       newQueue.dispose();
     });
 
-    test('should process multiple requests in order', () async {
+    testInFakeTime('should process multiple requests in order', (async) {
       final processedSongs = <String>[];
 
       // Add delay to processing to allow queueing multiple items
@@ -387,19 +453,19 @@ void main() {
         processedSongs.add(songId);
       });
 
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueNowPlaying('song1');
-      await scrobbleQueue.queueNowPlaying('song2');
-      await scrobbleQueue.queueNowPlaying('song3');
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(async, scrobbleQueue.queueNowPlaying('song1'));
+      awaitFake(async, scrobbleQueue.queueNowPlaying('song2'));
+      awaitFake(async, scrobbleQueue.queueNowPlaying('song3'));
 
       // Wait for processing
-      await Future<void>.delayed(const Duration(milliseconds: 800));
+      settle(async);
 
       expect(processedSongs, ['song1', 'song2', 'song3']);
       expect(scrobbleQueue.queueSize, 0);
     });
 
-    test('should handle mixed request types', () async {
+    testInFakeTime('should handle mixed request types', (async) {
       // Add delay to processing to allow queueing multiple items
       when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {
         await Future<void>.delayed(const Duration(milliseconds: 50));
@@ -409,13 +475,16 @@ void main() {
             await Future<void>.delayed(const Duration(milliseconds: 50));
           });
 
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueNowPlaying('song1');
-      await scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now());
-      await scrobbleQueue.queueNowPlaying('song3');
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(async, scrobbleQueue.queueNowPlaying('song1'));
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now()),
+      );
+      awaitFake(async, scrobbleQueue.queueNowPlaying('song3'));
 
       // Wait for processing
-      await Future<void>.delayed(const Duration(milliseconds: 800));
+      settle(async);
 
       verify(mockApi.scrobbleNowPlaying('song1')).called(1);
       verify(
@@ -425,65 +494,66 @@ void main() {
       expect(scrobbleQueue.queueSize, 0);
     });
 
-    test('should not process when already processing', () async {
+    testInFakeTime('should not process when already processing', (async) {
       when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {
         await Future<void>.delayed(const Duration(milliseconds: 500));
       });
 
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueNowPlaying('song1');
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(async, scrobbleQueue.queueNowPlaying('song1'));
 
       // Try to process multiple times simultaneously
       unawaited(scrobbleQueue.processQueue());
       unawaited(scrobbleQueue.processQueue());
       unawaited(scrobbleQueue.processQueue());
 
-      await Future<void>.delayed(const Duration(milliseconds: 700));
+      settle(async);
 
       // Should only process once
       verify(mockApi.scrobbleNowPlaying('song1')).called(1);
     });
 
-    test('should handle empty queue gracefully', () async {
-      await scrobbleQueue.initialize();
+    testInFakeTime('should handle empty queue gracefully', (async) {
+      awaitFake(async, scrobbleQueue.initialize());
 
       // Process empty queue should not throw
-      await scrobbleQueue.processQueue();
+      awaitFake(async, scrobbleQueue.processQueue());
 
       expect(scrobbleQueue.queueSize, 0);
     });
 
-    test('should clear queue from storage when empty', () async {
+    testInFakeTime('should clear queue from storage when empty', (async) {
       when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {});
 
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueNowPlaying('song1');
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(async, scrobbleQueue.queueNowPlaying('song1'));
 
       // Wait for processing
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      settle(async);
 
       // Verify queue was cleared from storage
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = awaitFake(async, SharedPreferences.getInstance());
       final queueJson = prefs.getString('scrobble_queue');
       expect(queueJson, isNull);
     });
 
-    test('should handle disposal during processing', () async {
+    testInFakeTime('should handle disposal during processing', (async) {
       when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {
         await Future<void>.delayed(const Duration(milliseconds: 500));
       });
 
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueNowPlaying('song1');
-      await scrobbleQueue.queueNowPlaying('song2');
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(async, scrobbleQueue.queueNowPlaying('song1'));
+      awaitFake(async, scrobbleQueue.queueNowPlaying('song2'));
 
       // Start processing and dispose immediately
       unawaited(scrobbleQueue.processQueue());
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      async.elapse(const Duration(milliseconds: 100));
       scrobbleQueue.dispose();
 
-      // Should not throw
-      await Future<void>.delayed(const Duration(milliseconds: 600));
+      // Should not throw, and not send the next one
+      settle(async);
+      verifyNever(mockApi.scrobbleNowPlaying('song2'));
     });
 
     test('ScrobbleRequest serialization', () {
@@ -510,38 +580,38 @@ void main() {
       );
     });
 
-    test('should immediately try to process on enqueue', () async {
+    testInFakeTime('should immediately try to process on enqueue', (async) {
       when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {});
 
-      await scrobbleQueue.initialize();
+      awaitFake(async, scrobbleQueue.initialize());
 
-      // Queue should be processed immediately
-      await scrobbleQueue.queueNowPlaying('song1');
-
-      // Small delay for immediate processing
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      // Queue should be processed immediately, without time passing
+      awaitFake(async, scrobbleQueue.queueNowPlaying('song1'));
+      async.flushMicrotasks();
 
       verify(mockApi.scrobbleNowPlaying('song1')).called(1);
       expect(scrobbleQueue.queueSize, 0);
     });
 
-    test('should process queue periodically', () async {
+    testInFakeTime('should process queue periodically', (async) {
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) => throw Exception('Network error'));
 
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
 
       // Wait for initial processing attempt (will fail)
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      settle(async);
 
       // Now make the API succeed
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) async {});
 
-      // Wait for periodic processing (up to 30 seconds interval, but we'll manually trigger)
-      await scrobbleQueue.processQueue();
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      // The retry timer sends it again after 30 s
+      async.elapse(const Duration(seconds: 30));
 
       // Should have been processed
       verify(
@@ -550,50 +620,64 @@ void main() {
       expect(scrobbleQueue.queueSize, 0);
     });
 
-    test('clear drops pending requests, also from storage', () async {
+    testInFakeTime('clear drops pending requests, also from storage', (async) {
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenThrow(Exception('offline'));
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
+      settle(async);
 
-      await scrobbleQueue.clear();
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      awaitFake(async, scrobbleQueue.clear());
+      settle(async);
 
       expect(scrobbleQueue.queueSize, 0);
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = awaitFake(async, SharedPreferences.getInstance());
       expect(prefs.getString('scrobble_queue'), isNull);
     });
 
-    test('clear wins over a pass still in progress', () async {
+    testInFakeTime('clear wins over a pass still in progress', (async) {
       final sending = Completer<void>();
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) => sending.future);
-      await scrobbleQueue.initialize();
-      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
-      await scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now());
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now()),
+      );
+      settle(async);
 
-      await scrobbleQueue.clear();
+      awaitFake(async, scrobbleQueue.clear());
       sending.complete();
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      settle(async);
 
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = awaitFake(async, SharedPreferences.getInstance());
       final stored = prefs.getString('scrobble_queue');
       expect(stored == null || (jsonDecode(stored) as List).isEmpty, isTrue);
     });
 
-    test('sends nothing while the server rejects the credentials', () async {
+    testInFakeTime('sends nothing while the server rejects the credentials', (
+      async,
+    ) {
       when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {});
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) async {});
       when(mockApi.hasRejectedCredentials).thenReturn(true);
-      await scrobbleQueue.initialize();
+      awaitFake(async, scrobbleQueue.initialize());
 
-      await scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now());
-      await scrobbleQueue.queueNowPlaying('song2');
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
+      awaitFake(async, scrobbleQueue.queueNowPlaying('song2'));
       for (var i = 0; i < 3; i++) {
-        await scrobbleQueue.processQueue();
+        awaitFake(async, scrobbleQueue.processQueue());
       }
 
       verifyNever(mockApi.scrobbleNowPlaying(any));
@@ -603,12 +687,12 @@ void main() {
       // The play is kept, also in storage; the "now playing" is stale
       expect(scrobbleQueue.queueSize, 1);
       expect(scrobbleQueue.pendingSubmissions, 1);
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = awaitFake(async, SharedPreferences.getInstance());
       expect(jsonDecode(prefs.getString('scrobble_queue')!), hasLength(1));
 
       // A new password
       when(mockApi.hasRejectedCredentials).thenReturn(false);
-      await scrobbleQueue.processQueue();
+      awaitFake(async, scrobbleQueue.processQueue());
       verify(
         mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
       ).called(1);
@@ -620,7 +704,9 @@ void main() {
   group('ScrobbleQueue retries', () {
     late MockSubsonicApi mockApi;
     late ScrobbleQueue queue;
-    final attempts = <DateTime>[];
+    // The fake time of the running test; attempts are recorded in it
+    late FakeAsync time;
+    final attempts = <Duration>[];
     var offline = true;
 
     ScrobbleQueue newQueue({
@@ -634,6 +720,13 @@ void main() {
       maxRetryDelay: max,
     );
 
+    /// A test in fake time whose submissions are recorded in [attempts]
+    void retryTest(String description, void Function(FakeAsync async) body) =>
+        testInFakeTime(description, (async) {
+          time = async;
+          body(async);
+        });
+
     setUp(() {
       mockApi = newMockApi();
       SharedPreferences.setMockInitialValues({});
@@ -641,14 +734,14 @@ void main() {
       offline = true;
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) async {
-            attempts.add(DateTime.now());
+            attempts.add(time.elapsed);
             if (offline) throw Exception('offline');
           });
     });
 
     tearDown(() => queue.dispose());
 
-    test('a blocked submission expires after 7 days', () async {
+    retryTest('a blocked submission expires after 7 days', (async) {
       var now = DateTime(2026, 1, 1);
       queue = ScrobbleQueue(
         mockApi,
@@ -656,17 +749,18 @@ void main() {
         maxRetryDelay: const Duration(milliseconds: 160),
         clock: () => now,
       );
-      await queue.initialize();
+      awaitFake(async, queue.initialize());
 
-      await queue.queueSubmission('song1', playedAt: now);
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      awaitFake(async, queue.queueSubmission('song1', playedAt: now));
+      async.elapse(const Duration(milliseconds: 20));
       // Still blocked, and kept: the server can't be reached
       expect(queue.queueSize, 1);
       expect(queue.retryScheduled, isTrue);
 
       final sent = attempts.length;
       now = now.add(const Duration(days: 7, minutes: 1));
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      // The retry at 40 ms
+      async.elapse(const Duration(milliseconds: 20));
 
       // Dropped without another attempt
       expect(attempts.length, sent);
@@ -674,115 +768,132 @@ void main() {
       expect(queue.retryScheduled, isFalse);
     });
 
-    test('an empty queue has no timer', () async {
+    retryTest('an empty queue has no timer', (async) {
       queue = newQueue();
-      await queue.initialize();
+      awaitFake(async, queue.initialize());
       expect(queue.retryScheduled, isFalse);
 
       offline = false;
-      await queue.queueSubmission('song1', playedAt: DateTime.now());
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      awaitFake(
+        async,
+        queue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
+      async.flushMicrotasks();
 
       expect(queue.queueSize, 0);
       expect(queue.retryScheduled, isFalse);
     });
 
-    test(
-      'a failed submission is retried by a timer, at growing delays',
-      () async {
-        queue = newQueue();
-        await queue.initialize();
-        await queue.queueSubmission('song1', playedAt: DateTime.now());
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-        expect(queue.retryScheduled, isTrue);
+    retryTest('a failed submission is retried by a timer, at growing delays', (
+      async,
+    ) {
+      queue = newQueue();
+      awaitFake(async, queue.initialize());
+      awaitFake(
+        async,
+        queue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
+      expect(queue.retryScheduled, isTrue);
 
-        // Attempts at about 0, 40 and 120 ms, then every 160 ms at most
-        await Future<void>.delayed(const Duration(milliseconds: 400));
-        expect(attempts.length, greaterThanOrEqualTo(3));
-        expect(
-          attempts[1].difference(attempts[0]),
-          greaterThanOrEqualTo(const Duration(milliseconds: 40)),
-        );
-        expect(
-          attempts[2].difference(attempts[1]),
-          greaterThanOrEqualTo(const Duration(milliseconds: 80)),
-        );
+      // After 40 ms, 80 ms more, then every 160 ms at most
+      async.elapse(const Duration(milliseconds: 400));
+      expect(attempts, const [
+        Duration.zero,
+        Duration(milliseconds: 40),
+        Duration(milliseconds: 120),
+        Duration(milliseconds: 280),
+      ]);
 
-        offline = false;
-        await Future<void>.delayed(const Duration(milliseconds: 250));
-        expect(queue.queueSize, 0);
-        expect(queue.retryScheduled, isFalse);
-      },
-    );
+      offline = false;
+      async.elapse(const Duration(milliseconds: 40));
+      expect(attempts.last, const Duration(milliseconds: 440));
+      expect(queue.queueSize, 0);
+      expect(queue.retryScheduled, isFalse);
+    });
 
-    test('the network coming back sends it right away', () async {
+    retryTest('the network coming back sends it right away', (async) {
       queue = newQueue(
         initial: const Duration(seconds: 30),
         max: const Duration(minutes: 5),
       );
-      await queue.initialize();
-      await queue.queueSubmission('song1', playedAt: DateTime.now());
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      awaitFake(async, queue.initialize());
+      awaitFake(
+        async,
+        queue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
       expect(attempts, hasLength(1));
       expect(queue.retryScheduled, isTrue);
 
       offline = false;
+      async.elapse(const Duration(seconds: 1));
       queue.networkAvailable();
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      async.flushMicrotasks();
 
-      expect(attempts, hasLength(2));
+      expect(attempts, const [Duration.zero, Duration(seconds: 1)]);
       expect(queue.queueSize, 0);
       expect(queue.retryScheduled, isFalse);
     });
 
-    test('the network coming back with nothing queued does nothing', () async {
+    retryTest('the network coming back with nothing queued does nothing', (
+      async,
+    ) {
       queue = newQueue();
-      await queue.initialize();
+      awaitFake(async, queue.initialize());
 
       queue.networkAvailable();
+      async.flushMicrotasks();
 
       expect(attempts, isEmpty);
       expect(queue.retryScheduled, isFalse);
     });
 
-    test('a dispose cancels the timer', () async {
+    retryTest('a dispose cancels the timer', (async) {
       queue = newQueue();
-      await queue.initialize();
-      await queue.queueSubmission('song1', playedAt: DateTime.now());
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      awaitFake(async, queue.initialize());
+      awaitFake(
+        async,
+        queue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
       expect(queue.retryScheduled, isTrue);
 
       queue.dispose();
-      final before = attempts.length;
-      await Future<void>.delayed(const Duration(milliseconds: 150));
+      async.elapse(const Duration(seconds: 1));
 
       expect(queue.retryScheduled, isFalse);
-      expect(attempts, hasLength(before));
+      expect(attempts, hasLength(1));
     });
 
-    test('onSubmitted is called for a sent submission only', () async {
+    retryTest('onSubmitted is called for a sent submission only', (async) {
       offline = false;
       when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {});
       var submitted = 0;
       queue = newQueue(onSubmitted: () => submitted++);
-      await queue.initialize();
+      awaitFake(async, queue.initialize());
 
-      await queue.queueNowPlaying('song1');
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      awaitFake(async, queue.queueNowPlaying('song1'));
+      async.flushMicrotasks();
       expect(submitted, 0);
 
-      await queue.queueSubmission('song1', playedAt: DateTime.now());
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      awaitFake(
+        async,
+        queue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
+      async.flushMicrotasks();
       expect(submitted, 1);
     });
 
-    test('onSubmitted is not called for a submission that failed', () async {
+    retryTest('onSubmitted is not called for a submission that failed', (
+      async,
+    ) {
       var submitted = 0;
       queue = newQueue(onSubmitted: () => submitted++);
-      await queue.initialize();
+      awaitFake(async, queue.initialize());
 
-      await queue.queueSubmission('song1', playedAt: DateTime.now());
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      awaitFake(
+        async,
+        queue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
+      async.flushMicrotasks();
 
       expect(submitted, 0);
     });

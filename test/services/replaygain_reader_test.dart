@@ -1143,6 +1143,8 @@ void main() {
         );
         expect(data.hasAnyData, isFalse);
         expect(data.unavailable, isTrue);
+        // Nothing shows a fallback request that wasn't made; too short a
+        // wait could only let the check pass (see test/README.md)
         await Future<void>.delayed(const Duration(milliseconds: 100));
         expect(paths, ['/download']);
       });

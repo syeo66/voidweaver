@@ -85,6 +85,8 @@ void main() {
 
     // Once: the fetch that followed the play is the last one
     final lists = server.requestsTo('getAlbumList2').length;
+    // Nothing shows a fetch that wasn't made; too short a wait could only
+    // let the check pass (see test/README.md). The same for the waits below.
     await Future<void>.delayed(const Duration(milliseconds: 200));
     expect(server.requestsTo('getAlbumList2'), hasLength(lists));
     expect(appState.albumError, isNull);

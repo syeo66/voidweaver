@@ -13,6 +13,7 @@ import '../test_helpers/fake_audio_cache.dart';
 import '../test_helpers/mock_audio_player.dart';
 import '../test_helpers/mock_api.dart';
 import '../test_helpers/mocks.mocks.dart';
+import '../test_helpers/waiting.dart';
 
 void main() {
   late MockSubsonicApi mockApi;
@@ -186,8 +187,10 @@ void main() {
 
     await tester.runAsync(() async {
       await tester.tap(find.byIcon(Icons.skip_next));
-      // Let the skip finish loading the next track
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await pumpUntil(
+        () => service.currentSong?.id == 's2' && service.pendingPlayerOps == 0,
+        reason: 'the skip to load the next track',
+      );
     });
     await tester.pump();
 

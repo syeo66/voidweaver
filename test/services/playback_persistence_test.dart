@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/playback_persistence.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 
+import '../test_helpers/waiting.dart';
+
 void main() {
   group('PlaybackPersistenceService position saves', () {
     const interval = Duration(milliseconds: 100);
@@ -36,10 +38,22 @@ void main() {
       await persistence.initialize();
     });
 
+    /// Waits until [saved] holds for what's saved, then for the rest of
+    /// that save: a read can see its queue before its position file
+    Future<void> untilSaved(
+      bool Function(PersistedPlaybackState? saved) saved,
+    ) async {
+      await pumpUntil(
+        () async => saved(await persistence.loadPlaybackState()),
+        reason: 'the timed save',
+      );
+      await savesWritten(persistence);
+    }
+
     tearDown(() async {
       persistence.dispose();
       // Writes in progress could recreate it
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await allSavesWritten(persistence);
       await directory.delete(recursive: true);
     });
 
@@ -49,6 +63,8 @@ void main() {
         persistence.schedulePositionSave(stateAt(0, i));
         await Future<void>.delayed(const Duration(milliseconds: 20));
       }
+      // A save that fired at the end is complete before the read
+      await savesWritten(persistence);
 
       final saved = await persistence.loadPlaybackState();
       expect(saved, isNotNull);
@@ -59,7 +75,7 @@ void main() {
       persistence.schedulePositionSave(stateAt(0, 1));
       persistence.schedulePositionSave(stateAt(0, 2));
       persistence.schedulePositionSave(stateAt(0, 3));
-      await Future<void>.delayed(interval * 2);
+      await untilSaved((saved) => saved != null);
 
       final saved = await persistence.loadPlaybackState();
       expect(saved!.currentPosition, const Duration(seconds: 3));
@@ -70,6 +86,8 @@ void main() {
       () async {
         persistence.schedulePositionSave(stateAt(0, 42));
         await persistence.savePlaybackState(stateAt(1, 0));
+        // Past the timed save it must not make. Nothing shows a save that
+        // didn't happen; too short a wait could only let the check pass.
         await Future<void>.delayed(interval * 2);
 
         final saved = await persistence.loadPlaybackState();
@@ -81,7 +99,8 @@ void main() {
     test('dispose writes a pending position save', () async {
       persistence.schedulePositionSave(stateAt(0, 42));
       persistence.dispose();
-      await Future<void>.delayed(Duration.zero);
+      // Writes the queue too (this instance never saved it)
+      await savesWritten(persistence);
 
       final saved = await persistence.loadPlaybackState();
       expect(saved!.currentPosition, const Duration(seconds: 42));
@@ -95,11 +114,16 @@ void main() {
         await prefs.remove('playbackQueue');
 
         persistence.schedulePositionSave(stateAt(1, 30));
-        await Future<void>.delayed(interval * 2);
+        final file = File('${directory.path}/playback_position.json');
+        // The queue isn't saved again, so the file tells the save is done
+        await pumpUntil(() async {
+          final json = jsonDecode(await file.readAsString()) as Map;
+          // Renamed into place, so never half written
+          return json['currentIndex'] == 1;
+        }, reason: 'the timed save');
 
         expect(prefs.getString('playbackQueue'), isNull);
         expect(prefs.getKeys(), isEmpty);
-        final file = File('${directory.path}/playback_position.json');
         expect(
           jsonDecode(await file.readAsString()),
           containsPair('currentIndex', 1),
@@ -209,7 +233,9 @@ void main() {
       playlist[1] = playlist[1].copyWith(replayGainTrackGain: -6.5);
       persistence.queueChanged();
       persistence.schedulePositionSave(state(10));
-      await Future<void>.delayed(interval * 2);
+      await untilSaved(
+        (saved) => saved?.currentPosition == const Duration(seconds: 10),
+      );
 
       final saved = await persistence.loadPlaybackState();
       expect(saved!.playlist[1].replayGainTrackGain, -6.5);
@@ -219,6 +245,7 @@ void main() {
     test('clear discards a pending position save', () async {
       persistence.schedulePositionSave(stateAt(0, 42));
       await persistence.clearPlaybackState();
+      // Past the timed save it must not make (see above)
       await Future<void>.delayed(interval * 2);
 
       expect(await persistence.loadPlaybackState(), isNull);
