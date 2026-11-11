@@ -9,7 +9,11 @@ tool/release.sh 1.3.0-beta.1   # an explicit version
 
 It bumps `version:` in `pubspec.yaml`, commits "release vX.Y.Z", tags it, and after a confirmation pushes `main` and the tag (`--dry-run` only prints the new version). It refuses to run off `main`, with uncommitted changes, or if the tag exists. Pushing goes to all of `origin`'s push URLs; only GitHub runs the workflow. Wait for CI on the pushed commit if you want the checks before the tag; otherwise the tag's own run does them before publishing.
 
-The `release` job in `.github/workflows/flutter.yml` runs after tests and the release build passed (the integration tests are not in CI; run them locally before tagging). It then:
+Before the bump it runs the integration tests (`flutter test integration_test`), which CI doesn't run for a release, on the first running Android emulator, and stops if they fail or change a file (a `pubspec.lock` rewritten by `pub get` would end up in the release commit). Only on an emulator: the tests reinstall the app and clear its data, which on a phone would remove the login and the cache. Without an emulator it asks whether to release without them; anything but `y` stops. It needs `jq` to read `flutter devices`.
+
+After a larger change to playback (like a rewrite of the player's worker), release a beta first and use it for a few days: `tool/release.sh 1.3.0-beta.1`, then `tool/release.sh 1.3.0` for the final version. Give that one explicitly: `patch` from `1.3.0-beta.1` drops the suffix and bumps, which makes `1.3.1`.
+
+The `release` job in `.github/workflows/flutter.yml` runs after tests and the release build passed. The integration tests run nightly instead (`.github/workflows/nightly.yml`, see [test/README.md](../test/README.md#nightly-checks)), not for a release. The job then:
 
 - fails if the tag differs from the `version:` in `pubspec.yaml`,
 - fails if the APK is signed with the debug key (`tool/check_apk_signature.sh`),

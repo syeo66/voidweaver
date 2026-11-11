@@ -10,13 +10,16 @@ Tests need no device, network or platform plugins.
 
 ## Randomized playback test
 
-`services/playback_random_actions_test.dart` runs random sequences of presses (in the app and as system commands) and player events (track ends, buffering, load errors, failing URLs, slow seeks and loads, audio focus loss) against `AudioPlayerService` with the fake player, and checks rules that must hold once everything has settled: no skip or start left in progress, nothing stuck at loading, the player holding the service's playlist and on its track, the state matching the player, Pause/Stop and Play holding, an unsuperseded failure stopped and reported once, "now playing" only for the player's current item, no more scrobbles than plays, errors only for tracks the player has been on. 400 runs by default (about 2 s); each rule about the last press checks a good share of them, so a change to the model can't switch one off unnoticed.
+`services/playback_random_actions_test.dart` runs random sequences of presses (in the app and as system commands) and player events (track ends, buffering, load errors, failing URLs, slow seeks and loads, audio focus loss) against `AudioPlayerService` with the fake player, and checks rules that must hold once everything has settled: no skip or start left in progress, nothing stuck at loading, the player holding the service's playlist and on its track, the state matching the player, Pause/Stop and Play holding, an unsuperseded failure stopped and reported once, "now playing" only for the player's current item, no more scrobbles than plays, errors only for tracks the player has been on. 1000 runs by default, seeds 0 to 999 (about 4 s); each rule about the last press checks a good share of them, so a change to the model can't switch one off unnoticed.
 
 ```bash
 flutter test test/services/playback_random_actions_test.dart --dart-define=PLAYBACK_SEED=<seed>  # replay one, with the service's log
 flutter test test/services/playback_random_actions_test.dart --dart-define=PLAYBACK_RUNS=20000   # more runs; prints how often each rule was checked
 flutter test test/services/playback_random_actions_test.dart --dart-define=PLAYBACK_STEPS=120    # longer runs (default 40 steps)
+flutter test test/services/playback_random_actions_test.dart --dart-define=PLAYBACK_FIRST_SEED=500000 --dart-define=PLAYBACK_RUNS=20000   # other seeds
 ```
+
+A failure prints its seed, and `PLAYBACK_STEPS` if it wasn't the default; a replay needs both. The nightly workflow runs new seeds every night, see [Nightly checks](#nightly-checks).
 
 Run it with many more runs after changing `audio_player_service.dart`. When it fails, check first whether the fake player can do what the run shows: most false alarms so far were the fake doing something the real one can't (see `mock_audio_player.dart`, whose behaviors follow `PlaylistPlayer` and Media3). A real bug gets a readable regression test of its own in the matching test file.
 
@@ -30,7 +33,16 @@ It doesn't use `fakeAsync`: awaiting `StreamSubscription.cancel()` on a broadcas
 flutter test integration_test -d emulator-5554   # or: make test-integration
 ```
 
-Each test starts from a fresh install (credentials and SharedPreferences cleared). CI doesn't run them (they failed more often than not in the runner's emulator), so run them locally after changes to playback, login or the screens they touch. They use a debug build, so they don't replace `tool/emulator_check.sh` (release build, R8, media keys, resumption), which also runs locally only (see below and [docs/ANDROID.md](../docs/ANDROID.md)).
+Each test starts from a fresh install (credentials and SharedPreferences cleared), so run them on an emulator, not on a phone with the app logged in. Run them after changes to playback, login or the screens they touch. `tool/release.sh` runs them before a release when an emulator is running (see [docs/RELEASING.md](../docs/RELEASING.md)), and the nightly workflow runs them in CI, see below; the workflow for pushes doesn't. They use a debug build, so they don't replace `tool/emulator_check.sh` (release build, R8, media keys, resumption), which also runs locally only (see below and [docs/ANDROID.md](../docs/ANDROID.md)).
+
+## Nightly checks
+
+`.github/workflows/nightly.yml` runs every night (and by hand: `gh workflow run nightly.yml`). It doesn't block pushes or releases.
+
+- The randomized playback test with new seeds: run N of the workflow checks seeds from `N * 100000` on, 50,000 runs of 40 steps, then 20,000 of 120 steps from `N * 100000 + 50000`. The log prints the range; replay a failure locally with the seed (and steps) it prints.
+- The integration tests in an emulator in the runner, only if `main` has a commit from the last 25 hours (by its commit date) or the run was started by hand. The emulator sometimes fails to start there (adb can't connect, the system image doesn't unpack), and the test tool sometimes fails to start the Dart Development Service (`--no-dds` doesn't help: the tests then fail to load). So a failed attempt gets a second one in a fresh emulator, and a warning on the run shows that the first one failed, also when the second passes: look at its log for whether a test failed.
+
+GitHub emails a failed scheduled run to whoever last changed the workflow's `cron` line, and turns the schedule off after 60 days without activity in the repository.
 
 ## Fake Subsonic server
 

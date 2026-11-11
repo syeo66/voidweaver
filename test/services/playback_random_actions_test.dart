@@ -24,7 +24,9 @@
 //   flutter test test/services/playback_random_actions_test.dart \
 //     --dart-define=PLAYBACK_SEED=<seed>
 // More runs: --dart-define=PLAYBACK_RUNS=<n> (prints how often each rule
-// was checked); longer ones: --dart-define=PLAYBACK_STEPS=<n> (default 40).
+// was checked); longer ones: --dart-define=PLAYBACK_STEPS=<n> (default 40),
+// which a replay needs too; other seeds: --dart-define=PLAYBACK_FIRST_SEED=<n>
+// (default 0), as the nightly workflow does.
 
 import 'dart:async';
 import 'dart:math';
@@ -48,9 +50,16 @@ import '../test_helpers/mocks.mocks.dart';
 
 const _seedOverride = int.fromEnvironment('PLAYBACK_SEED', defaultValue: -1);
 const _runsOverride = int.fromEnvironment('PLAYBACK_RUNS', defaultValue: -1);
+// The runs use the seeds from this one on. Every CI run of the test checks
+// the same seeds; the nightly workflow tries new ones.
+const _firstSeed = int.fromEnvironment('PLAYBACK_FIRST_SEED');
 // About 4 s; more with PLAYBACK_RUNS
 const _defaultRuns = 1000;
-const _steps = int.fromEnvironment('PLAYBACK_STEPS', defaultValue: 40);
+const _defaultSteps = 40;
+const _steps = int.fromEnvironment(
+  'PLAYBACK_STEPS',
+  defaultValue: _defaultSteps,
+);
 
 /// The service's skip debounce and Previous's restart threshold
 const _skipDebounceMs = 100;
@@ -247,7 +256,16 @@ class _Run {
     unawaited(logRecords?.cancel());
     return problems.isEmpty
         ? const []
-        : ['seed $seed:', ...problems, '', 'actions:', ...log];
+        : [
+            // What a replay needs, see the top of the file
+            _steps == _defaultSteps
+                ? 'seed $seed:'
+                : 'seed $seed (PLAYBACK_STEPS=$_steps):',
+            ...problems,
+            '',
+            'actions:',
+            ...log,
+          ];
   }
 
   late final _Stats stats;
@@ -938,7 +956,7 @@ void main() {
     final runs = _runsOverride > 0 ? _runsOverride : _defaultRuns;
     final seeds = _seedOverride >= 0
         ? [_seedOverride]
-        : [for (var seed = 0; seed < runs; seed++) seed];
+        : [for (var seed = _firstSeed; seed < _firstSeed + runs; seed++) seed];
     final stats = _Stats();
     for (final seed in seeds) {
       final report = await _Run(seed).run(stats);

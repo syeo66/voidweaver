@@ -1,0 +1,167 @@
+name: Nightly
+
+# Checks that are too slow or too flaky for every push, so they don't block a
+# release (tool/release.sh runs the integration tests before tagging when an
+# emulator is running, see docs/RELEASING.md):
+#
+# - the randomized playback test with seeds no run checked before: the push
+#   workflow's run always checks seeds 0 to 999
+# - the integration tests in an emulator, which sometimes fails to start
+#
+# Actions are pinned to commit SHAs like in flutter.yml; Dependabot updates
+# them.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  random-playback:
+    runs-on: ubuntu-latest
+    # About 7 minutes; the default limit is 6 hours
+    timeout-minutes: 30
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+      with:
+        flutter-version: '3.47.7'
+        channel: 'stable'
+        # The SDK and the pub cache
+        cache: true
+
+    - name: Install dependencies
+      run: flutter pub get
+
+    # New seeds every night: run N checks seeds from N * 100000 on. A failure
+    # prints its seed (and PLAYBACK_STEPS if not the default); replay it with
+    # --dart-define=PLAYBACK_SEED=<seed>, see test/README.md.
+    - name: Randomized playback test, new seeds
+      run: |
+        first=$((GITHUB_RUN_NUMBER * 100000))
+        echo "Seeds $first to $((first + 49999))"
+        flutter test test/services/playback_random_actions_test.dart \
+          --dart-define=PLAYBACK_FIRST_SEED=$first \
+          --dart-define=PLAYBACK_RUNS=50000
+
+    - name: Randomized playback test, new seeds, longer runs
+      run: |
+        first=$((GITHUB_RUN_NUMBER * 100000 + 50000))
+        echo "Seeds $first to $((first + 19999)), 120 steps each"
+        flutter test test/services/playback_random_actions_test.dart \
+          --dart-define=PLAYBACK_FIRST_SEED=$first \
+          --dart-define=PLAYBACK_RUNS=20000 \
+          --dart-define=PLAYBACK_STEPS=120
+
+  # Whether main changed since the last night: the integration tests only
+  # run then (or when started by hand), so a night without commits can't fail
+  # just because the emulator didn't start.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      recent: ${{ steps.check.outputs.recent }}
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Check for a commit in the last 25 hours
+      id: check
+      run: |
+        age=$(( $(date +%s) - $(git log -1 --format=%ct) ))
+        if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] || [ "$age" -lt 90000 ]; then
+          echo recent=true >> "$GITHUB_OUTPUT"
+        else
+          echo "No commit since the last night ($age s ago), skipping the integration tests"
+          echo recent=false >> "$GITHUB_OUTPUT"
+        fi
+
+  integration-test:
+    needs: changes
+    if: needs.changes.outputs.recent == 'true'
+    runs-on: ubuntu-latest
+    # A hung emulator would otherwise keep it running for the default 6
+    # hours; each attempt also has its own limit
+    timeout-minutes: 70
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+      with:
+        flutter-version: '3.47.7'
+        channel: 'stable'
+        # The SDK and the pub cache
+        cache: true
+
+    # Gradle User Home (wrapper, dependencies). The basic provider: the
+    # default one is proprietary.
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
+      with:
+        cache-provider: basic
+
+    - name: Install dependencies
+      run: flutter pub get
+
+    # Hardware acceleration for the emulator
+    - name: Enable KVM
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+
+    # User flows against the fake Subsonic server, with the real player
+    # (debug build). In the runner, most failures are the emulator not
+    # starting (adb can't connect, the system image fails to unpack) or the
+    # test tool failing to start the Dart Development Service, not the
+    # tests. So a failed attempt gets a second one, in a fresh
+    # emulator. (--no-dds isn't a way around the latter: the test tool then
+    # fails to listen on a service stream that DDS provides.)
+    - name: Run integration tests in an emulator
+      id: first
+      continue-on-error: true
+      timeout-minutes: 25
+      uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+      with:
+        api-level: 35
+        arch: x86_64
+        target: google_apis
+        profile: pixel_6
+        disable-animations: true
+        script: flutter test integration_test
+
+    # Visible on the run even if the second attempt passes: a test that only
+    # fails sometimes shows up here
+    - name: Note the failed first attempt
+      if: steps.first.outcome != 'success'
+      run: echo "::warning::The first attempt failed; see its log for whether the emulator or a test failed"
+
+    # An emulator the first attempt left running (it died before shutting
+    # it down, or its step timed out) would hold the port the second one
+    # starts on
+    - name: Stop what's left of the first attempt's emulator
+      if: steps.first.outcome != 'success'
+      # Nothing to stop isn't a reason to skip the second attempt
+      continue-on-error: true
+      run: |
+        "$ANDROID_HOME/platform-tools/adb" devices | awk '/^emulator-/ {print $1}' |
+          while read -r serial; do "$ANDROID_HOME/platform-tools/adb" -s "$serial" emu kill || true; done
+        pkill -f qemu-system || true
+
+    - name: Run integration tests in an emulator, second attempt
+      if: steps.first.outcome != 'success'
+      timeout-minutes: 25
+      uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+      with:
+        api-level: 35
+        arch: x86_64
+        target: google_apis
+        profile: pixel_6
+        disable-animations: true
+        script: flutter test integration_test
