@@ -45,9 +45,49 @@ if [ -n "$emulator" ]; then
   flutter test integration_test -d "$emulator" ||
     { echo "Integration tests failed, not releasing" >&2; exit 1; }
 else
-  answer=
-  read -r -p "No Android emulator running, so the integration tests can't run. Release without them? [y/N] " answer || true
-  [ "$answer" = y ] || { echo "Not released. Start one (see docs/ANDROID.md) and run this again." >&2; exit 1; }
+  # Without an emulator, the nightly workflow's integration tests on this
+  # commit count instead. Its integration-test job decides, not the run: the
+  # randomized test can fail the run, and a night without commits skips the
+  # integration tests in a run that passes.
+  head=$(git rev-parse HEAD)
+  passed= why= run_result=
+  if ! command -v gh >/dev/null; then
+    why="gh isn't installed, so the nightly runs can't be checked"
+  # Completed runs on exactly this commit, newest first
+  elif ! runs=$(gh run list --workflow nightly.yml --commit "$head" --limit 20 \
+      --json databaseId,headSha,status,conclusion \
+      --jq ".[] | select(.headSha == \"$head\" and .status == \"completed\") | \"\\(.databaseId) \\(.conclusion)\""); then
+    why="gh couldn't list the nightly runs (see above)"
+  elif [ -z "$runs" ]; then
+    why="no completed nightly run on $head (not pushed, or still running?)"
+  else
+    # The newest one decides: a failure after a pass on the same commit is
+    # a flaky test to look at, not something an older pass makes up for
+    newest=${runs%%$'\n'*}
+    id=${newest%% *} run_result=${newest#* }
+    result=$(gh run view "$id" --json jobs --jq \
+      '[.jobs[] | select(.name == "integration-test")
+        | if .status == "completed" then .conclusion else .status end][0]
+        // "missing"') || result="unknown (gh failed)"
+    if [ "$result" = success ]; then
+      passed=$id
+    else
+      why="newest completed nightly run on $head: $id, integration-test $result"
+    fi
+  fi
+  if [ -n "$passed" ]; then
+    echo "No Android emulator running; nightly run $passed passed the integration tests on $head."
+    # Another job of it (the randomized test) doesn't stop a release, but
+    # shouldn't go unnoticed either
+    [ "$run_result" = success ] ||
+      echo "The run itself is $run_result: see its other jobs (gh run view $passed)."
+  else
+    echo "No Android emulator running, so the integration tests can't run here, and no passed nightly run could be confirmed for this commit: $why."
+    echo "Start an emulator (see docs/ANDROID.md), or run them in CI (gh workflow run nightly.yml) and run this again once it passed."
+    answer=
+    read -r -p "Release without them? [y/N] " answer || true
+    [ "$answer" = y ] || { echo "Not released." >&2; exit 1; }
+  fi
 fi
 # The commit below takes every changed file; flutter's implicit pub get can
 # rewrite a pubspec.lock

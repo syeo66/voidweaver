@@ -259,6 +259,72 @@ void main() {
       },
     );
 
+    // Seed 106136 of the randomized playback test
+    test('a stop and Play during the seek a slow skip makes after reaching '
+        'its target load the target again there, and play', () async {
+      await service.playAlbum(album(4));
+      player.seekGate = Completer();
+
+      final skipping = service.next();
+      await pumpEventQueue();
+      expect(player.loadedSources.last, urlFor('s2'));
+      // Waits for the skip's seek, then seeks within the target
+      unawaited(service.seekTo(const Duration(seconds: 40)));
+      // Both arrive while that seek runs. The player stops, which ends the
+      // seek as it would end a waiting one (PlaylistPlayer's completeSeek()).
+      player.onSeekWithinItem = (_) {
+        player.onSeekWithinItem = null;
+        unawaited(service.stop());
+        unawaited(service.play());
+      };
+      player.seekGate!.complete();
+      await skipping;
+      await pumpEventQueue();
+
+      expect(service.currentIndex, 1);
+      expect(player.currentIndex, 1);
+      expect(player.processingState, ProcessingState.ready);
+      expect(player.playing, isTrue);
+      expect(service.playbackState, PlaybackState.playing);
+      expect(service.currentPosition, const Duration(seconds: 40));
+    });
+
+    test('a seek while the target loads again after such a stop wins over '
+        'one queued before the stop', () async {
+      // Read again on every step, so a gate can hold the step that loads
+      when(mockApi.readReplayGain(any))
+          .thenAnswer((_) async => const ReplayGainData.unavailable());
+      await service.playAlbum(unreadAlbum('u', 4));
+      player.seekGate = Completer();
+
+      final skipping = service.next();
+      await pumpEventQueue();
+      unawaited(service.seekTo(const Duration(seconds: 40)));
+      final gainRead = Completer<ReplayGainData>();
+      player.onSeekWithinItem = (_) {
+        player.onSeekWithinItem = null;
+        // Queued while the seek to 40 s runs
+        unawaited(service.seekTo(const Duration(seconds: 50)));
+        unawaited(service.stop());
+        unawaited(service.play());
+        when(mockApi.readReplayGain(any)).thenAnswer((_) => gainRead.future);
+      };
+      player.seekGate!.complete();
+      await pumpEventQueue();
+      // The step that loads again waits for the target's tags: the player
+      // hasn't been told yet, so this is where it starts
+      unawaited(service.seekTo(const Duration(seconds: 60)));
+      gainRead.complete(const ReplayGainData.unavailable());
+      await skipping;
+      await pumpEventQueue();
+      await settle();
+
+      expect(player.processingState, ProcessingState.ready);
+      expect(player.playing, isTrue);
+      expect(service.currentPosition, const Duration(seconds: 60));
+      expect(player.position, const Duration(seconds: 60));
+    });
+
     test('presses during a skip stop at the last track', () async {
       await service.playAlbum(album(3));
       player.seekGate = Completer();

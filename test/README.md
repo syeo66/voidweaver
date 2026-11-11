@@ -33,7 +33,7 @@ It doesn't use `fakeAsync`: awaiting `StreamSubscription.cancel()` on a broadcas
 flutter test integration_test -d emulator-5554   # or: make test-integration
 ```
 
-Each test starts from a fresh install (credentials and SharedPreferences cleared), so run them on an emulator, not on a phone with the app logged in. Run them after changes to playback, login or the screens they touch. `tool/release.sh` runs them before a release when an emulator is running (see [docs/RELEASING.md](../docs/RELEASING.md)), and the nightly workflow runs them in CI, see below; the workflow for pushes doesn't. They use a debug build, so they don't replace `tool/emulator_check.sh` (release build, R8, media keys, resumption), which also runs locally only (see below and [docs/ANDROID.md](../docs/ANDROID.md)).
+Each test starts from a fresh install (credentials and SharedPreferences cleared), so run them on an emulator, not on a phone with the app logged in. Run them after changes to playback, login or the screens they touch. `tool/release.sh` runs them before a release when an emulator is running, and otherwise looks for a nightly run that passed them on the commit (see [docs/RELEASING.md](../docs/RELEASING.md)), and the nightly workflow runs them in CI, see below; the workflow for pushes doesn't. They use a debug build, so they don't replace `tool/emulator_check.sh` (release build, R8, media keys, resumption), which also runs locally only (see below and [docs/ANDROID.md](../docs/ANDROID.md)).
 
 ## Nightly checks
 

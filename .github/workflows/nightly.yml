@@ -2,7 +2,8 @@ name: Nightly
 
 # Checks that are too slow or too flaky for every push, so they don't block a
 # release (tool/release.sh runs the integration tests before tagging when an
-# emulator is running, see docs/RELEASING.md):
+# emulator is running, and otherwise requires a passed integration-test job of
+# this workflow on the commit or a confirmation, see docs/RELEASING.md):
 #
 # - the randomized playback test with seeds no run checked before: the push
 #   workflow's run always checks seeds 0 to 999
@@ -80,6 +81,8 @@ jobs:
           echo recent=false >> "$GITHUB_OUTPUT"
         fi
 
+  # tool/release.sh looks this job up by its name (integration-test): keep
+  # it, or update the script
   integration-test:
     needs: changes
     if: needs.changes.outputs.recent == 'true'

@@ -935,6 +935,16 @@ class AudioPlayerService extends ChangeNotifier {
         _log.warning('Seek after loading failed', e);
       }
       if (changed()) return;
+      if (move.stopped &&
+          _audioPlayer.processingState == ProcessingState.idle) {
+        // stop() was called during the seek, which it ended: the player
+        // holds nothing to play. The next step ends the move or loads again
+        // where the seek went, see _stopEnds()
+        move
+          ..issued = false
+          ..position = seekAfter;
+        return;
+      }
     }
     final pressed = move.nextIndex;
     if (pressed != null && pressed != index) {
@@ -1421,7 +1431,11 @@ class AudioPlayerService extends ChangeNotifier {
       // The move's end saves only if it starts playback
       _schedulePositionSave();
       if (!move.issued) {
-        move.position = position;
+        // A seek queued before (one the move took back after a stop) is
+        // older than this one
+        move
+          ..position = position
+          ..seekAfter = null;
         return Future.value();
       }
       move.seekAfter = position;
