@@ -215,6 +215,12 @@ class MockSubsonicApi extends _i1.Mock implements _i7.SubsonicApi {
       ) as _i9.Future<_i6.ReplayGainData>);
 
   @override
+  bool tryOtherUrlAfterRefusal(String? body) => (super.noSuchMethod(
+    Invocation.method(#tryOtherUrlAfterRefusal, [body]),
+    returnValue: false,
+  ) as bool);
+
+  @override
   String getCoverArtUrl(String? id, {int? size = 300}) => (super.noSuchMethod(
     Invocation.method(#getCoverArtUrl, [id], {#size: size}),
     returnValue: _i8.dummyValue<String>(
