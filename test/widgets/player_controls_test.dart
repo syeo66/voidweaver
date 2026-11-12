@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/rendering.dart' show SemanticsNode;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
@@ -221,6 +222,35 @@ void main() {
     );
     // Only the position listenable changed, so nothing else rebuilt
     expect(notifications, 0);
+  });
+
+  testWidgets('the slider reads out the position as a time', (tester) async {
+    final semantics = tester.ensureSemantics();
+    // Not addTearDown: testWidgets checks for open handles before the
+    // teardowns run
+    try {
+      await pumpControls(tester);
+      await playAlbum(tester);
+
+      await tester.runAsync(() async {
+        player.simulatePositionChange(const Duration(seconds: 30));
+        await Future<void>.delayed(Duration.zero);
+      });
+      await tester.pump();
+
+      // The node with the slider's value is below the one of its widget
+      SemanticsNode? slider;
+      tester.getSemantics(find.byType(Slider)).visitChildren((node) {
+        if (node.getSemanticsData().flagsCollection.isSlider) slider = node;
+        return slider == null;
+      });
+      final data = slider!.getSemanticsData();
+      expect(data.value, '0:30');
+      // A step of the slider, read out the same way
+      expect(data.increasedValue, matches(RegExp(r'^\d+:\d\d$')));
+    } finally {
+      semantics.dispose();
+    }
   });
 
   testWidgets('moving the slider seeks', (tester) async {

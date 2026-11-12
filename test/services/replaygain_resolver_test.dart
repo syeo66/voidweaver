@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:logging/logging.dart';
 import 'package:mockito/mockito.dart';
 import 'package:voidweaver/services/replaygain_reader.dart';
 import 'package:voidweaver/services/replaygain_resolver.dart';
@@ -105,10 +106,21 @@ void main() {
       expect(data?.trackGain, -9);
     });
 
-    test('returns null when the file can\'t be read', () async {
-      when(api.readReplayGain('s1')).thenThrow(Exception('offline'));
+    test('returns null and warns when the read throws', () async {
+      final records = <LogRecord>[];
+      final sub = Logger('replaygain').onRecord.listen(records.add);
+      addTearDown(sub.cancel);
+      final error = StateError('parser bug');
+      when(api.readReplayGain('s1')).thenThrow(error);
 
       expect(await resolver.readMissing(song()), isNull);
+
+      // Logged even where ReplayGain diagnostics are off (tests, the console
+      // of release builds)
+      final record = records.singleWhere((r) => r.level == Level.WARNING);
+      expect(record.message, contains('s1'));
+      expect(record.error, same(error));
+      expect(record.stackTrace, isNotNull);
     });
 
     // Starts and skips wait for the read, up to a few seconds each time

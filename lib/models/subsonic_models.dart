@@ -318,38 +318,6 @@ class Song {
   }
 
   static Song fromJson(Map<String, dynamic> json) {
-    // Parse ReplayGain data - support both flat and nested formats
-    // Nested format (Navidrome/OpenSubsonic): {"replayGain": {"trackGain": -12.61, ...}}
-    // Flat format (legacy): {"replayGainTrackGain": -12.61, ...}
-    double? trackGain;
-    double? albumGain;
-    double? trackPeak;
-    double? albumPeak;
-
-    if (json.containsKey('replayGain') && json['replayGain'] is Map) {
-      final replayGain = json['replayGain'] as Map<String, dynamic>;
-      trackGain = (replayGain['trackGain'] as num?)?.toDouble();
-      albumGain = (replayGain['albumGain'] as num?)?.toDouble();
-      trackPeak = (replayGain['trackPeak'] as num?)?.toDouble();
-      albumPeak = (replayGain['albumPeak'] as num?)?.toDouble();
-      logReplayGain(
-        () =>
-            '[ReplayGain JSON] "${json['title']}" (id=${json['id']}): nested replayGain='
-            '{trackGain: $trackGain, albumGain: $albumGain, trackPeak: $trackPeak, albumPeak: $albumPeak}',
-      );
-    } else {
-      // Fallback to flat format for backwards compatibility
-      trackGain = (json['replayGainTrackGain'] as num?)?.toDouble();
-      albumGain = (json['replayGainAlbumGain'] as num?)?.toDouble();
-      trackPeak = (json['replayGainTrackPeak'] as num?)?.toDouble();
-      albumPeak = (json['replayGainAlbumPeak'] as num?)?.toDouble();
-      logReplayGain(
-        () =>
-            '[ReplayGain JSON] "${json['title']}" (id=${json['id']}): flat fields='
-            '{trackGain: $trackGain, albumGain: $albumGain, trackPeak: $trackPeak, albumPeak: $albumPeak}',
-      );
-    }
-
     return Song(
       id: json['id'] as String? ?? '',
       title: json['title'] as String? ?? '',
@@ -362,10 +330,10 @@ class Song {
       contentType: json['contentType'] as String?,
       suffix: json['suffix'] as String?,
       size: json['size'] as int?,
-      replayGainTrackGain: trackGain,
-      replayGainAlbumGain: albumGain,
-      replayGainTrackPeak: trackPeak,
-      replayGainAlbumPeak: albumPeak,
+      replayGainTrackGain: (json['replayGainTrackGain'] as num?)?.toDouble(),
+      replayGainAlbumGain: (json['replayGainAlbumGain'] as num?)?.toDouble(),
+      replayGainTrackPeak: (json['replayGainTrackPeak'] as num?)?.toDouble(),
+      replayGainAlbumPeak: (json['replayGainAlbumPeak'] as num?)?.toDouble(),
     );
   }
 }

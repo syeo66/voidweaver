@@ -176,6 +176,9 @@ class _ProgressSectionState extends State<_ProgressSection> {
                 ),
                 child: Slider(
                   value: value.clamp(0.0, 1.0),
+                  // Read out as a time, not as a percentage
+                  semanticFormatterCallback: (value) =>
+                      formatClock(_positionAt(value, total)),
                   onChangeStart: canSeek
                       ? (value) => setState(() {
                           _drag++;

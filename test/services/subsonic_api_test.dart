@@ -391,6 +391,47 @@ void main() {
     });
   });
 
+  group('SearchResult.fromXml', () {
+    test('parses the artists, albums and songs of a search3 response', () {
+      final result = SearchResult.fromXml(
+        SubsonicApi.parseResponse('''
+<subsonic-response xmlns="http://subsonic.org/restapi" status="ok" version="1.16.1" type="navidrome" serverVersion="0.58.0" openSubsonic="true">
+  <searchResult3>
+    <artist id="ar-1" name="Mechina" coverArt="ar-ar-1" albumCount="3"></artist>
+    <album id="al-1" name="Xenon" artist="Mechina" artistId="ar-1" coverArt="al-al-1" songCount="8" duration="2843" created="2026-02-27T06:28:34.732Z"></album>
+    <song id="s-1" parent="al-1" isDir="false" title="Tartarus" album="Xenon" artist="Mechina" track="6" coverArt="mf-s-1" size="12979081" contentType="audio/mpeg" suffix="mp3" duration="354" albumId="al-1" artistId="ar-1" type="music">
+      <replayGain trackGain="-12.61" albumGain="-12.97" trackPeak="1" albumPeak="1"></replayGain>
+    </song>
+  </searchResult3>
+</subsonic-response>
+'''),
+      );
+
+      expect(result.artists.single.id, 'ar-1');
+      expect(result.artists.single.albumCount, 3);
+      expect(result.albums.single.name, 'Xenon');
+      expect(result.albums.single.songCount, 8);
+      // Songs of the search aren't taken for the album's
+      expect(result.albums.single.songs, isEmpty);
+      final song = result.songs.single;
+      expect(song.title, 'Tartarus');
+      expect(song.albumId, 'al-1');
+      expect(song.duration, 354);
+      expect(song.replayGainTrackGain, -12.61);
+      expect(result.isNotEmpty, isTrue);
+    });
+
+    test('is empty for a response without searchResult3', () {
+      final result = SearchResult.fromXml(
+        SubsonicApi.parseResponse(
+          '<subsonic-response xmlns="http://subsonic.org/restapi" status="ok" version="1.16.1"/>',
+        ),
+      );
+
+      expect(result.isEmpty, isTrue);
+    });
+  });
+
   group('Song.copyWith', () {
     test('keeps every field it is not given', () {
       final song = Song(

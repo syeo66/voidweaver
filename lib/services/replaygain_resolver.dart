@@ -1,8 +1,12 @@
+import 'package:logging/logging.dart';
+
 import 'audio_cache.dart';
 import 'replaygain/replaygain_log.dart';
 import 'replaygain_reader.dart';
 import 'settings_service.dart';
 import 'subsonic_api.dart';
+
+final _log = Logger('replaygain');
 
 /// Where a song's ReplayGain data comes from, and the gain it plays at. See
 /// docs/REPLAYGAIN.md.
@@ -78,9 +82,10 @@ class ReplayGainResolver {
       );
       if (!data.hasAnyData && !data.unavailable) _untagged.add(song.id);
       return data;
-    } catch (e, stackTrace) {
-      logReplayGain(() => '[ReplayGain] ERROR reading ReplayGain metadata: $e');
-      logReplayGain(() => '[ReplayGain] Stack trace: $stackTrace');
+    } catch (e, stack) {
+      // The reads return unavailable data for the failures they expect
+      // (network, storage), so this points to a bug
+      _log.warning('Could not read ReplayGain of song ${song.id}', e, stack);
       return null;
     }
   }
