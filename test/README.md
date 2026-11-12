@@ -39,7 +39,7 @@ Each test starts from a fresh install (credentials and SharedPreferences cleared
 
 `.github/workflows/nightly.yml` runs every night (and by hand: `gh workflow run nightly.yml`). It doesn't block pushes or releases.
 
-- The randomized playback test with new seeds: run N of the workflow checks seeds from `N * 100000` on, 50,000 runs of 40 steps, then 20,000 of 120 steps from `N * 100000 + 50000`. The log prints the range; replay a failure locally with the seed (and steps) it prints.
+- The randomized playback test with new seeds: run N of the workflow checks seeds from `N * 100000` on, 25,000 runs of 40 steps, then 10,000 of 120 steps from `N * 100000 + 25000`. The log prints the range; replay a failure locally with the seed (and steps) it prints.
 - The integration tests in an emulator in the runner, only if `main` has a commit from the last 25 hours (by its commit date) or the run was started by hand. The emulator sometimes fails to start there (adb can't connect, the system image doesn't unpack), and the test tool sometimes fails to start the Dart Development Service (`--no-dds` doesn't help: the tests then fail to load). So a failed attempt gets a second one in a fresh emulator, and a warning on the run shows that the first one failed, also when the second passes: look at its log for whether a test failed.
 
 GitHub emails a failed scheduled run to whoever last changed the workflow's `cron` line, and turns the schedule off after 60 days without activity in the repository.

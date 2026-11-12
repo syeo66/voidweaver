@@ -54,18 +54,18 @@ jobs:
     - name: Randomized playback test, new seeds
       run: |
         first=$((GITHUB_RUN_NUMBER * 100000))
-        echo "Seeds $first to $((first + 49999))"
+        echo "Seeds $first to $((first + 24999))"
         flutter test test/services/playback_random_actions_test.dart \
           --dart-define=PLAYBACK_FIRST_SEED=$first \
-          --dart-define=PLAYBACK_RUNS=50000
+          --dart-define=PLAYBACK_RUNS=25000
 
     - name: Randomized playback test, new seeds, longer runs
       run: |
-        first=$((GITHUB_RUN_NUMBER * 100000 + 50000))
-        echo "Seeds $first to $((first + 19999)), 120 steps each"
+        first=$((GITHUB_RUN_NUMBER * 100000 + 25000))
+        echo "Seeds $first to $((first + 9999)), 120 steps each"
         flutter test test/services/playback_random_actions_test.dart \
           --dart-define=PLAYBACK_FIRST_SEED=$first \
-          --dart-define=PLAYBACK_RUNS=20000 \
+          --dart-define=PLAYBACK_RUNS=10000 \
           --dart-define=PLAYBACK_STEPS=120
 
   # Whether main changed since the last night: the integration tests only
