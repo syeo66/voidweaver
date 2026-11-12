@@ -18,7 +18,7 @@ make check-emulator-fake  # the same against the fake Subsonic server, no login 
 Regenerate mocks after changing a `@GenerateMocks` annotation:
 
 ```bash
-dart run build_runner build --delete-conflicting-outputs
+dart run build_runner build
 ```
 
 CI regenerates them and fails if `test/` differs from what's committed (also a generated file that's missing), so commit the regenerated files.

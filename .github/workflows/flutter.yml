@@ -50,7 +50,7 @@ jobs:
     # fails, run build_runner locally and commit the result (see test/README.md)
     - name: Check the generated mocks are up to date
       run: |
-        dart run build_runner build --delete-conflicting-outputs
+        dart run build_runner build
         # Also catches a generated file that was never committed
         if [ -n "$(git status --porcelain -- test)" ]; then
           git status --porcelain -- test
