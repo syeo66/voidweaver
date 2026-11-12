@@ -1,7 +1,7 @@
 import 'package:logging/logging.dart';
 import 'package:xml/xml.dart';
 
-import '../services/replaygain_debug_logger.dart';
+import '../services/replaygain/replaygain_log.dart';
 
 final _log = Logger('subsonic_api');
 

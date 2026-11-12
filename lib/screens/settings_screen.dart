@@ -7,9 +7,9 @@ import '../widgets/app_version.dart';
 import '../widgets/settings/appearance_section.dart';
 import '../widgets/settings/cache_section.dart';
 import '../widgets/settings/network_section.dart';
-import '../widgets/settings/replaygain_debug_log_section.dart';
 import '../widgets/settings/replaygain_section.dart';
 import '../widgets/settings/scrobbling_section.dart';
+import '../widgets/settings/session_log_section.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -63,9 +63,9 @@ class _SettingsContent extends StatelessWidget {
             const SizedBox(height: 16),
             ReplayGainSection(settingsService: settingsService),
             const SizedBox(height: 16),
-            const ReplayGainDebugLogSection(),
-            const SizedBox(height: 16),
             ScrobblingSection(settingsService: settingsService),
+            const SizedBox(height: 16),
+            const SessionLogSection(),
             const SizedBox(height: 24),
             const AppVersion(),
             const SizedBox(height: 8),

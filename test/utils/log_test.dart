@@ -50,4 +50,28 @@ void main() {
       expect(line, contains('id=7'));
     });
   });
+
+  group('shouldPrint', () {
+    LogRecord at(Level level, [String logger = 'audio_player']) =>
+        LogRecord(level, 'message', logger);
+
+    test('prints from the console level up', () {
+      expect(shouldPrint(at(Level.INFO), Level.INFO, {}), isTrue);
+      expect(shouldPrint(at(Level.SEVERE), Level.INFO, {}), isTrue);
+      // Made for the session log, not printed in a release build
+      expect(shouldPrint(at(Level.FINE), Level.INFO, {}), isFalse);
+    });
+
+    test('prints FINE of the loggers LOG_FINE names', () {
+      expect(shouldPrint(at(Level.FINE), Level.INFO, {'audio_player'}), isTrue);
+      expect(
+        shouldPrint(at(Level.FINE, 'network'), Level.INFO, {'audio_player'}),
+        isFalse,
+      );
+      expect(
+        shouldPrint(at(Level.FINER), Level.INFO, {'audio_player'}),
+        isFalse,
+      );
+    });
+  });
 }

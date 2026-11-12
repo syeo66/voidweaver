@@ -13,7 +13,7 @@ import 'replaygain/reader_log.dart';
 import 'replaygain/replaygain_data.dart';
 import 'replaygain/url_head.dart';
 import 'replaygain/vorbis.dart';
-import 'replaygain_debug_logger.dart';
+import 'replaygain/replaygain_log.dart';
 
 export 'replaygain/replaygain_data.dart';
 

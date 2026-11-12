@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import 'services/app_state.dart';
 import 'services/error_handler.dart';
+import 'services/session_log.dart';
 import 'services/settings_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
@@ -22,6 +23,8 @@ void main() async {
       () async {
         WidgetsFlutterBinding.ensureInitialized();
         setUpLogging();
+        // This run's log, for the user to export (Settings → Session Log)
+        unawaited(SessionLog.instance.start());
         // Only in the build of tool/emulator_check.sh --fake-server
         trustTestCa();
 

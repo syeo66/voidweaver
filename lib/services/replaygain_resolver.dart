@@ -1,5 +1,5 @@
 import 'audio_cache.dart';
-import 'replaygain_debug_logger.dart';
+import 'replaygain/replaygain_log.dart';
 import 'replaygain_reader.dart';
 import 'settings_service.dart';
 import 'subsonic_api.dart';
@@ -85,7 +85,7 @@ class ReplayGainResolver {
     }
   }
 
-  /// Writes how the gain of [song] came about to the ReplayGain debug log.
+  /// Logs how the gain of [song] came about, for the session log.
   /// [queue] names what the queue was started from.
   void logTrack(Song song, {required bool fromAlbum, required String queue}) {
     if (!replayGainLogging) return;

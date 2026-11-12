@@ -33,6 +33,8 @@ After login, tapping the first album card at (400, 550) starts playback. Tapping
 
 **Offline:** `$ADB shell svc wifi disable; $ADB shell svc data disable` (`enable` to undo). The next 3 tracks are downloaded, so skip past them with `MEDIA_NEXT` to reach a track that has to stream and fails to load. Playback should stop there, paused, with the session still active; with the network back, Play loads it again.
 
+**Network events in the emulator:** `NetworkMonitor` (and with it the resume after a network failure, and restarting downloads, see [PLAYBACK.md](PLAYBACK.md#when-the-network-comes-back)) only reacts to a *validated* default network. In the AVD no network passes Android's internet check, so it never fires, whatever you toggle (`dumpsys connectivity`: no `VALIDATED` in the network's capabilities; the default network is mobile data, so toggling Wi-Fi doesn't even change it). To test it, turn the check off with `$ADB shell settings put global captive_portal_mode 0`, then `svc data disable` / `enable`: the network comes back validated and the app gets the event. Undo with `$ADB shell settings delete global captive_portal_mode`. The same holds on a phone: a network without internet access (e.g. Wi-Fi with only the home server) never counts as back.
+
 **Screenshots:** `$ADB exec-out screencap -p > x.png`. They're 1080x2400; if you view them scaled down, scale the coordinates back up before tapping.
 
 ## Checking the media session, notification and Bluetooth controls

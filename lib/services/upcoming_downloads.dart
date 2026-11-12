@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:logging/logging.dart';
 
 import 'audio_cache.dart';
-import 'replaygain_debug_logger.dart';
+import 'replaygain/replaygain_log.dart';
 import 'replaygain_reader.dart';
 import 'subsonic_api.dart';
 

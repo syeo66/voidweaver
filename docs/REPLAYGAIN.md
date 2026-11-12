@@ -31,6 +31,6 @@ Supported tags:
 
 ## Debugging
 
-Turn on **Debug Logging** under Settings → ReplayGain Debug Log to write a log file on the device. For every track played or prefetched it records the source of the values, the parsed gains and peaks, the settings and the final multiplier. The log is capped at 5 MB and can be exported through the share sheet. Every line is passed through `redactCredentials()`, so credentials in URLs (also inside error messages) are masked, but the log still contains the server address and song titles.
+For every track played or prefetched, the `replaygain` logger records the source of the values, the parsed gains and peaks, the settings and the final multiplier, at `FINE`. These lines are in the session log (Settings → Session Log → Export, see [DEVELOPMENT.md](DEVELOPMENT.md#conventions)), and on the console in debug builds (`--dart-define=LOG_FINE=replaygain` for a release build).
 
 If tracks have no ReplayGain data, tag the library with a tool such as `rsgain`, foobar2000 or MusicBrainz Picard, then rescan in Navidrome.

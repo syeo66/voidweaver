@@ -13,7 +13,6 @@ import 'audio_cache.dart';
 import 'image_cache_manager.dart';
 import 'settings_service.dart';
 import 'playback_persistence.dart';
-import 'replaygain_debug_logger.dart';
 import 'scrobble_queue.dart';
 import 'network_config.dart';
 import 'network_errors.dart';
@@ -127,8 +126,6 @@ class AppState extends ChangeNotifier {
     _applyNetworkConfig();
     // The app's theme comes from the settings
     notifyListeners();
-
-    await ReplayGainDebugLogger.instance.initialize();
 
     if (_persistenceService == null) {
       final persistence = PlaybackPersistenceService();

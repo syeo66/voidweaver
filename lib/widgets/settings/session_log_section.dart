@@ -1,62 +1,62 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
-import '../../services/replaygain_debug_logger.dart';
+import '../../services/session_log.dart';
 import '../../utils/format.dart';
 
-/// Turning the ReplayGain debug log on and off, exporting and clearing it.
-class ReplayGainDebugLogSection extends StatefulWidget {
-  const ReplayGainDebugLogSection({super.key});
+/// Exporting and clearing the session log (this run of the app and the
+/// previous one), see [SessionLog].
+class SessionLogSection extends StatefulWidget {
+  const SessionLogSection({super.key});
 
   @override
-  State<ReplayGainDebugLogSection> createState() =>
-      ReplayGainDebugLogSectionState();
+  State<SessionLogSection> createState() => _SessionLogSectionState();
 }
 
-class ReplayGainDebugLogSectionState extends State<ReplayGainDebugLogSection> {
-  final ReplayGainDebugLogger _logger = ReplayGainDebugLogger.instance;
+class _SessionLogSectionState extends State<SessionLogSection> {
+  final SessionLog _log = SessionLog.instance;
   final GlobalKey _exportButtonKey = GlobalKey();
-  late Future<int> _sizeFuture;
+  late Future<int> _previousSize;
 
   @override
   void initState() {
     super.initState();
-    _sizeFuture = _logger.sizeBytes();
+    _previousSize = _log.previousSizeBytes();
   }
 
-  void _refreshSize() {
+  void _refresh() {
     setState(() {
-      _sizeFuture = _logger.sizeBytes();
+      _previousSize = _log.previousSizeBytes();
     });
   }
 
-  Future<void> _handleExport() async {
-    final renderBox =
+  Future<void> _export() async {
+    final box =
         _exportButtonKey.currentContext?.findRenderObject() as RenderBox?;
-    final sharePositionOrigin = renderBox != null
-        ? renderBox.localToGlobal(Offset.zero) & renderBox.size
+    final origin = box != null
+        ? box.localToGlobal(Offset.zero) & box.size
         : null;
-
-    final success = await _logger.exportLog(
-      sharePositionOrigin: sharePositionOrigin,
-    );
+    final shared = await _log.export(sharePositionOrigin: origin);
     if (!mounted) return;
-    if (!success) {
+    _refresh();
+    if (!shared) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Log is empty — nothing to export yet'),
+          content: Text('Nothing to export'),
           duration: Duration(seconds: 2),
         ),
       );
     }
   }
 
-  Future<void> _handleClear() async {
+  Future<void> _clear() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear Debug Log?'),
+        title: const Text('Clear Session Log?'),
         content: const Text(
-          'This permanently deletes the stored ReplayGain debug log. This cannot be undone.',
+          'This deletes the log of this run and of the previous one.',
         ),
         actions: [
           TextButton(
@@ -70,15 +70,14 @@ class ReplayGainDebugLogSectionState extends State<ReplayGainDebugLogSection> {
         ],
       ),
     );
-
     if (confirmed != true) return;
 
-    await _logger.clear();
+    await _log.clear();
     if (!mounted) return;
-    _refreshSize();
+    _refresh();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Debug log cleared'),
+        content: Text('Session log cleared'),
         duration: Duration(seconds: 2),
       ),
     );
@@ -86,28 +85,23 @@ class ReplayGainDebugLogSectionState extends State<ReplayGainDebugLogSection> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'ReplayGain Debug Log',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
+            Text('Session Log', style: theme.textTheme.headlineSmall),
             const SizedBox(height: 8),
             Text(
-              "If ReplayGain volume normalization isn't being applied to some "
-              'songs, enable this to record diagnostic details for every '
-              'track played: the stream URL, detected file format, where '
-              'ReplayGain metadata was found (server response vs. reading '
-              'the file directly), the parsed gain/peak values, current '
-              'settings, and the resulting volume adjustment. Export the '
-              'log and share it to help track down the issue.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+              'The app records what it does while it runs: playback, '
+              'network errors, downloads, scrobbles and ReplayGain. If '
+              'something goes wrong, export the log and share it to help '
+              'track down the issue. It holds this run of the app and the '
+              'previous one; older runs are discarded.',
+              style: theme.textTheme.bodyMedium?.copyWith(color: muted),
             ),
             const SizedBox(height: 8),
             Container(
@@ -130,10 +124,10 @@ class ReplayGainDebugLogSectionState extends State<ReplayGainDebugLogSection> {
                     child: Text(
                       'The log includes your server address and song details. '
                       'Login credentials are redacted before saving, but only '
-                      'export and share this file with people you trust.',
+                      'share it with people you trust.',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Theme.of(context).colorScheme.onSurface,
+                        color: theme.colorScheme.onSurface,
                       ),
                     ),
                   ),
@@ -141,33 +135,14 @@ class ReplayGainDebugLogSectionState extends State<ReplayGainDebugLogSection> {
               ),
             ),
             const SizedBox(height: 16),
-            ListenableBuilder(
-              listenable: _logger,
-              builder: (context, _) {
-                return SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Enable Debug Logging'),
-                  subtitle: const Text(
-                    'Record ReplayGain diagnostics to a log file on this device',
-                  ),
-                  value: _logger.enabled,
-                  onChanged: (value) async {
-                    await _logger.setEnabled(value);
-                    _refreshSize();
-                  },
-                );
-              },
-            ),
-            const SizedBox(height: 8),
             FutureBuilder<int>(
-              future: _sizeFuture,
+              future: _previousSize,
               builder: (context, snapshot) {
-                final size = snapshot.data ?? 0;
+                final previous = snapshot.data ?? 0;
                 return Text(
-                  'Log size: ${formatBytes(size)}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                  'This run: ${formatBytes(_log.sizeBytes)}'
+                  '${previous > 0 ? ' · Previous run: ${formatBytes(previous)}' : ''}',
+                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
                 );
               },
             ),
@@ -177,7 +152,7 @@ class ReplayGainDebugLogSectionState extends State<ReplayGainDebugLogSection> {
                 Expanded(
                   child: OutlinedButton.icon(
                     key: _exportButtonKey,
-                    onPressed: _handleExport,
+                    onPressed: () => unawaited(_export()),
                     icon: const Icon(Icons.ios_share),
                     label: const Text('Export'),
                   ),
@@ -185,11 +160,11 @@ class ReplayGainDebugLogSectionState extends State<ReplayGainDebugLogSection> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _handleClear,
+                    onPressed: () => unawaited(_clear()),
                     icon: const Icon(Icons.delete_outline),
                     label: const Text('Clear'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Theme.of(context).colorScheme.error,
+                      foregroundColor: theme.colorScheme.error,
                     ),
                   ),
                 ),

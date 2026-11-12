@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 
+import '../services/session_log.dart';
 import 'redact.dart';
 
 /// Lowest level printed for all loggers. Debug builds print everything,
@@ -16,8 +17,10 @@ const _fineLoggerNames = String.fromEnvironment('LOG_FINE');
 
 StreamSubscription<LogRecord>? _subscription;
 
-/// Prints the records of all loggers to the console (logcat on Android).
-/// Call once at startup; without it (as in tests) nothing is printed.
+/// Prints the records of all loggers to the console (logcat on Android),
+/// and hands them to the [SessionLog], which keeps `FINE` and up whatever
+/// the console prints. Call once at startup; without it (as in tests)
+/// nothing is printed or recorded.
 ///
 /// Each file logs through its own `Logger('<name>')` at one of these levels:
 /// - `severe`: unexpected errors, e.g. uncaught ones from [ErrorHandler]
@@ -29,21 +32,38 @@ StreamSubscription<LogRecord>? _subscription;
 /// with auth parameters can be logged as they are.
 void setUpLogging() {
   hierarchicalLoggingEnabled = true;
-  Logger.root.level =
+  final console =
       _levelNamed(_logLevelName) ?? (kDebugMode ? Level.ALL : Level.INFO);
-  for (final name in _fineLoggerNames.split(',')) {
-    if (name.trim().isNotEmpty) Logger(name.trim()).level = Level.FINE;
+  final fineLoggers = {
+    for (final name in _fineLoggerNames.split(','))
+      if (name.trim().isNotEmpty) name.trim(),
+  };
+  // Records are made down to whichever is lower, the console's level or the
+  // session log's
+  Logger.root.level = console < SessionLog.level ? console : SessionLog.level;
+  for (final name in fineLoggers) {
+    Logger(name).level = Level.FINE;
   }
 
   unawaited(_subscription?.cancel());
   _subscription = Logger.root.onRecord.listen((record) {
-    debugPrint(formatLogRecord(record));
+    if (shouldPrint(record, console, fineLoggers)) {
+      debugPrint(formatLogRecord(record));
+    }
+    SessionLog.instance.add(record);
   });
 }
 
-/// One line per record (plus the stack trace, if any), e.g.
-/// `W/api_cache: Error reading persistent cache: <error>`.
+/// Whether the console prints [record]: from the [console] level up, and
+/// from `FINE` up for the loggers named in `LOG_FINE` ([fineLoggers]).
 @visibleForTesting
+bool shouldPrint(LogRecord record, Level console, Set<String> fineLoggers) =>
+    record.level >= console ||
+    (fineLoggers.contains(record.loggerName) && record.level >= Level.FINE);
+
+/// One line per record (plus the stack trace, if any), e.g.
+/// `W/api_cache: Error reading persistent cache: <error>`. Also the
+/// [SessionLog]'s lines.
 String formatLogRecord(LogRecord record) {
   final buffer = StringBuffer()
     ..write(record.level.name[0])

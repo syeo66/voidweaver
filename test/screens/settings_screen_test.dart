@@ -88,8 +88,8 @@ void main() {
         'Network & Timeouts',
         'Cache',
         'ReplayGain',
-        'ReplayGain Debug Log',
         'Scrobbling',
+        'Session Log',
       ]) {
         await scrollTo(tester, find.text(title));
         expect(find.text(title), findsOneWidget);
