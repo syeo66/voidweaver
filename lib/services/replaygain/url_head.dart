@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -26,6 +27,14 @@ class UrlHead {
   /// JSON with HTTP 200, e.g. Navidrome's "downloads are disabled")
   bool refused = false;
 
+  /// The start of the Subsonic response the server refused with (see
+  /// [refused]), up to [_maxRefusalBytes]; null if it refused with an error
+  /// status, or didn't refuse.
+  String? refusal;
+
+  // A Subsonic error response is a few hundred bytes
+  static const _maxRefusalBytes = 16 * 1024;
+
   /// At least [length] bytes from the start of the file, or fewer if it
   /// ends sooner; null if nothing could be read.
   Future<Uint8List?> read(int length) async {
@@ -47,8 +56,8 @@ class UrlHead {
                 'Got a Subsonic response instead of audio: '
                 '${response.headers['content-type']}',
           );
-          await response.stream.listen(null).cancel();
           refused = true;
+          refusal = await _readRefusal(response);
           _ended = true;
           break;
         }
@@ -82,6 +91,29 @@ class UrlHead {
       }
     }
     return _bytes.isEmpty ? null : _bytes.toBytes();
+  }
+
+  /// The body of [response], up to [_maxRefusalBytes]. Read as [_body], so
+  /// [close] stops it.
+  Future<String> _readRefusal(http.StreamedResponse response) async {
+    final body = _body = StreamIterator(response.stream);
+    final bytes = BytesBuilder(copy: false);
+    try {
+      while (bytes.length < _maxRefusalBytes && await body.moveNext()) {
+        bytes.add(body.current);
+      }
+    } finally {
+      _body = null;
+      await body.cancel();
+    }
+    // The last chunk can go past the limit
+    final read = bytes.toBytes();
+    return utf8.decode(
+      read.length > _maxRefusalBytes
+          ? Uint8List.sublistView(read, 0, _maxRefusalBytes)
+          : read,
+      allowMalformed: true,
+    );
   }
 
   static bool _isSubsonicResponse(http.StreamedResponse response) {

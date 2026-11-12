@@ -146,6 +146,69 @@ void main() {
       // Refused for the permission, not the credentials
       expect(client.credentialsRejected.value, isFalse);
     });
+
+    test('reads the stream file when downloads are refused', () async {
+      server.downloadsEnabled = false;
+      final data = await api().readReplayGain('s-1');
+      // The fake server's WAV has no tags: read, unlike a refused one
+      expect(data.unavailable, isFalse);
+      expect(data.hasAnyData, isFalse);
+    });
+
+    test('is not sent while the credentials are rejected', () async {
+      final client = api(password: 'wrong');
+      await expectLater(client.ping(), throwsA(isA<SubsonicException>()));
+      expect(client.credentialsRejected.value, isTrue);
+      final before = server.requests.length;
+
+      final data = await client.readReplayGain('s-1');
+
+      expect(data.unavailable, isTrue);
+      expect(server.requests.length, before);
+    });
+
+    test(
+      'a refusal of the credentials rejects them, without the stream',
+      () async {
+        final client = api();
+        server.password = 'changed';
+
+        final data = await client.readReplayGain('s-1');
+
+        expect(data.unavailable, isTrue);
+        expect(client.credentialsRejected.value, isTrue);
+        expect(server.requestsTo('download'), hasLength(1));
+        // It would be refused the same way: one failed login, not two
+        expect(server.requestsTo('stream'), isEmpty);
+      },
+    );
+
+    group('tryOtherUrlAfterRefusal', () {
+      String error(int code) =>
+          '<subsonic-response status="failed">'
+          '<error code="$code" message="error $code"/>'
+          '</subsonic-response>';
+
+      test('stops after an auth error, rejecting the credentials', () {
+        final client = api();
+        expect(client.tryOtherUrlAfterRefusal(error(40)), isFalse);
+        expect(client.credentialsRejected.value, isTrue);
+      });
+
+      for (final (name, body) in [
+        ('another error', error(50)),
+        ('a JSON response', '{"subsonic-response":{"status":"failed"}}'),
+        ('a page that is not XML', '<html><body>Bad gateway'),
+        ('a cut-off response', '<subsonic-response status="fai'),
+        ('a successful response', '<subsonic-response status="ok"/>'),
+      ]) {
+        test('goes on after $name, leaving the credentials alone', () {
+          final client = api();
+          expect(client.tryOtherUrlAfterRefusal(body), isTrue);
+          expect(client.credentialsRejected.value, isFalse);
+        });
+      }
+    });
   });
 
   group('AppState', () {

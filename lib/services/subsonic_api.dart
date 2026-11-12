@@ -422,12 +422,39 @@ class SubsonicApi {
   /// file ([getDownloadUrl]): a stream the server transcodes may have lost
   /// the tags. From the stream if the server refuses the download. No data
   /// after a few seconds, see [ReplayGainReader.readFromUrl].
-  Future<ReplayGainData> readReplayGain(String id) =>
-      ReplayGainReader.readFromUrl(
-        getDownloadUrl(id),
-        fallbackUrl: getStreamUrl(id),
-        client: _httpClient,
-      );
+  ///
+  /// Never sent while [hasRejectedCredentials]: no data then
+  /// ([ReplayGainData.unavailable], so it's read again later). A read the
+  /// server refuses for the credentials sets [credentialsRejected] and
+  /// doesn't try the stream, which would be refused the same way.
+  Future<ReplayGainData> readReplayGain(String id) async {
+    if (hasRejectedCredentials) return const ReplayGainData.unavailable();
+    return ReplayGainReader.readFromUrl(
+      getDownloadUrl(id),
+      fallbackUrl: getStreamUrl(id),
+      client: _httpClient,
+      onRefusal: tryOtherUrlAfterRefusal,
+    );
+  }
+
+  /// Whether a ReplayGain read refused with the Subsonic response [body]
+  /// goes on with another URL: not if the credentials were refused. Yes for
+  /// any other error (e.g. downloads disabled), and for a body that can't be
+  /// parsed (JSON, a proxy's page).
+  @visibleForTesting
+  bool tryOtherUrlAfterRefusal(String body) {
+    try {
+      parseResponse(body);
+    } on SubsonicException catch (e) {
+      if (e.isAuthError) {
+        _setCredentialsRejected(true);
+        return false;
+      }
+    } on Exception catch (e) {
+      _log.fine('Unreadable refusal of a ReplayGain read', e);
+    }
+    return true;
+  }
 
   /// URL of the cover art [id], scaled by the server to [size] pixels
   String getCoverArtUrl(String id, {int size = 300}) {

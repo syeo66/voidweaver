@@ -1086,6 +1086,125 @@ void main() {
         expect(paths, ['/download', '/stream']);
       });
 
+      group('onRefusal', () {
+        const authError =
+            '<subsonic-response status="failed">'
+            '<error code="40" message="Wrong username or password"/>'
+            '</subsonic-response>';
+
+        Future<void> Function(HttpResponse) refuseWith(String body) =>
+            (response) async {
+              response.headers.contentType = ContentType('application', 'xml');
+              response.write(body);
+            };
+
+        test('gets the body, and stops the read when it says so', () async {
+          final (download, stream, paths) = await serveBoth(
+            refuseWith(authError),
+          );
+          final bodies = <String>[];
+
+          final data = await ReplayGainReader.readFromUrl(
+            download,
+            fallbackUrl: stream,
+            client: client,
+            onRefusal: (body) {
+              bodies.add(body);
+              return false;
+            },
+          );
+
+          expect(data.unavailable, isTrue);
+          expect(bodies, [authError]);
+          expect(paths, ['/download']);
+        });
+
+        test('reads the fallback when it says so', () async {
+          final (download, stream, paths) = await serveBoth(
+            refuseWith(authError),
+          );
+
+          final data = await ReplayGainReader.readFromUrl(
+            download,
+            fallbackUrl: stream,
+            client: client,
+            onRefusal: (_) => true,
+          );
+
+          expect(data.trackGain, -6.5);
+          expect(paths, ['/download', '/stream']);
+        });
+
+        test('is not asked about an error status', () async {
+          final (download, stream, paths) = await serveBoth((response) async {
+            response.statusCode = HttpStatus.forbidden;
+          });
+          var asked = false;
+
+          final data = await ReplayGainReader.readFromUrl(
+            download,
+            fallbackUrl: stream,
+            client: client,
+            onRefusal: (_) {
+              asked = true;
+              return false;
+            },
+          );
+
+          expect(asked, isFalse);
+          expect(data.trackGain, -6.5);
+          expect(paths, ['/download', '/stream']);
+        });
+
+        test('gets at most 16 KB of the body', () async {
+          final (download, stream, _) = await serveBoth(
+            refuseWith('x' * (100 * 1024)),
+          );
+          final bodies = <String>[];
+
+          await ReplayGainReader.readFromUrl(
+            download,
+            fallbackUrl: stream,
+            client: client,
+            onRefusal: (body) {
+              bodies.add(body);
+              return false;
+            },
+          );
+
+          expect(bodies.single.length, 16 * 1024);
+        });
+
+        test('is not asked once the read timed out', () async {
+          // The refusal's body never ends
+          final (download, stream, paths) = await serveBoth((response) async {
+            response.headers.contentType = ContentType('application', 'xml');
+            response.write('<subsonic-response status="failed">');
+            await response.flush();
+            await Completer<void>().future;
+          });
+          var asked = false;
+
+          final data = await ReplayGainReader.readFromUrl(
+            download,
+            fallbackUrl: stream,
+            client: client,
+            timeout: const Duration(milliseconds: 300),
+            onRefusal: (_) {
+              asked = true;
+              return true;
+            },
+          );
+
+          expect(data.unavailable, isTrue);
+          // The read given up on ends after this returned: its body is
+          // cancelled, so it sees the refusal cut off then
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+          expect(asked, isFalse);
+          expect(paths, ['/download']);
+        });
+      });
+
       test('reads the fallback for an error status', () async {
         final (download, stream, paths) = await serveBoth((response) async {
           response.statusCode = HttpStatus.forbidden;

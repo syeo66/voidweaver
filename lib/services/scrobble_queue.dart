@@ -198,6 +198,10 @@ class ScrobbleQueue {
         }
         _queue.remove(request);
         if (sent && request.type == ScrobbleType.submission) {
+          // Saved right away rather than at the end of the pass: a process
+          // killed during a long backlog would send every play the server
+          // already counted again on the next start
+          await _saveQueue();
           onSubmitted?.call();
         }
 

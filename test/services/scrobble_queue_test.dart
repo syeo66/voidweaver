@@ -339,6 +339,45 @@ void main() {
       online.complete();
     });
 
+    testInFakeTime('removes each sent submission from storage at once', (
+      async,
+    ) {
+      // A backlog sent in one pass: song1 goes through, song2 is still on
+      // its way when the process is killed.
+      //
+      // Both queued before song1's answer, so queueing doesn't save the
+      // queue after song1 is sent
+      final song1Sent = Completer<void>();
+      final song2Sent = Completer<void>();
+      when(mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')))
+          .thenAnswer((_) => song1Sent.future);
+      when(mockApi.scrobbleSubmission('song2', playedAt: anyNamed('playedAt')))
+          .thenAnswer((_) => song2Sent.future);
+
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now()),
+      );
+      song1Sent.complete();
+      // Past the 100 ms between requests: song2 is being sent
+      settle(async);
+      verify(
+        mockApi.scrobbleSubmission('song2', playedAt: anyNamed('playedAt')),
+      ).called(1);
+
+      // What the next start would load: only the play the server hasn't
+      // confirmed, not song1 a second time
+      final prefs = awaitFake(async, SharedPreferences.getInstance());
+      final saved = jsonDecode(prefs.getString('scrobble_queue')!) as List;
+      expect(saved, [containsPair('songId', 'song2')]);
+      song2Sent.complete();
+    });
+
     testInFakeTime('drops now playing requests saved by older versions', (
       async,
     ) {

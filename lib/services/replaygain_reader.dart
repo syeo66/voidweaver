@@ -33,11 +33,16 @@ class ReplayGainReader {
   /// (for both) it gives up and returns [ReplayGainData.unavailable] (the
   /// fallback gain applies) rather than hold it up on a stalled connection;
   /// so it does if the server refuses both.
+  ///
+  /// [onRefusal] gets the body of each Subsonic response a URL is refused
+  /// with (not error statuses); if it returns false, no further URL is tried
+  /// (e.g. the credentials were refused, which the fallback would be too).
   static Future<ReplayGainData> readFromUrl(
     String url, {
     required http.Client client,
     String? fallbackUrl,
     Duration timeout = defaultUrlTimeout,
+    bool Function(String body)? onRefusal,
   }) async {
     UrlHead? head;
     var timedOut = false;
@@ -53,6 +58,14 @@ class ReplayGainReader {
           await current.close();
         }
         readerLog(() => 'The server refused the request');
+        final refusal = current.refusal;
+        if (!timedOut &&
+            refusal != null &&
+            onRefusal != null &&
+            !onRefusal(refusal)) {
+          readerLog(() => 'Not trying another URL');
+          break;
+        }
       }
       return const ReplayGainData.unavailable();
     }
