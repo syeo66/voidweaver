@@ -67,7 +67,22 @@ The search for a cached track gives up when a load or skip took over during the 
 
 The player's `seek()` completes once the target is ready or has failed (the error arrives on `errorStream` first). With `just_audio`, a seek to a target that failed never completed; awaited in the worker, that would block every later change. `_seekToItem()` still stops waiting once the player reports an error or goes idle, so a seek that never completes can't block playback again. `setAudioSources()` completes once the start item is ready and throws its own errors, which the move handles the same way.
 
-After `stop()` or an error the player is idle, so `play()` and skips load the queue again instead of seeking (`_needsLoad`), `play()` at `_pendingResumePosition`: the start of the track after an error or a stop, the saved position after a restore that couldn't load.
+After `stop()` or an error the player is idle, so `play()` and skips load the queue again instead of seeking (`_needsLoad`), `play()` at `_pendingResumePosition`: where the track broke off after the network failed, the start of the track after any other error or a stop, the saved position after a restore that couldn't load.
+
+### When the network comes back
+
+A track that streams (it isn't downloaded, typically the first one of a new queue) breaks off when the network is gone for longer than the player's buffer (about 50 s) plus the retries. Media3 reports the error only once the buffer has run dry, for the playing item. With a later track downloaded, playback goes on there (above). With none, it stops on the failed track, reported. A failed load of the *next* item, which the player starts near the end of the current one, doesn't cut the current one off: Media3 1.11 only stops loading it, and reports the error once the current track has played out and the failed one is playing, so playback stops on that one at 0:00.
+
+The network coming back then plays the stopped track again, where it broke off (`_onNetworkAvailable()`, on `AudioCache.networkAvailable`, the event the downloads use). Only when all of these hold:
+
+- The failure was the network's: Media3 code 2001 (`ERROR_CODE_IO_NETWORK_CONNECTION_FAILED`, also a connection that breaks off mid-stream) or 2002 (`…_TIMEOUT`), see `_isNetworkFailure()`. Not an HTTP error (2004), and not a document instead of audio (`ErrorDocumentException`, which comes out as 2000): the server would answer the same again, e.g. after a password changed on the server.
+- It was meant to play when it stopped (`_playPending` in `_finish()`). A pause during the search for a downloaded track counts as paused.
+- Nothing was done with playback since: every move (Play, a skip, a new queue, a restore), `pause()`, `stop()` and logout clear `_networkResume`. A move that fails for the network itself arms it again, for its own target (a skip's target from its start). A seek while stopped is kept: playback resumes where it moved to.
+- It's at most 10 minutes since the failure (`networkResumeWindow`). For that long Media3 keeps the service in the foreground after playback stops (`SessionPlayer` shows the idle player as paused), so the app can start playing again from the background.
+
+A resume is `play()`: if the network fails again, the track stops again, reported, and the next network event tries again. Play pressed after a network failure also continues where the track broke off.
+
+The network event comes when Android's default network is validated (a new network, or a switch from Wi-Fi to mobile data). If that happens before the player gives up (the new network is up within the retries, but the server is reachable only later, e.g. a server on the home network or behind a VPN that connects later), nothing resumes: the next event comes only with the next network change. Play continues where the track broke off.
 
 A password changed on the server and updated in the app (`AppState.updatePassword()`) doesn't reload the queue: playback goes on, as cached tracks play from the cache whatever their URL. The items' stream URLs still carry the old password, though, so `credentialsChanged()` marks them stale (`_sourcesStale`) and starts the downloads of the upcoming tracks again. An item that fails while they're stale (one that wasn't downloaded in time) loads the queue again at that track, with new URLs, instead of skipping it; a failure after that is handled as above. A skip (or any other move, see `_step()`) loads the queue with new URLs too instead of seeking within the stale sequence, and a seek that fails after the password changed while it ran is retried as such a load.
 

@@ -103,6 +103,10 @@ class _Stats {
   int quietRestoreFailures = 0;
   int passwordChanges = 0;
   int songStarts = 0;
+  // The network coming back, and the times it resumed a track the network
+  // had failed on
+  int networkEvents = 0;
+  int networkResumes = 0;
   // Loads of an item that failed only because its URL carries an outdated
   // password
   int staleFailures = 0;
@@ -312,6 +316,11 @@ class _Run {
         if (!cache.cached.contains(song)) stats.staleFailures++;
         return true;
       };
+    // Half the runs fail for the network (Media3's
+    // ERROR_CODE_IO_NETWORK_CONNECTION_FAILED), which the network coming back
+    // resumes; the other half for no particular cause, which it doesn't.
+    // From the seed, so the random actions stay the same.
+    player.errorCode = seed.isOdd ? 2001 : 0;
     player.onSeekWithinItem = (position) {
       final song = _currentItemSong;
       if (position != Duration.zero || song == null) return;
@@ -377,6 +386,16 @@ class _Run {
       player.simulateBufferingEnd();
     }
     await pumpEventQueue(times: 200);
+    if ((seed ~/ 2).isOdd) {
+      // In half the runs, once more after everything settled: a failure the
+      // network caused is resumed, and the rules check where that ends
+      _networkAvailable();
+      await pumpEventQueue(times: 200);
+      if (player.processingState == ProcessingState.buffering) {
+        player.simulateBufferingEnd();
+      }
+      await pumpEventQueue(times: 200);
+    }
 
     _check(stats);
 
@@ -828,6 +847,8 @@ class _Run {
       stats.songStarts++;
       _setIntent(_Intent.play, queue: [song]);
       _press('playSong($id)', () => service.playSong(song), mayFail: true);
+    } else if (roll < 98) {
+      _networkAvailable();
     }
 
     // Time between this and the next action: none (the actions overlap),
@@ -844,6 +865,20 @@ class _Run {
       default:
         now = now.add(Duration(milliseconds: 100 + random.nextInt(400)));
         await pumpEventQueue();
+    }
+  }
+
+  /// The network coming back. It resumes a track the network failed on
+  /// while it was meant to play, unless anything was pressed since: like a
+  /// Play, which the rules hold to (the Pause/Stop rule in particular).
+  void _networkAvailable() {
+    stats.networkEvents++;
+    final wanted = service.playWhenReady;
+    log.add('network: available');
+    cache.simulateNetworkAvailable();
+    if (!wanted && service.playWhenReady) {
+      stats.networkResumes++;
+      log.add('    resumes');
     }
   }
 
@@ -995,7 +1030,8 @@ void main() {
         '${stats.restores} restores (${stats.quietRestoreFailures} failed '
         'quietly), ${stats.passwordChanges} password changes '
         '(${stats.staleFailures} item loads failed only for an outdated URL), '
-        '${stats.songStarts} single songs';
+        '${stats.songStarts} single songs, ${stats.networkEvents} network '
+        'events (${stats.networkResumes} resumed)';
     // ignore: avoid_print
     if (_runsOverride > 0) print(summary);
     if (_seedOverride < 0) {
@@ -1023,6 +1059,13 @@ void main() {
         reason: summary,
       );
       expect(stats.songStarts, greaterThan(stats.runs ~/ 2), reason: summary);
+      // A failure the network caused, then nothing pressed until the
+      // network comes back: rare, like a quiet restore failure
+      expect(
+        stats.networkResumes,
+        greaterThan(stats.runs ~/ 100),
+        reason: summary,
+      );
     }
   }, timeout: const Timeout(Duration(minutes: 20)));
 }

@@ -31,6 +31,12 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
   /// player, items whose cache key is cached ([isCached]) still play.
   final Set<String> failingUrls = {};
 
+  /// Media3's error code of the load errors this player reports (failing
+  /// URLs, [simulateLoadError]). 0 is no particular cause; set 2001
+  /// (`ERROR_CODE_IO_NETWORK_CONNECTION_FAILED`) for the network failing, or
+  /// 2000 for the server answering with a document instead of audio.
+  int errorCode = 0;
+
   /// Also fail to load, for URLs it returns true for (e.g. one carrying an
   /// outdated password). Cached items still play, as with [failingUrls].
   bool Function(String url)? failsUrl;
@@ -177,8 +183,12 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
 
   /// The item at the current index failed to load: the player reports the
   /// error and goes idle.
-  void _failCurrent([int? index]) {
-    final error = PlayerException(0, 'Source error', index ?? _currentIndex);
+  void _failCurrent([int? index, int? code]) {
+    final error = PlayerException(
+      code ?? errorCode,
+      'Source error',
+      index ?? _currentIndex,
+    );
     failures++;
     _setState(playing, ProcessingState.idle);
     idleCause = 'error';
@@ -214,7 +224,7 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
       failures++;
       _setState(playing, ProcessingState.idle);
       idleCause = 'error';
-      throw PlayerException(0, 'Network unreachable', index);
+      throw PlayerException(errorCode, 'Network unreachable', index);
     }
     if (breakAfterLoad.contains(_describe(_sequence[index]))) {
       failures++;
@@ -394,8 +404,9 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
   ///
   /// With [index], the error is about that item instead of the current one:
   /// the error of an item the player has just moved away from, reported
-  /// after the move (it was on its way when the seek was issued).
-  void simulateLoadError({int? index}) => _failCurrent(index);
+  /// after the move (it was on its way when the seek was issued). [code]
+  /// overrides [errorCode].
+  void simulateLoadError({int? index, int? code}) => _failCurrent(index, code);
 
   /// The current item running out of buffered data while it plays.
   void simulateBuffering() => _setState(playing, ProcessingState.buffering);

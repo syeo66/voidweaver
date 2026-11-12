@@ -209,6 +209,19 @@ class AudioPlayerService extends ChangeNotifier {
   // play (after stop(), an error, or a restore that couldn't load)
   Duration _pendingResumePosition = Duration.zero;
 
+  // Playback stopped on a track because the network failed while it was
+  // meant to play: it's played again when the network is back, see
+  // _onNetworkAvailable(). Cleared by every move, pause() and stop(). (A
+  // move after the failure loads the queue, as the player is idle, which
+  // takes a new generation: _onNetworkAvailable() checks that as well.)
+  ({int generation, int index, DateTime failedAt})? _networkResume;
+
+  /// How long after a network failure the network coming back still resumes
+  /// playback. Media3 keeps the service in the foreground for 10 minutes
+  /// after playback stops, so the app can still start playing from the
+  /// background; later the user may have long moved on.
+  static const networkResumeWindow = Duration(minutes: 10);
+
   // Set when the password changed after the player's sequence was created:
   // the stream URLs of its items carry the old one, so an item that isn't
   // cached fails to load, see credentialsChanged()
@@ -276,6 +289,7 @@ class AudioPlayerService extends ChangeNotifier {
       (_) {
         _downloads.networkAvailable();
         _scrobbleQueue.networkAvailable();
+        _onNetworkAvailable();
       },
       onError: (Object e) {
         _log.warning('[audio_cache] Network events failed', e);
@@ -680,6 +694,7 @@ class AudioPlayerService extends ChangeNotifier {
     _move = move;
     previous?.complete(_MoveResult.superseded);
     _signalChange();
+    _networkResume = null;
     _playPending = play;
     _awaitedIndex = null;
     if (failure == null) {
@@ -980,7 +995,17 @@ class AudioPlayerService extends ChangeNotifier {
         );
         move.fail(failure);
       case _OnFailure.report:
-        _pendingResumePosition = Duration.zero;
+        // After a network failure, play() goes on where the track broke off,
+        // and so does the network coming back if it was meant to play
+        final network = _isNetworkFailure(failure);
+        _pendingResumePosition = network ? move.position : Duration.zero;
+        if (network && _playPending) {
+          _networkResume = (
+            generation: _generation,
+            index: move.index,
+            failedAt: _clock(),
+          );
+        }
         _onLoadFailed('Failed to play ${move.description}', failure);
         move.complete(_MoveResult.failed);
       case _OnFailure.quiet:
@@ -1264,15 +1289,49 @@ class AudioPlayerService extends ChangeNotifier {
     }
     // Continues at the next downloaded track if it was playing; stops on
     // the failed one, reported, if it was paused or nothing later is
-    // downloaded. play() tries it again then.
+    // downloaded. play() tries it again then, where it broke off if the
+    // network failed (see _finish()).
     unawaited(
       _requestMove(
         failedIndex,
+        position: failedIndex == _currentIndex
+            ? _currentPosition
+            : Duration.zero,
         play: playWhenReady,
         onFailure: _OnFailure.report,
         failure: error,
       ),
     );
+  }
+
+  /// Whether [failure] is the player failing to reach the server (the
+  /// connection failed, broke off or timed out), as opposed to the server
+  /// answering with an error (Media3 code 2004), or with a document instead
+  /// of audio (2000, see `LoadErrorPolicy`), which it would answer again.
+  static bool _isNetworkFailure(Object failure) =>
+      failure is PlayerException &&
+      (failure.code == 2001 || // ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
+          failure.code == 2002); // ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
+
+  /// The network is back: plays the track that stopped because the network
+  /// failed (see _finish()), where it broke off, unless the user did
+  /// anything with playback since, or it's been too long.
+  void _onNetworkAvailable() {
+    final resume = _networkResume;
+    if (resume == null || _disposed) return;
+    _networkResume = null;
+    if (_clock().difference(resume.failedAt) > networkResumeWindow) {
+      _log.info('Network is back, too long after playback stopped to resume');
+      return;
+    }
+    if (resume.generation != _generation ||
+        resume.index != _currentIndex ||
+        _move != null ||
+        !_needsLoad) {
+      return;
+    }
+    _log.info('Network is back, resuming index $_currentIndex');
+    unawaited(play());
   }
 
   /// The API's password changed (see [SubsonicApi.usePassword]). Playback
@@ -1339,6 +1398,7 @@ class AudioPlayerService extends ChangeNotifier {
   /// Pauses, also while a track loads or buffers: a load or skip in progress
   /// then doesn't start playback.
   Future<void> pause() async {
+    _networkResume = null;
     if (_move != null && _playPending) {
       _playPending = false;
       notifyListeners();
@@ -1355,6 +1415,7 @@ class AudioPlayerService extends ChangeNotifier {
   /// after the stop, while the move hasn't noticed it yet, loads and starts
   /// its target. See _stopEnds().
   Future<void> stop() async {
+    _networkResume = null;
     _playPending = false;
     _move?.stopped = true;
     _pendingResumePosition = Duration.zero;
@@ -1618,6 +1679,7 @@ class AudioPlayerService extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _networkResume = null;
     _move?.complete(_MoveResult.superseded);
     _move = null;
     _signalChange();
