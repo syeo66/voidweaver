@@ -8,6 +8,16 @@ import 'package:voidweaver/services/settings_service.dart';
 import '../test_helpers/fake_audio_cache.dart';
 import '../test_helpers/mock_audio_player.dart';
 
+/// `ChangeNotifier` throws for a listener added after `dispose()`. Matched on
+/// the message, which Flutter has kept while the type of the error changed
+/// (a `FlutterError` before, a `StateError` from `package:listen` now).
+final throwsUseAfterDispose = throwsA(
+  predicate<Object>(
+    (error) => error.toString().contains('was used after being disposed'),
+    'an error about use after dispose',
+  ),
+);
+
 // Create mock classes for testing without SharedPreferences
 class MockSettingsService extends Mock implements SettingsService {
   @override
@@ -54,7 +64,10 @@ void main() {
       audioPlayerService.dispose();
 
       // Verify service can't accept new listeners after disposal
-      expect(() => audioPlayerService.addListener(() {}), throwsFlutterError);
+      expect(
+        () => audioPlayerService.addListener(() {}),
+        throwsUseAfterDispose,
+      );
     });
 
     test('AppState should dispose all services and timers', () {
@@ -64,7 +77,7 @@ void main() {
       appState.dispose();
 
       // Verify disposal - AppState should handle null services gracefully
-      expect(() => appState.addListener(() {}), throwsFlutterError);
+      expect(() => appState.addListener(() {}), throwsUseAfterDispose);
     });
 
     test('SubsonicApi mock should handle dispose', () {
@@ -147,7 +160,10 @@ void main() {
       audioPlayerService.dispose();
 
       // Service should properly reject new listeners after disposal
-      expect(() => audioPlayerService.addListener(() {}), throwsFlutterError);
+      expect(
+        () => audioPlayerService.addListener(() {}),
+        throwsUseAfterDispose,
+      );
     });
 
     test('Service disposal should handle null resources gracefully', () {

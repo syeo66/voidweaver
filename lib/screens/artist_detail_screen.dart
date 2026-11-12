@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../services/subsonic_api.dart';
 import '../widgets/artist_albums_view.dart';

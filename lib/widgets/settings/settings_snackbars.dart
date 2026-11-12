@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Confirms a changed setting.
 void showSettingsSuccess(BuildContext context, String message) {

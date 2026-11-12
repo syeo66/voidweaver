@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Shows a fallback UI in place of [child] when building a widget in it
 /// fails, so the rest of the app keeps working.
