@@ -50,7 +50,12 @@ class SubsonicApi {
   final String version = '1.16.1';
   // Scoped to the server and user, so another login never sees this one's
   // data; closed in dispose()
-  late final ApiCache _cache = ApiCache(namespace: '$serverUrl|$username');
+  late final ApiCache _cache = ApiCache(
+    namespace: '$serverUrl|$username',
+    clock: _clock,
+  );
+  // When cached responses expire is measured against this
+  final DateTime Function() _clock;
   late HttpClient _innerClient;
   late http.Client _httpClient;
   late NetworkRetryService _retryService;
@@ -77,6 +82,7 @@ class SubsonicApi {
     required this.username,
     required this._password,
     NetworkConfig? networkConfig,
+    this._clock = DateTime.now,
   }) : _networkConfig = networkConfig ?? NetworkConfig.defaultConfig {
     // Enforce HTTPS for security
     final uri = Uri.tryParse(serverUrl);

@@ -25,6 +25,12 @@ enum SyncStatus { idle, syncing, success, error }
 enum LoadingState { idle, loading, success, error }
 
 class AppState extends ChangeNotifier {
+  AppState({@visibleForTesting this._clock = DateTime.now});
+
+  // The background sync's timing (when the album list was last up to date,
+  // when it's due again) and the API cache's expiry are measured against this
+  final DateTime Function() _clock;
+
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage(
     aOptions: AndroidOptions(),
     iOptions: IOSOptions(
@@ -161,6 +167,7 @@ class AppState extends ChangeNotifier {
         username: username,
         password: password,
         networkConfig: _settingsService!.networkConfig,
+        clock: _clock,
       );
       if (verifyCredentials) {
         try {
@@ -334,7 +341,7 @@ class AppState extends ChangeNotifier {
           context: 'Failed to load albums',
         );
       } else {
-        _lastSyncTime = DateTime.now();
+        _lastSyncTime = _clock();
         if (type == AlbumListType.recent) _scrobblesListed = listed;
       }
     } catch (e) {
@@ -387,7 +394,7 @@ class AppState extends ChangeNotifier {
       } else {
         if (type == AlbumListType.recent) _scrobblesListed = listed;
         _syncStatus = SyncStatus.success;
-        _lastSyncTime = DateTime.now();
+        _lastSyncTime = _clock();
         _albumError = null;
       }
     } catch (e) {
@@ -430,7 +437,7 @@ class AppState extends ChangeNotifier {
     final interval = type == AlbumListType.recent
         ? _recentSyncInterval
         : _syncInterval;
-    return DateTime.now().difference(lastSync) >= interval;
+    return _clock().difference(lastSync) >= interval;
   }
 
   /// The server counted a play of this login: "Recently played" has changed.

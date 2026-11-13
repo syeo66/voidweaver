@@ -26,8 +26,8 @@ class CacheEntry<T> {
     this.version,
   });
 
-  bool get isExpired => DateTime.now().isAfter(expiresAt);
-  bool get isValid => !isExpired;
+  /// Whether the entry has expired at [now]
+  bool isExpiredAt(DateTime now) => now.isAfter(expiresAt);
 
   Map<String, dynamic> toJson() => {
     'data': data,
@@ -74,7 +74,7 @@ class CacheResult<T> {
 /// So one login never sees another's data, and after [close] (logout) a fetch
 /// that was still running stores nothing.
 class ApiCache {
-  ApiCache({required this.namespace})
+  ApiCache({required this.namespace, this._clock = DateTime.now})
     : _rootProvider = _defaultRoot,
       _maxMemoryEntries = defaultMaxMemoryEntries;
 
@@ -84,6 +84,7 @@ class ApiCache {
     Directory? directory,
     this.namespace = 'test',
     this._maxMemoryEntries = defaultMaxMemoryEntries,
+    this._clock = DateTime.now,
   }) : _rootProvider = (() async => directory);
 
   /// How many entries the memory cache keeps, see [_remember]. Every album
@@ -98,6 +99,8 @@ class ApiCache {
   final Map<String, Completer<CacheResult<Object?>>> _ongoingRequests = {};
   final int _maxMemoryEntries;
   final Future<Directory?> Function() _rootProvider;
+  // When entries expire is measured against this
+  final DateTime Function() _clock;
   Future<_Storage?>? _storageFuture;
   final Set<Future<void>> _pendingWrites = {};
   bool _closed = false;
@@ -123,6 +126,8 @@ class ApiCache {
       return null;
     }
   }();
+
+  bool _isExpired(CacheEntry<Object?> entry) => entry.isExpiredAt(_clock());
 
   static File _fileFor(Directory directory, String key) =>
       File('${directory.path}/${md5.convert(utf8.encode(key))}.json');
@@ -204,7 +209,7 @@ class ApiCache {
 
     // Check memory cache first
     final memoryCached = _memoryCache[key];
-    if (!forceRefresh && memoryCached != null && memoryCached.isValid) {
+    if (!forceRefresh && memoryCached != null && !_isExpired(memoryCached)) {
       _log.fine('Cache HIT (memory): $key');
       // Now the most recently used, see _remember()
       _remember(key, memoryCached);
@@ -217,7 +222,7 @@ class ApiCache {
       persistentCached = await _getPersistentCache<T>(key, fromJson);
       if (!forceRefresh &&
           persistentCached != null &&
-          persistentCached.isValid) {
+          !_isExpired(persistentCached)) {
         _log.fine('Cache HIT (persistent): $key');
         // Store in memory cache for faster access
         _remember(key, persistentCached);
@@ -257,7 +262,7 @@ class ApiCache {
           key,
           CacheEntry<T>(
             data: result,
-            expiresAt: DateTime.now().add(cacheDuration),
+            expiresAt: _clock().add(cacheDuration),
             key: key,
             version: currentVersion,
           ),
@@ -269,7 +274,7 @@ class ApiCache {
         // Store in memory cache
         final entry = CacheEntry<T>(
           data: result,
-          expiresAt: DateTime.now().add(cacheDuration),
+          expiresAt: _clock().add(cacheDuration),
           key: key,
           version: currentVersion,
         );
@@ -330,7 +335,7 @@ class ApiCache {
     ];
     for (final e in others) {
       if (excess <= 0) return;
-      if (e.value.isExpired) {
+      if (_isExpired(e.value)) {
         _memoryCache.remove(e.key);
         excess--;
       }

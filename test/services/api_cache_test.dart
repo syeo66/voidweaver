@@ -14,11 +14,18 @@ void main() {
   group('API Cache Tests', () {
     late ApiCache cache;
     late Directory directory;
+    // Every cache here measures expiry against this; tests move it on
+    late DateTime now;
+    DateTime clock() => now;
+
+    /// Moves the clock past entries cached for [Duration.zero]
+    void tick() => now = now.add(const Duration(milliseconds: 1));
 
     setUp(() async {
+      now = DateTime(2026, 11, 13, 12);
       SharedPreferences.setMockInitialValues({});
       directory = await Directory.systemTemp.createTemp('api_cache_test');
-      cache = ApiCache.forTesting(directory: directory);
+      cache = ApiCache.forTesting(clock: clock, directory: directory);
       await cache.initialize();
     });
 
@@ -87,29 +94,24 @@ void main() {
         return 'result_$callCount';
       }
 
-      // First call
-      final result1 = await cache.getOrFetch<String>(
+      Future<String> get() => cache.getOrFetch<String>(
         endpoint,
         params,
         () async => fetchData(),
-        cacheDuration: const Duration(milliseconds: 50),
+        cacheDuration: const Duration(minutes: 5),
       );
 
-      expect(result1, 'result_1');
+      expect(await get(), 'result_1');
       expect(callCount, 1);
 
-      // Wait for cache to expire
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      // Up to its expiry it's served from the cache
+      now = now.add(const Duration(minutes: 5));
+      expect(await get(), 'result_1');
+      expect(callCount, 1);
 
-      // Second call should fetch new data
-      final result2 = await cache.getOrFetch<String>(
-        endpoint,
-        params,
-        () async => fetchData(),
-        cacheDuration: const Duration(milliseconds: 50),
-      );
-
-      expect(result2, 'result_2');
+      // After it, fetched again
+      tick();
+      expect(await get(), 'result_2');
       expect(callCount, 2);
     });
 
@@ -204,7 +206,7 @@ void main() {
       );
 
       // A fresh instance (e.g. after app restart) has an empty memory cache
-      final restarted = ApiCache.forTesting(directory: directory);
+      final restarted = ApiCache.forTesting(clock: clock, directory: directory);
       await restarted.initialize();
       var fetched = false;
       final result = await restarted.getOrFetch<List<Album>>(
@@ -233,7 +235,7 @@ void main() {
         fromJson: (json) => (json as List<dynamic>).cast<String>(),
       );
 
-      final restarted = ApiCache.forTesting(directory: directory);
+      final restarted = ApiCache.forTesting(clock: clock, directory: directory);
       await restarted.initialize();
       final result = await restarted.getOrFetch<List<String>>(
         'large',
@@ -257,7 +259,10 @@ void main() {
         );
 
         // Not initialized and nothing loaded, as right after a restart
-        final restarted = ApiCache.forTesting(directory: directory);
+        final restarted = ApiCache.forTesting(
+          clock: clock,
+          directory: directory,
+        );
         await restarted.clearAll();
 
         expect(filesIn(directory), isEmpty);
@@ -274,7 +279,7 @@ void main() {
       final file = filesIn(directory).single;
       file.writeAsStringSync('{not json');
 
-      final restarted = ApiCache.forTesting(directory: directory);
+      final restarted = ApiCache.forTesting(clock: clock, directory: directory);
       final result = await restarted.getOrFetch<String>(
         'endpoint',
         null,
@@ -286,7 +291,7 @@ void main() {
     });
 
     test('works in memory when the storage is unavailable', () async {
-      final memoryOnly = ApiCache.forTesting();
+      final memoryOnly = ApiCache.forTesting(clock: clock);
       await memoryOnly.getOrFetch<String>(
         'endpoint',
         null,
@@ -310,7 +315,7 @@ void main() {
         () async => 'fresh',
         cacheDuration: Duration.zero,
       );
-      await Future<void>.delayed(const Duration(milliseconds: 5));
+      tick();
 
       final result = await cache.getOrFetch<String>(
         'endpoint',
@@ -331,9 +336,12 @@ void main() {
           cacheDuration: Duration.zero,
           usePersistentCache: true,
         );
-        await Future<void>.delayed(const Duration(milliseconds: 5));
+        tick();
 
-        final restarted = ApiCache.forTesting(directory: directory);
+        final restarted = ApiCache.forTesting(
+          clock: clock,
+          directory: directory,
+        );
         await restarted.initialize();
         final result = await restarted.getOrFetch<String>(
           'endpoint',
@@ -433,7 +441,10 @@ void main() {
         expect(memory.data, 'cached');
         expect(memory.isStale, isFalse);
 
-        final restarted = ApiCache.forTesting(directory: directory);
+        final restarted = ApiCache.forTesting(
+          clock: clock,
+          directory: directory,
+        );
         await restarted.initialize();
         final stored = await get(() async => 'not fetched', from: restarted);
         expect(stored.data, 'cached');
@@ -462,7 +473,10 @@ void main() {
         'the stored entry is stale when the fetch fails after a restart',
         () async {
           await get(() async => 'saved');
-          final restarted = ApiCache.forTesting(directory: directory);
+          final restarted = ApiCache.forTesting(
+            clock: clock,
+            directory: directory,
+          );
           await restarted.initialize();
 
           final result = await get(() async => throw offline, from: restarted);
@@ -537,7 +551,11 @@ void main() {
       late Map<String, int> fetches;
 
       setUp(() {
-        small = ApiCache.forTesting(directory: directory, maxMemoryEntries: 3);
+        small = ApiCache.forTesting(
+          clock: clock,
+          directory: directory,
+          maxMemoryEntries: 3,
+        );
         fetches = {};
       });
 
@@ -583,7 +601,7 @@ void main() {
         await get('a');
         await get('b', duration: Duration.zero);
         await get('c');
-        await Future<void>.delayed(const Duration(milliseconds: 5));
+        tick();
         await get('d');
 
         // b expired and went; a is older but fresh and stays
@@ -610,7 +628,7 @@ void main() {
       test('a stale entry still serves a failed fetch', () async {
         await get('a', duration: Duration.zero);
         await get('b');
-        await Future<void>.delayed(const Duration(milliseconds: 5));
+        tick();
 
         final result = await small.getOrFetch<String>(
           'a',
@@ -625,6 +643,7 @@ void main() {
         'a fetch failing after its entry was dropped still serves it',
         () async {
           final single = ApiCache.forTesting(
+            clock: clock,
             directory: directory,
             maxMemoryEntries: 1,
           );
@@ -634,7 +653,7 @@ void main() {
             () async => 'va',
             cacheDuration: Duration.zero,
           );
-          await Future<void>.delayed(const Duration(milliseconds: 5));
+          tick();
 
           final fetch = Completer<String>();
           final pending = single.getOrFetch<String>(
@@ -698,7 +717,7 @@ void main() {
 
       test('keeps an unchanged persistent entry after a restart', () async {
         await get();
-        cache = ApiCache.forTesting(directory: directory);
+        cache = ApiCache.forTesting(clock: clock, directory: directory);
         await cache.initialize();
         expect(await get(), 'data 1');
         expect(fetches, 1);
@@ -749,10 +768,12 @@ void main() {
 
       test('another login sees neither memory nor persisted entries', () async {
         final serverA = ApiCache.forTesting(
+          clock: clock,
           directory: directory,
           namespace: 'https://a|user',
         );
         final serverB = ApiCache.forTesting(
+          clock: clock,
           directory: directory,
           namespace: 'https://b|user',
         );
@@ -761,6 +782,7 @@ void main() {
         expect(await get(serverB, 'from B'), 'from B');
 
         final restartedA = ApiCache.forTesting(
+          clock: clock,
           directory: directory,
           namespace: 'https://a|user',
         );
@@ -769,10 +791,12 @@ void main() {
 
       test('the same server with another user is another scope', () async {
         final alice = ApiCache.forTesting(
+          clock: clock,
           directory: directory,
           namespace: 'https://a|alice',
         );
         final bob = ApiCache.forTesting(
+          clock: clock,
           directory: directory,
           namespace: 'https://a|bob',
         );
@@ -783,7 +807,10 @@ void main() {
 
       test('a fetch finishing after close() stores nothing', () async {
         final fetch = Completer<String>();
-        final loggedOut = ApiCache.forTesting(directory: directory);
+        final loggedOut = ApiCache.forTesting(
+          clock: clock,
+          directory: directory,
+        );
         final result = loggedOut.getOrFetch<String>(
           'endpoint',
           null,
@@ -800,7 +827,7 @@ void main() {
         // Its caller still gets the result, but nothing is kept
         expect(await result, 'late');
         expect(filesIn(directory), isEmpty);
-        final relogin = ApiCache.forTesting(directory: directory);
+        final relogin = ApiCache.forTesting(clock: clock, directory: directory);
         expect(await get(relogin, 'fresh'), 'fresh');
       });
 
@@ -829,6 +856,7 @@ void main() {
 
       test('clearAll removes the entries of other logins too', () async {
         final other = ApiCache.forTesting(
+          clock: clock,
           directory: directory,
           namespace: 'https://other|user',
         );
