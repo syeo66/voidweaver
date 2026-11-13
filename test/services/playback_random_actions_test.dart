@@ -626,8 +626,8 @@ class _Run {
 
   /// The player reports the end of the queue. The service pauses at the
   /// start of the last track if nothing is changing the player and it's on
-  /// the service's current track (see _onPlayerCompleted()); otherwise it
-  /// looks again after the change, and the model can't tell.
+  /// the service's current track (see PlayerWorker.playerCompleted());
+  /// otherwise it looks again after the change, and the model can't tell.
   void _onQueueEnd() {
     final onCurrentTrack =
         _holdsPlaylist(service.playlist) &&
