@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'subsonic_api.dart';
@@ -12,6 +13,33 @@ class ImageCacheManager {
   /// smallest of these that covers its box in physical pixels, so the server
   /// and the cache keep a few sizes of a cover rather than one per box.
   static const coverArtSizes = [150, 300, 600, 1200];
+
+  /// How many cover images the disk cache keeps, and for how long it keeps
+  /// one that isn't used. The default manager holds 200 for 30 days, which
+  /// scrolling through a library's album grid (each cover at one or two
+  /// sizes) would push out, so covers wouldn't stay available offline. A
+  /// cover is 5 to 300 KB depending on its size, so this stays well below a
+  /// few hundred MB.
+  @visibleForTesting
+  static const maxCachedImages = 3000;
+  @visibleForTesting
+  static const cachedImageLifetime = Duration(days: 90);
+
+  static CacheManager? _cacheManager;
+
+  /// The disk cache of all cover art. Created on first use.
+  static CacheManager get cacheManager => _cacheManager ??= CacheManager(
+    Config(
+      'voidweaverCoverArt',
+      stalePeriod: cachedImageLifetime,
+      maxNrOfCacheObjects: maxCachedImages,
+    ),
+  );
+
+  /// Replaces the disk cache, which needs the platform's storage plugins; null
+  /// goes back to the real one.
+  @visibleForTesting
+  static set cacheManager(CacheManager? manager) => _cacheManager = manager;
 
   // For a box that's unbounded in both directions
   static const _defaultCoverArtSize = 600;
@@ -64,6 +92,7 @@ class ImageCacheManager {
         height: height,
         fit: fit ?? BoxFit.cover,
         cacheKey: api.coverArtCacheKey(coverArtId, size: size),
+        cacheManager: cacheManager,
         placeholder:
             placeholder ?? (context, url) => _buildPlaceholder(context),
         errorWidget:
@@ -100,6 +129,7 @@ class ImageCacheManager {
     return CachedNetworkImageProvider(
       api.getCoverArtUrl(coverArtId, size: size),
       cacheKey: api.coverArtCacheKey(coverArtId, size: size),
+      cacheManager: cacheManager,
     );
   }
 
@@ -164,6 +194,8 @@ class ImageCacheManager {
 
   /// Clear all cached images from disk and memory
   static Future<void> clearCache() async {
+    await cacheManager.emptyCache();
+    // Covers cached by versions that used the default manager
     await CachedNetworkImageProvider.defaultCacheManager.emptyCache();
     PaintingBinding.instance.imageCache.clear();
   }

@@ -30,6 +30,22 @@ void main() {
     });
   });
 
+  group('formatCount', () {
+    test('uses the singular for exactly one', () {
+      expect(formatCount(1, 'song'), '1 song');
+    });
+
+    test('uses the plural for zero and for more than one', () {
+      expect(formatCount(0, 'album'), '0 albums');
+      expect(formatCount(12, 'album'), '12 albums');
+    });
+
+    test('takes an irregular plural', () {
+      expect(formatCount(1, 'person', plural: 'people'), '1 person');
+      expect(formatCount(2, 'person', plural: 'people'), '2 people');
+    });
+  });
+
   group('formatBytes', () {
     test('picks the unit by size', () {
       expect(formatBytes(0), '0 B');

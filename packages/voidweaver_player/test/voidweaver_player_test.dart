@@ -326,6 +326,33 @@ void main() {
     ]);
   });
 
+  group('ProcessHistory', () {
+    test('returns what the platform reports, in order', () async {
+      platform.onPluginCall = (call) => [
+        {'text': 'The previous run crashed.', 'notable': true},
+        {'text': 'A process ended: stopped by the user', 'notable': false},
+      ];
+
+      final events = await const ProcessHistory().takeNew();
+
+      expect(
+        platform.lastCall('process.takeHistory').method,
+        'process.takeHistory',
+      );
+      expect(events.map((e) => e.text), [
+        'The previous run crashed.',
+        'A process ended: stopped by the user',
+      ]);
+      expect(events.map((e) => e.notable), [true, false]);
+    });
+
+    test('is empty when there is nothing new', () async {
+      platform.onPluginCall = (call) => <Object?>[];
+
+      expect(await const ProcessHistory().takeNew(), isEmpty);
+    });
+  });
+
   group('MediaCache', () {
     const cache = MediaCache();
 

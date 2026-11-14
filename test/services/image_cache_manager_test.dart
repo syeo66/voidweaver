@@ -1,10 +1,44 @@
+import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart'
+    show
+        CacheManager,
+        Config,
+        FileService,
+        FileSystem,
+        FileServiceResponse,
+        NonStoringObjectProvider;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:voidweaver/services/image_cache_manager.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 
+/// Never has a file and fails every download, so no platform plugin is needed
+class _OfflineFileService extends FileService {
+  @override
+  Future<FileServiceResponse> get(String url, {Map<String, String>? headers}) =>
+      Future.error(const SocketException('offline'));
+}
+
+/// Never asked for a file: nothing is downloaded
+class _NoFileSystem implements FileSystem {
+  @override
+  Future<Never> createFile(String name) => Future.error(StateError(name));
+}
+
+CacheManager _offlineManager() => CacheManager(
+  Config(
+    'test',
+    repo: NonStoringObjectProvider(),
+    fileSystem: _NoFileSystem(),
+    fileService: _OfflineFileService(),
+  ),
+);
+
 void main() {
+  tearDown(() => ImageCacheManager.cacheManager = null);
+
   group('ImageCacheManager.coverArtSizeFor', () {
     test('picks the smallest size covering the box in physical pixels', () {
       expect(ImageCacheManager.coverArtSizeFor(50, 2.625), 150);
@@ -24,10 +58,43 @@ void main() {
     });
   });
 
+  group('ImageCacheManager cache', () {
+    test('keeps far more than the default 200 images', () {
+      // Scrolling through a library's album grid must not push covers out
+      expect(ImageCacheManager.maxCachedImages, greaterThan(1000));
+      expect(
+        ImageCacheManager.cachedImageLifetime,
+        greaterThan(const Duration(days: 30)),
+      );
+    });
+
+    test('cover art providers use it', () {
+      final manager = _offlineManager();
+      ImageCacheManager.cacheManager = manager;
+      final api = SubsonicApi(
+        serverUrl: 'https://music.example.com',
+        username: 'testuser',
+        password: 'testpass',
+      );
+      addTearDown(api.dispose);
+
+      final provider = ImageCacheManager.coverArtProvider(
+        api,
+        'al-1',
+      ) as CachedNetworkImageProvider;
+
+      expect(provider.cacheManager, same(manager));
+    });
+  });
+
   group('ImageCacheManager.buildCoverArt', () {
     late SubsonicApi api;
 
+    late CacheManager manager;
+
     setUp(() {
+      manager = _offlineManager();
+      ImageCacheManager.cacheManager = manager;
       api = SubsonicApi(
         serverUrl: 'https://music.example.com',
         username: 'testuser',
@@ -66,6 +133,7 @@ void main() {
 
       expect(Uri.parse(image.imageUrl).queryParameters['size'], '150');
       expect(image.cacheKey, api.coverArtCacheKey('al-1', size: 150));
+      expect(image.cacheManager, same(manager));
     });
 
     testWidgets('fetches the size of the box it is laid out in', (

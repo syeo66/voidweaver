@@ -145,6 +145,8 @@ public final class PlaybackService extends MediaLibraryService {
   public void onCreate() {
     super.onCreate();
     instance = this;
+    // Before anything that could crash; the plugin installs it too, once the engine is attached
+    ProcessHistory.installCrashRecorder(this);
     // The session is only idle once playback was stopped (SessionPlayer shows a failed load as
     // paused), and a stop ends the notification and the foreground service
     setShowNotificationForIdlePlayer(SHOW_NOTIFICATION_FOR_IDLE_PLAYER_NEVER);

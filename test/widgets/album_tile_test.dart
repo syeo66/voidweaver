@@ -90,6 +90,19 @@ void main() {
       expect(find.text('9 songs • 1h 2m'), findsOneWidget);
     });
 
+    testWidgets('says "1 song" for a single', (tester) async {
+      final single = Album(
+        id: 'al-2',
+        name: 'A Single',
+        artist: 'Some Artist',
+        songCount: 1,
+        duration: 200,
+      );
+      await pump(tester, AlbumTile(album: single), size: const Size(400, 100));
+
+      expect(find.text('1 song • 3m'), findsOneWidget);
+    });
+
     testWidgets('shows a spinner while starting and ignores another tap', (
       tester,
     ) async {

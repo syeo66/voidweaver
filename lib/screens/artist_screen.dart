@@ -7,6 +7,7 @@ import '../services/app_state.dart';
 import '../services/image_cache_manager.dart';
 import '../services/subsonic_api.dart';
 import '../services/network_errors.dart';
+import '../utils/format.dart';
 import '../widgets/artist_albums_view.dart';
 
 class ArtistScreen extends StatefulWidget {
@@ -162,7 +163,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
       leading: _buildArtistAvatar(artist),
       title: Text(artist.name),
       subtitle: artist.albumCount != null
-          ? Text('${artist.albumCount} albums')
+          ? Text(formatCount(artist.albumCount!, 'album'))
           : null,
       trailing: const Icon(Icons.chevron_right),
       onTap: () => _showArtist(artist),

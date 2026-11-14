@@ -435,3 +435,50 @@ class MediaCache {
   /// Removes everything. Downloads that are running still finish.
   Future<void> clear() => _channel.invokeMethod('cache.clear');
 }
+
+/// Something that happened to an earlier run of the app, see
+/// [ProcessHistory.takeNew].
+class ProcessEvent {
+  final String text;
+
+  /// Whether something went wrong (a crash, a not responding app, a kill
+  /// while playing), as opposed to the system's routine cleanup or the user
+  /// closing the app
+  final bool notable;
+
+  const ProcessEvent(this.text, {required this.notable});
+
+  @override
+  String toString() => 'ProcessEvent($text, notable: $notable)';
+}
+
+/// How earlier runs of the app ended, for the app's log. Android ends a
+/// background player for memory, a hang or a crash without the app seeing
+/// it, so the log of that run just stops. Everything stays on the device.
+///
+/// Two sources: the stack of an uncaught Java exception, which the plugin
+/// saves before the process dies, and Android's record of why a process
+/// ended (Android 11 and newer: low memory, not responding, native crash, a
+/// force stop).
+class ProcessHistory {
+  static const _channel = MethodChannel('voidweaver_player');
+
+  const ProcessHistory();
+
+  /// What happened to earlier runs that wasn't reported before, oldest
+  /// first. Each is reported once.
+  Future<List<ProcessEvent>> takeNew() async {
+    final entries =
+        await _channel.invokeListMethod<Map<Object?, Object?>>(
+          'process.takeHistory',
+        ) ??
+        const [];
+    return [
+      for (final entry in entries)
+        ProcessEvent(
+          entry['text'] as String? ?? '',
+          notable: entry['notable'] as bool? ?? false,
+        ),
+    ];
+  }
+}

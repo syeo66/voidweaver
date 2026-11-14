@@ -9,6 +9,7 @@ import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.EventChannel;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +37,7 @@ public class VoidweaverPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
   @Override
   public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
     context = binding.getApplicationContext();
+    ProcessHistory.installCrashRecorder(context);
     messenger = binding.getBinaryMessenger();
     downloads = Executors.newSingleThreadExecutor();
     reads = Executors.newSingleThreadExecutor();
@@ -69,6 +71,9 @@ public class VoidweaverPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
         }
       case "resumption.take":
         result.success(PlaybackService.takeResumeRequest());
+        break;
+      case "process.takeHistory":
+        run(reads, result, () -> processHistory());
         break;
       case "network.setTimeouts":
         MediaCache.setTimeouts(
@@ -123,6 +128,18 @@ public class VoidweaverPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
       default:
         result.notImplemented();
     }
+  }
+
+  /** How earlier runs ended that wasn't reported yet, see {@link ProcessHistory}. */
+  private List<Map<String, Object>> processHistory() {
+    List<Map<String, Object>> entries = new ArrayList<>();
+    for (ProcessHistory.Entry entry : ProcessHistory.takeNew(context)) {
+      Map<String, Object> map = new HashMap<>();
+      map.put("text", entry.text);
+      map.put("notable", entry.notable);
+      entries.add(map);
+    }
+    return entries;
   }
 
   /** Runs [task] on [executor] and replies with its result on the main thread. */

@@ -404,7 +404,7 @@ class _SearchScreenState extends State<SearchScreen>
       ),
       title: Text(artist.name),
       subtitle: artist.albumCount != null
-          ? Text('${artist.albumCount} albums')
+          ? Text(formatCount(artist.albumCount!, 'album'))
           : null,
       onTap: () {
         Navigator.push(

@@ -16,6 +16,11 @@ String formatHoursMinutes(Duration duration) {
   return hours > 0 ? '${hours}h ${minutes}m' : '${minutes}m';
 }
 
+/// A count with its noun, e.g. `1 song` or `12 songs`. [plural] is for nouns
+/// that don't just add an `s`.
+String formatCount(int count, String singular, {String? plural}) =>
+    '$count ${count == 1 ? singular : (plural ?? '${singular}s')}';
+
 /// A size in bytes, e.g. `512 B`, `12 KB`, `3.4 MB`, `1.25 GB`.
 String formatBytes(int bytes) {
   const kb = 1024;

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import 'services/app_state.dart';
 import 'services/error_handler.dart';
+import 'services/previous_run.dart';
 import 'services/session_log.dart';
 import 'services/settings_service.dart';
 import 'screens/login_screen.dart';
@@ -25,6 +26,8 @@ void main() async {
         setUpLogging();
         // This run's log, for the user to export (Settings → Session Log)
         unawaited(SessionLog.instance.start());
+        // Why the last run's log stops, if Android ended it
+        unawaited(logPreviousRunEnd());
         // Only in the build of tool/emulator_check.sh --fake-server
         trustTestCa();
 

@@ -98,7 +98,7 @@ class _AlbumTileState extends State<AlbumTile> with _PlaysAlbum {
             Text(album.artist),
             if (album.songCount != null && album.duration != null)
               Text(
-                '${album.songCount} songs • ${formatHoursMinutes(Duration(seconds: album.duration!))}',
+                '${formatCount(album.songCount!, 'song')} • ${formatHoursMinutes(Duration(seconds: album.duration!))}',
                 style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
               ),
           ],
@@ -147,7 +147,9 @@ class _AlbumGridTileState extends State<AlbumGridTile> with _PlaysAlbum {
     );
     final secondLine = widget.showArtist
         ? album.artist
-        : (album.songCount != null ? '${album.songCount} songs' : null);
+        : (album.songCount != null
+              ? formatCount(album.songCount!, 'song')
+              : null);
 
     return Card(
       elevation: 2,
