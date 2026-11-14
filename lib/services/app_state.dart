@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logging/logging.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:voidweaver_player/voidweaver_player.dart' show MediaCache;
 
 import 'subsonic_api.dart';
@@ -82,6 +83,18 @@ class AppState extends ChangeNotifier {
 
   // The timeouts last handed to the player, see _applyNetworkConfig()
   (Duration, Duration)? _playerTimeouts;
+
+  // The app's version for the User-Agent, read once; null if unknown
+  Future<String?>? _appVersion;
+
+  Future<String?> _readAppVersion() => _appVersion ??= () async {
+    try {
+      return (await PackageInfo.fromPlatform()).version;
+    } catch (e) {
+      _log.fine('The app version is unknown', e);
+      return null;
+    }
+  }();
 
   // The login: its progress, and why it failed
   LoadingState _configurationLoadingState = LoadingState.idle;
@@ -167,6 +180,7 @@ class AppState extends ChangeNotifier {
         username: username,
         password: password,
         networkConfig: _settingsService!.networkConfig,
+        appVersion: await _readAppVersion(),
         clock: _clock,
       );
       if (verifyCredentials) {
@@ -237,6 +251,7 @@ class AppState extends ChangeNotifier {
       username: current.username,
       password: password,
       networkConfig: _settingsService!.networkConfig,
+      appVersion: current.appVersion,
     );
     try {
       await check.ping();

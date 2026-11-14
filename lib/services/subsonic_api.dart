@@ -47,6 +47,10 @@ class SubsonicApi {
   final String username;
   String _password;
   final String clientName = 'voidweaver';
+
+  /// The app's version, e.g. `1.3.0`, so server logs can tell builds apart.
+  /// Null if it isn't known.
+  final String? appVersion;
   final String version = '1.16.1';
   // Scoped to the server and user, so another login never sees this one's
   // data; closed in dispose()
@@ -82,6 +86,7 @@ class SubsonicApi {
     required this.username,
     required this._password,
     NetworkConfig? networkConfig,
+    this.appVersion,
     this._clock = DateTime.now,
   }) : _networkConfig = networkConfig ?? NetworkConfig.defaultConfig {
     // Enforce HTTPS for security
@@ -106,6 +111,11 @@ class SubsonicApi {
   }
 
   String get password => _password;
+
+  /// The `User-Agent` of the requests: `voidweaver/1.3.0`, or `voidweaver`
+  /// without a known version
+  String get userAgent =>
+      appVersion == null ? clientName : '$clientName/$appVersion';
 
   /// Uses [password] for every request from now on, for a password changed
   /// on the server. The caller has checked it (see [ping]), so
@@ -225,7 +235,7 @@ class SubsonicApi {
     try {
       final response = await _retryService.getWithRetry(
         uri,
-        headers: {'User-Agent': clientName},
+        headers: {'User-Agent': userAgent},
         requestType: requestType,
         contextDescription: 'Subsonic API: $endpoint',
         retry: retry,

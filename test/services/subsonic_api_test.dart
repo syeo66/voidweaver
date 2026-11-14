@@ -11,6 +11,29 @@ void main() {
   // Initialize Flutter test binding
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  group('SubsonicApi User-Agent', () {
+    SubsonicApi apiWith({String? appVersion}) => SubsonicApi(
+      serverUrl: 'https://demo.navidrome.org',
+      username: 'testuser',
+      password: 'testpass',
+      appVersion: appVersion,
+    );
+
+    test('names the app and its version', () {
+      final api = apiWith(appVersion: '1.3.0');
+      addTearDown(api.dispose);
+
+      expect(api.userAgent, 'voidweaver/1.3.0');
+    });
+
+    test('is just the app name when the version is unknown', () {
+      final api = apiWith();
+      addTearDown(api.dispose);
+
+      expect(api.userAgent, 'voidweaver');
+    });
+  });
+
   group('SubsonicApi HTTPS Enforcement', () {
     test('should accept HTTPS URLs', () async {
       // Mock the SharedPreferences plugin for testing

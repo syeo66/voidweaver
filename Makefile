@@ -1,5 +1,5 @@
 # Voidweaver Flutter Project Makefile
-.PHONY: help setup analyze format test test-android test-integration check-apk check-emulator check-emulator-fake build-release deploy deploy-patch deploy-minor deploy-major clean doctor devices run install upgrade
+.PHONY: help setup analyze format test test-android lint-android test-integration check-apk check-emulator check-emulator-fake build-release deploy deploy-patch deploy-minor deploy-major clean doctor devices run install upgrade
 
 # Default target
 all: format analyze test
@@ -12,6 +12,7 @@ help:
 	@echo "  format        - Format code (dart format)"
 	@echo "  test          - Run the Dart tests (app and player plugin)"
 	@echo "  test-android  - Run the player plugin's JVM tests (Gradle, needs JAVA_HOME)"
+	@echo "  lint-android  - Run Android Lint on the player plugin (Gradle, needs JAVA_HOME)"
 	@echo "  test-integration - Run the user-flow tests on a device/emulator (fake server, debug build)"
 	@echo "  check-apk     - Check the release APK for shrunk-away notification resources and session entries"
 	@echo "  check-emulator - Check media session, media keys and resumption in the running emulator"
@@ -66,6 +67,12 @@ test-android: setup
 	@echo "Running Android unit tests..."
 	cd android && ./gradlew :voidweaver_player:testDebugUnitTest
 	@echo "Android unit tests complete."
+
+# Android Lint on the player plugin's Java code and manifest
+lint-android: setup
+	@echo "Running Android Lint..."
+	cd android && ./gradlew :voidweaver_player:lintDebug
+	@echo "Android Lint complete."
 
 # User flows on a device or emulator, against the fake Subsonic server
 # running in the app (integration_test/, debug build)

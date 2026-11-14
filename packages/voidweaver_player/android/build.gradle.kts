@@ -42,6 +42,17 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    lint {
+        // Media3 marks much of what the plugin builds on @UnstableApi; the
+        // check reports every use of it (193 of them), which would bury the
+        // findings that matter. Media3 upgrades are checked in the emulator.
+        disable += "UnsafeOptInUsageError"
+        // Newer versions are Dependabot's job; these would also make the
+        // output depend on the date
+        disable += "GradleDependency"
+        disable += "NewerVersionAvailable"
+    }
 }
 
 dependencies {
