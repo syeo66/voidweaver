@@ -1,0 +1,32 @@
+name: Set up Flutter
+description: >-
+  Installs the Flutter SDK version in .flutter-version (one line, so changing
+  it moves every job of every workflow) and runs flutter pub get. Run
+  actions/checkout first.
+
+runs:
+  using: composite
+  steps:
+  - name: Read the Flutter version
+    id: flutter
+    shell: bash
+    run: |
+      version=$(tr -d '[:space:]' < .flutter-version)
+      # Empty would install the latest stable
+      test -n "$version"
+      echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  # Pinned to a commit SHA like every action, as a tag can be moved to other
+  # code; Dependabot updates it (.github/dependabot.yml lists this
+  # directory)
+  - name: Setup Flutter
+    uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+    with:
+      flutter-version: ${{ steps.flutter.outputs.version }}
+      channel: 'stable'
+      # The SDK and the pub cache
+      cache: true
+
+  - name: Install dependencies
+    shell: bash
+    run: flutter pub get

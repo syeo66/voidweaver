@@ -2,7 +2,10 @@ version: 2
 updates:
   # Keeps the SHAs the workflow's actions are pinned to current
   - package-ecosystem: github-actions
-    directory: /
+    # The workflows, and the composite action they share
+    directories:
+      - /
+      - /.github/actions/setup-flutter
     schedule:
       interval: weekly
     groups:

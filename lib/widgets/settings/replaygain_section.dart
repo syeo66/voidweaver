@@ -77,14 +77,13 @@ class ReplayGainSection extends StatelessWidget {
               },
               child: Column(
                 children: ReplayGainMode.values.map((mode) {
-                  return ListTile(
+                  // One control for the whole row: a bare Radio in a ListTile
+                  // is announced without its title
+                  return RadioListTile<ReplayGainMode>(
+                    value: mode,
                     title: Text(_getReplayGainModeTitle(mode)),
                     subtitle: Text(_getReplayGainModeDescription(mode)),
-                    leading: Radio<ReplayGainMode>(value: mode),
-                    onTap: () {
-                      unawaited(settingsService.setReplayGainMode(mode));
-                      _refreshAudioVolume(context);
-                    },
+                    controlAffinity: ListTileControlAffinity.leading,
                   );
                 }).toList(),
               ),

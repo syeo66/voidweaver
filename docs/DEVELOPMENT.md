@@ -51,19 +51,62 @@ State is managed with Provider. Services take optional dependencies (`Voidweaver
 
 ## Conventions
 
-- Log through a `Logger` from `package:logging`, one per file (`final _log = Logger('api_cache');`), not `debugPrint()` or `print()`. Levels: `severe` for unexpected errors, `warning` for failures the app recovers from, `info` for notable events, `fine` for details. Pass the error as the second argument (`_log.warning('Search failed', e)`), and the stack trace as the third for `severe` and for errors that point to a bug rather than to the network or storage (`catch (e, stack)`), and a closure for messages that are expensive to build (`_log.fine(() => doc.toXmlString())`). `setUpLogging()` in `lib/utils/log.dart` prints all records through `redactCredentials()`, so URLs can be logged as they are.
-- Debug builds print every level, release builds `info` and up. Build with `--dart-define=LOG_LEVEL=FINE` for everything, or `--dart-define=LOG_FINE=audio_player,replaygain` for some loggers only. On Android the lines appear as `I flutter : W/api_cache: ...` (`adb logcat -s flutter`). Tests print nothing.
-- **Session log** (`lib/services/session_log.dart`): every record from `fine` up, whatever the console prints, also in release builds, goes to `session.log` in the app's documents directory, for users to send (Settings → Session Log → Export, through the share sheet). Each start moves the last run's file to `session.previous.log`, replacing the one before, and starts a new one with a header (app version, OS, start time). So the log holds this run and the previous one, which a process killed in the background or a crash would otherwise lose. Lines logged before the file is open are kept in memory and written after the header. Over 5 MB the file starts over, with the header again and a note. Lines go through `formatLogRecord()`, so credentials are redacted. Native messages (ExoPlayer, Media3) aren't in it: logcat only. At the start of every run, `logPreviousRunEnd()` (`lib/services/previous_run.dart`) logs how earlier runs ended, from the plugin's `ProcessHistory`. It has two sources: the stack of an uncaught Java exception, which the plugin saves to a file before the process dies (`ProcessHistory.installCrashRecorder()`, installed with the plugin and in `PlaybackService`), and, on Android 11 and newer, Android's own record of why a process ended (`ApplicationExitInfo`: low memory, ANR, native crash, force stop). Each entry is reported once and comes right after the header, next to `session.previous.log`, which stops at the kill; a Java crash gives two entries, the saved stack and Android's exit record. Crashes and kills of a process that was playing are warnings; a user's stop and the cleanup of a cached process are info. Nothing leaves the device. Log at `fine` with care: nothing per position update or per frame, since it's written in release builds too.
+- Logging has its own section: [Logging](#logging), with the [session log](#session-log) users can send.
 - Every service and `State` that owns subscriptions, timers, controllers or HTTP clients disposes them in `dispose()`. `test/services/memory_leak_test.dart` covers the services.
 - Check `mounted` after `await` in widgets.
 - Screens choose layouts with `MediaQuery.of(context).orientation`, using `_buildPortraitLayout()` / `_buildLandscapeLayout()`. Test both orientations when changing a screen.
 - Wrap independent screen sections in `.withErrorBoundary()`.
+- Screens stay thin: their sections and dialogs live in `lib/widgets/` (`now_playing_view.dart`, `playlist_strip.dart`, `sleep_timer_dialog.dart`, and the Settings sections in `lib/widgets/settings/`).
+- Everything tappable needs a label a screen reader can read, a tap target of at least 48 dp, and readable text contrast, in both themes. Give `IconButton`s a `tooltip`. Don't put a bare `Radio` in a `ListTile` (it's announced without its title): use `RadioListTile`. `test/screens/accessibility_test.dart` checks the home, Now Playing, Settings and login screens against Flutter's guidelines; a new screen or Settings section goes there.
 - The analyzer runs with `strict-casts`, `strict-raw-types`, `strict-inference`, `discarded_futures` and `unawaited_futures`. Cast JSON values explicitly (`json['id'] as String?`), give type arguments where nothing infers them (`Future<void>.delayed(...)`, `MaterialPageRoute<void>(...)`), and mark fire-and-forget futures with `unawaited(...)`, adding `.catchError` when a failure needs more than the zone's error report.
-- When the server rejects the saved credentials (an auth error from any request, also the scrobble queue's retries), `SubsonicApi.credentialsRejected` is set and the home screen shows `CredentialsBanner`, which asks for the new password (`AppState.updatePassword()`). That checks it with a `ping`, saves it, and hands it to the existing `SubsonicApi` (`usePassword()`), so playback goes on and the pending scrobbles, the saved queue and the caches stay, which a logout would drop. The player's items still carry stream URLs with the old password: `AudioPlayerService.credentialsChanged()` restarts the downloads of the upcoming tracks, and an item that fails to stream loads the queue again with new URLs at that track. Any other answer from the server clears the flag. While it's set, nothing is sent on its own (`SubsonicApi.hasRejectedCredentials`): the scrobble queue holds its submissions and drops "now playing" requests, background sync skips, downloads of upcoming tracks stop, and ReplayGain tags aren't read from the server (`SubsonicApi.readReplayGain()`, also for a track the user starts: it plays at the fallback gain, its stream still goes out). Each request would fail the same way, and a steady stream of failed logins can get the device banned (fail2ban in front of the server), which would then refuse the new password too. Requests the user starts (a refresh, an album) still go out, so a password changed back on the server clears the flag.
 - Let exceptions keep their type (rethrow rather than wrapping them in `Exception('...: $e')`) and show them with `NetworkErrorHelper.getErrorMessage(e, context: '...')`, never with `toString()`. Throw `UserFacingException` for errors whose message is meant for the user.
 - Format durations and sizes with `lib/utils/format.dart`: `formatClock()` for playback times and track lengths (`3:05`), `formatHoursMinutes()` for longer spans (`1h 5m`), `formatBytes()`.
-- Screens stay thin: their sections and dialogs live in `lib/widgets/` (`now_playing_view.dart`, `playlist_strip.dart`, `sleep_timer_dialog.dart`, and the Settings sections in `lib/widgets/settings/`).
 - `AudioPlayerService` doesn't notify its listeners for position updates (several a second). Widgets that show the position listen to `AudioPlayerService.position`.
+- The server can reject the saved credentials (a changed password); requests the app makes on its own then stop. Read [Rejected credentials](#rejected-credentials) before adding one.
+
+## Logging
+
+- Log through a `Logger` from `package:logging`, one per file (`final _log = Logger('api_cache');`), not `debugPrint()` or `print()`.
+- Levels: `severe` for unexpected errors, `warning` for failures the app recovers from, `info` for notable events, `fine` for details.
+- Pass the error as the second argument (`_log.warning('Search failed', e)`), and the stack trace as the third for `severe` and for errors that point to a bug rather than to the network or storage (`catch (e, stack)`). Pass a closure for messages that are expensive to build (`_log.fine(() => doc.toXmlString())`).
+- `setUpLogging()` in `lib/utils/log.dart` prints all records through `redactCredentials()`, so URLs can be logged as they are.
+- Debug builds print every level, release builds `info` and up. Build with `--dart-define=LOG_LEVEL=FINE` for everything, or `--dart-define=LOG_FINE=audio_player,replaygain` for some loggers only. On Android the lines appear as `I flutter : W/api_cache: ...` (`adb logcat -s flutter`). Tests print nothing.
+- Log at `fine` with care: nothing per position update or per frame, since the session log below is written in release builds too.
+
+### Session log
+
+`lib/services/session_log.dart`: every record from `fine` up, whatever the console prints, also in release builds, goes to `session.log` in the app's documents directory, for users to send (Settings → Session Log → Export, through the share sheet). Nothing leaves the device.
+
+- Each start moves the last run's file to `session.previous.log`, replacing the one before, and starts a new one with a header (app version, OS, start time). So the log holds this run and the previous one, which a process killed in the background or a crash would otherwise lose.
+- Lines logged before the file is open are kept in memory and written after the header.
+- Over 5 MB the file starts over, with the header again and a note.
+- Lines go through `formatLogRecord()`, so credentials are redacted.
+- Native messages (ExoPlayer, Media3) aren't in it: logcat only.
+
+**How earlier runs ended.** At the start of every run, `logPreviousRunEnd()` (`lib/services/previous_run.dart`) logs how earlier runs ended, from the plugin's `ProcessHistory`. It has two sources:
+
+- The stack of an uncaught Java exception, which the plugin saves to a file before the process dies (`ProcessHistory.installCrashRecorder()`, installed with the plugin and in `PlaybackService`).
+- On Android 11 and newer, Android's own record of why a process ended (`ApplicationExitInfo`: low memory, ANR, native crash, force stop).
+
+Each entry is reported once and comes right after the header, next to `session.previous.log`, which stops at the kill; a Java crash gives two entries, the saved stack and Android's exit record. Crashes and kills of a process that was playing are warnings; a user's stop and the cleanup of a cached process are info.
+
+## Rejected credentials
+
+When the server rejects the saved credentials (an auth error from any request, also the scrobble queue's retries), `SubsonicApi.credentialsRejected` is set and the home screen shows `CredentialsBanner`, which asks for the new password.
+
+**Entering the new password** (`AppState.updatePassword()`):
+
+- It checks the password with a `ping`, saves it, and hands it to the existing `SubsonicApi` (`usePassword()`). So playback goes on, and the pending scrobbles, the saved queue and the caches stay, which a logout would drop.
+- The player's items still carry stream URLs with the old password: `AudioPlayerService.credentialsChanged()` restarts the downloads of the upcoming tracks, and an item that fails to stream loads the queue again with new URLs at that track.
+- Any other answer from the server clears the flag.
+
+**While the flag is set, nothing is sent on its own** (`SubsonicApi.hasRejectedCredentials`):
+
+- The scrobble queue holds its submissions and drops "now playing" requests.
+- Background sync skips, and downloads of upcoming tracks stop.
+- ReplayGain tags aren't read from the server (`SubsonicApi.readReplayGain()`, also for a track the user starts: it plays at the fallback gain, its stream still goes out).
+
+Each request would fail the same way, and a steady stream of failed logins can get the device banned (fail2ban in front of the server), which would then refuse the new password too. Requests the user starts (a refresh, an album) still go out, so a password changed back on the server clears the flag.
 
 ## Playback internals
 
@@ -78,8 +121,8 @@ Testing the native layer (media session, notification, media keys, R8) in the em
 - The plugin's manifest declares `PlaybackService` (`foregroundServiceType="mediaPlayback"`) and its permissions; it's merged into the app's.
 - Versioning: the version name comes from `pubspec.yaml`, where `tool/release.sh` bumps it (`make deploy-patch`, see [RELEASING.md](RELEASING.md)). The build number (`versionCode`) is the git commit count, set in `android/app/build.gradle.kts`, so it rises with every commit; the pubspec's `+N` or `--build-number` only wins if it's higher. CI checks out the full history for this. Settings shows both at the bottom.
 - Releases: a `v*` tag publishes the APK as a GitHub release, signed with the key from the repository secrets, see [RELEASING.md](RELEASING.md).
-- Flutter version: CI installs the SDK version in `.flutter-version` (one line, read by every job of both workflows). Dependabot can't bump it; change it by hand to move CI to another SDK. `pubspec.yaml` deliberately has no exact `environment: flutter:` pin, which would stop `flutter pub get` on any other local version.
-- CI: the workflow's actions are pinned to commit SHAs (the build job has the signing secrets, and a tag can be moved), with the version as a comment; Dependabot (`.github/dependabot.yml`) proposes the updates, along with pub and Gradle ones. Pin new actions the same way. Pull requests that change Media3, AGP or Kotlin need the emulator checks above. A second workflow (`.github/workflows/nightly.yml`) runs the randomized playback test with new seeds and the integration tests in an emulator every night, see [test/README.md](../test/README.md#nightly-checks).
+- Flutter version: CI installs the SDK version in `.flutter-version` (one line, read by the composite action `.github/actions/setup-flutter`, which every Flutter job of both workflows uses; it also runs `flutter pub get`). Dependabot can't bump it; change it by hand to move CI to another SDK. `pubspec.yaml` deliberately has no exact `environment: flutter:` pin, which would stop `flutter pub get` on any other local version.
+- CI: the workflow's actions are pinned to commit SHAs (the build job has the signing secrets, and a tag can be moved), with the version as a comment; Dependabot (`.github/dependabot.yml`) proposes the updates, along with pub and Gradle ones. Pin new actions the same way, also inside the composite action (Dependabot watches its directory too). The player plugin's JVM tests have their own job (`android-unit-tests`), in parallel with the Dart tests; it generates the Gradle wrapper with `flutter build apk --config-only`, as `gradlew` isn't in the repository. Pull requests that change Media3, AGP or Kotlin need the emulator checks above. A second workflow (`.github/workflows/nightly.yml`) runs the randomized playback test with new seeds and the integration tests in an emulator every night, see [test/README.md](../test/README.md#nightly-checks).
 
 ## Tests
 

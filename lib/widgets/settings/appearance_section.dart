@@ -36,13 +36,13 @@ class AppearanceSection extends StatelessWidget {
               },
               child: Column(
                 children: ThemeMode.values.map((mode) {
-                  return ListTile(
+                  // One control for the whole row: a bare Radio in a ListTile
+                  // is announced without its title
+                  return RadioListTile<ThemeMode>(
+                    value: mode,
                     title: Text(_getThemeModeTitle(mode)),
                     subtitle: Text(_getThemeModeDescription(mode)),
-                    leading: Radio<ThemeMode>(value: mode),
-                    onTap: () {
-                      unawaited(settingsService.setThemeMode(mode));
-                    },
+                    controlAffinity: ListTileControlAffinity.leading,
                   );
                 }).toList(),
               ),
