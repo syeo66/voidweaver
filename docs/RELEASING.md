@@ -37,4 +37,4 @@ gh secret set RELEASE_KEY_PASSWORD
 
 Keep the `.jks` and its passwords somewhere safe outside the repository, as above (`*.jks` is also git-ignored). If the key is lost, installed copies can't be updated; users have to uninstall first, which clears their login and cache.
 
-`android/app/build.gradle.kts` reads the key from `VOIDWEAVER_KEYSTORE_FILE`, `VOIDWEAVER_KEYSTORE_PASSWORD`, `VOIDWEAVER_KEY_ALIAS` and `VOIDWEAVER_KEY_PASSWORD`. To sign a release locally, export them before `flutter build apk --release`; without them the build is debug-signed, which is fine for local checks. Secrets aren't available to pull requests from forks, so those builds are debug-signed too.
+`android/app/build.gradle.kts` reads the key from `VOIDWEAVER_KEYSTORE_FILE`, `VOIDWEAVER_KEYSTORE_PASSWORD`, `VOIDWEAVER_KEY_ALIAS` and `VOIDWEAVER_KEY_PASSWORD`. To sign a release locally, export them before `tool/build_release_apk.sh`; without them the build is debug-signed, which is fine for local checks. Secrets aren't available to pull requests from forks, so those builds are debug-signed too.

@@ -77,7 +77,7 @@ test-integration: setup
 # System integration of the release build in the running emulator
 # (tool/emulator_check.sh: media session, notification, media keys, resumption)
 check-emulator: setup
-	flutter build apk --release
+	tool/build_release_apk.sh
 	tool/check_release_apk.sh
 	tool/emulator_check.sh
 
@@ -90,13 +90,13 @@ check-emulator-fake: setup
 # What R8 and the resource shrinker can break in the release APK, without a
 # device (tool/check_release_apk.sh: notification icons, manifest, classes)
 check-apk: setup
-	flutter build apk --release
+	tool/build_release_apk.sh
 	tool/check_release_apk.sh
 
 # Build release APK with full validation
 build-release: format analyze test
 	@echo "Building release APK..."
-	flutter build apk --release
+	tool/build_release_apk.sh
 	tool/check_release_apk.sh
 	@echo "Release APK built successfully."
 	@echo "APK location: build/app/outputs/flutter-apk/app-release.apk"

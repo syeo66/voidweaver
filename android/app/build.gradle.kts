@@ -39,6 +39,29 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = maxOf(flutter.versionCode, gitCommitCount ?: 0)
         versionName = flutter.versionName
+
+        // The plugins' native libraries only for the ABIs Flutter builds
+        // for (`--target-platform`, e.g. arm64 only in
+        // tool/build_release_apk.sh). The Flutter Gradle plugin sets this
+        // filter to all of its ABIs, whatever the target
+        // (configureAbiWithoutSplits in FlutterPlugin.kt), so plugins would
+        // add lib/ folders for ABIs without libflutter.so: a phone of such
+        // an ABI would install the APK and crash at launch instead of
+        // refusing it. Builds Flutter doesn't start (Android Studio, bare
+        // gradlew) have no target-platform and keep Flutter's filter.
+        val flutterAbis = mapOf(
+            "android-arm" to "armeabi-v7a",
+            "android-arm64" to "arm64-v8a",
+            "android-x64" to "x86_64",
+        )
+        val targetAbis = providers.gradleProperty("target-platform").orNull
+            ?.split(",")?.map { flutterAbis[it.trim()] }
+        if (targetAbis != null && targetAbis.all { it != null }) {
+            ndk {
+                abiFilters.clear()
+                abiFilters.addAll(targetAbis.filterNotNull())
+            }
+        }
     }
 
     // Trust in the fake Subsonic server of the tests (its CA, for localhost):

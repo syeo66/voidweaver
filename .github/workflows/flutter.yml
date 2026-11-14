@@ -123,7 +123,8 @@ jobs:
         VOIDWEAVER_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
         VOIDWEAVER_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
         VOIDWEAVER_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-      run: flutter build apk --release
+      # arm64 only, see the script
+      run: tool/build_release_apk.sh
 
     # Notification resources, media session manifest entries and classes,
     # which R8 and the resource shrinker can remove without any test failing

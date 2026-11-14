@@ -155,6 +155,24 @@ for class in \
 done
 
 echo
+echo "== Native code"
+# arm64 only (tool/build_release_apk.sh): the code of other ABIs only makes
+# the APK larger. A build made without the script has them too.
+abis=$(awk '$2 ~ /^lib\// {split($2, p, "/"); print p[2]}' <<<"$files" | sort -u | paste -sd' ' -)
+if [ "$abis" = "arm64-v8a" ]; then
+  pass "native code for arm64-v8a only"
+else
+  fail "native code for arm64-v8a only (found: ${abis:-none})"
+fi
+for lib in libapp.so libflutter.so; do
+  if awk -v f="lib/arm64-v8a/$lib" '$2 == f {found = 1} END {exit !found}' <<<"$files"; then
+    pass "lib/arm64-v8a/$lib"
+  else
+    fail "lib/arm64-v8a/$lib"
+  fi
+done
+
+echo
 echo "== No trust in the fake server"
 # The build of tool/emulator_check.sh --fake-server trusts the tests' fake
 # Subsonic server, whose private key is public; an APK that's installed must

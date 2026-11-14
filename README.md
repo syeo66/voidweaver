@@ -13,7 +13,7 @@ Voidweaver ──HTTPS──▶ reverse proxy ──▶ subsoxy (:8080) ──�
 1. **Navidrome**: run it as usual. Voidweaver uses Navidrome's ReplayGain data and cover art.
 2. **subsoxy**: run it as a Docker container (the repo has a `Dockerfile`) next to Navidrome, with `UPSTREAM_URL` pointing at Navidrome (e.g. `http://navidrome:4533`). Keep its database on a volume so listening history survives restarts. See the [subsoxy README](https://github.com/syeo66/subsoxy) for all options.
 3. **Reverse proxy**: subsoxy only serves plain HTTP and Voidweaver only connects over HTTPS, so put a reverse proxy with a valid certificate (Caddy, nginx, Traefik, …) in front of subsoxy.
-4. **Voidweaver**: log in with the HTTPS URL of the reverse proxy and your Navidrome username and password.
+4. **Voidweaver**: install the APK from the GitHub releases (it needs a 64-bit ARM phone, arm64), then log in with the HTTPS URL of the reverse proxy and your Navidrome username and password.
 
 ### Why subsoxy
 

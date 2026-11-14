@@ -161,6 +161,17 @@ type_text() {
 
 "$ADB" get-state >/dev/null 2>&1 || { echo "No device. Start the emulator first (see docs/ANDROID.md)." >&2; exit 2; }
 
+# The release APK is arm64 only (tool/build_release_apk.sh), so an x86_64
+# emulator can't install it. Checked before --build builds it, which takes
+# minutes (make check-emulator builds before it runs this script).
+if $install && ! $apk_given; then
+  abis="$("$ADB" shell getprop ro.product.cpu.abilist | tr -d '\r')"
+  case ",$abis," in
+    *,arm64-v8a,*) ;;
+    *) echo "The release APK is arm64 only; this device supports $abis. Use an arm64 emulator (see docs/ANDROID.md)." >&2; exit 2 ;;
+  esac
+fi
+
 if $fake_server; then
   $apk_given || APK="$FAKE_SERVER_APK"
   export VOIDWEAVER_URL="https://localhost:$FAKE_SERVER_PORT"
@@ -170,7 +181,7 @@ fi
 if $build && $fake_server; then
   step "Building the release APK that trusts the fake server"
   ca="$(base64 < android/app/src/fakeServer/res/raw/fake_subsonic_server.pem | tr -d '\n')"
-  flutter build apk --release -PtrustFakeServer=true \
+  tool/build_release_apk.sh -PtrustFakeServer=true \
     --dart-define=VOIDWEAVER_TEST_CA="$ca" || exit 1
   mkdir -p "$(dirname "$FAKE_SERVER_APK")"
   # Out of the place of the real release APK
@@ -178,7 +189,7 @@ if $build && $fake_server; then
   rm -f build/app/outputs/flutter-apk/app-release.apk.sha1
 elif $build; then
   step "Building release APK"
-  flutter build apk --release || exit 1
+  tool/build_release_apk.sh || exit 1
 fi
 
 server_pid=""
