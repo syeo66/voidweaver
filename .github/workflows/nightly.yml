@@ -98,6 +98,18 @@ jobs:
       with:
         cache-provider: basic
 
+    # The NDK and CMake the Gradle build installs on every run (about two
+    # minutes of download and unzipping). The versions come from the app's
+    # build.gradle.kts (ndkVersion) and AGP, so the key follows those files.
+    # The runner image's SDK path, as the env context doesn't have ANDROID_HOME.
+    - name: Cache the NDK and CMake
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          /usr/local/lib/android/sdk/ndk
+          /usr/local/lib/android/sdk/cmake
+        key: android-ndk-cmake-${{ runner.os }}-${{ hashFiles('android/app/build.gradle.kts', 'android/settings.gradle.kts') }}
+
     # Hardware acceleration for the emulator
     - name: Enable KVM
       run: |
