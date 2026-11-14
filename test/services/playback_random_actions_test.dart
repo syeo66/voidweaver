@@ -61,6 +61,15 @@ const _steps = int.fromEnvironment(
   defaultValue: _defaultSteps,
 );
 
+/// How long one run may take (real time; a run usually takes a few
+/// milliseconds). One that takes longer is stuck: it's reported with its
+/// seed and the actions so far, rather than leaving only the test's timeout,
+/// which can't tell a stuck run from a slow machine.
+const _runTimeout = Duration(seconds: 30);
+
+/// With PLAYBACK_RUNS, a progress line every this many runs
+const _progressEvery = 5000;
+
 /// The service's skip debounce and Previous's restart threshold
 const _skipDebounceMs = 100;
 const _restartThreshold = Duration(seconds: 3);
@@ -260,19 +269,29 @@ class _Run {
       },
     );
     unawaited(logRecords?.cancel());
-    return problems.isEmpty
-        ? const []
-        : [
-            // What a replay needs, see the top of the file
-            _steps == _defaultSteps
-                ? 'seed $seed:'
-                : 'seed $seed (PLAYBACK_STEPS=$_steps):',
-            ...problems,
-            '',
-            'actions:',
-            ...log,
-          ];
+    return problems.isEmpty ? const [] : _failureReport();
   }
+
+  /// The report of a run that didn't finish within [_runTimeout]: the
+  /// actions up to where it got stuck (with a replayed seed, the service's
+  /// log lines too)
+  List<String> timedOut() {
+    problems.add(
+      'the run did not finish within ${_runTimeout.inSeconds} s (stuck)',
+    );
+    return _failureReport();
+  }
+
+  List<String> _failureReport() => [
+    // What a replay needs, see the top of the file
+    _steps == _defaultSteps
+        ? 'seed $seed:'
+        : 'seed $seed (PLAYBACK_STEPS=$_steps):',
+    ...problems,
+    '',
+    'actions:',
+    ...log,
+  ];
 
   late final _Stats stats;
 
@@ -1018,12 +1037,40 @@ void main() {
         ? [_seedOverride]
         : [for (var seed = _firstSeed; seed < _firstSeed + runs; seed++) seed];
     final stats = _Stats();
+    // How long the runs took, and the slowest, for telling a slow machine
+    // (every run slower) from a seed that takes far longer than the rest
+    final total = Stopwatch()..start();
+    var slowest = Duration.zero;
+    int? slowestSeed;
     for (final seed in seeds) {
-      final report = await _Run(seed).run(stats);
+      final run = _Run(seed);
+      final started = total.elapsed;
+      final report = await run
+          .run(stats)
+          .timeout(_runTimeout, onTimeout: run.timedOut);
       if (report.isNotEmpty) fail(report.join('\n'));
+      final took = total.elapsed - started;
+      // Not the first run, which is slower for the warm-up alone (still
+      // under the timeout)
+      if (seed != seeds.first && took > slowest) {
+        (slowest, slowestSeed) = (took, seed);
+      }
+      // Before the test's own timeout can end a long run without the summary:
+      // how far it got, and how fast
+      if (_runsOverride > 0 && stats.runs % _progressEvery == 0) {
+        // ignore: avoid_print
+        print(
+          '${stats.runs} of ${seeds.length} runs after '
+          '${total.elapsed.inSeconds} s (slowest so far: seed $slowestSeed, '
+          '${slowest.inMilliseconds} ms)',
+        );
+      }
     }
     final summary =
-        '${stats.runs} runs; Pause/Stop rule checked in '
+        '${stats.runs} runs in ${total.elapsed.inMilliseconds} ms'
+        '${slowestSeed == null ? '' : ' (slowest after the first: seed '
+                  '$slowestSeed, ${slowest.inMilliseconds} ms)'}; '
+        'Pause/Stop rule checked in '
         '${stats.pauseChecked}, Play rule in ${stats.playChecked}, '
         'failure rule in ${stats.failureChecked} (on a replaced queue in '
         '${stats.replacedFailureChecked}); '

@@ -19,7 +19,7 @@ flutter test test/services/playback_random_actions_test.dart --dart-define=PLAYB
 flutter test test/services/playback_random_actions_test.dart --dart-define=PLAYBACK_FIRST_SEED=500000 --dart-define=PLAYBACK_RUNS=20000   # other seeds
 ```
 
-A failure prints its seed, and `PLAYBACK_STEPS` if it wasn't the default; a replay needs both. The nightly workflow runs new seeds every night, see [Nightly checks](#nightly-checks).
+A failure prints its seed, and `PLAYBACK_STEPS` if it wasn't the default; a replay needs both. So does a run that's stuck: one that takes longer than 30 s (real time; a run usually takes a few milliseconds) fails with its seed and the actions up to where it got stuck, rather than running into the test's 20-minute timeout, which can't tell a stuck run from a slow machine. With `PLAYBACK_RUNS` it prints a progress line every 5000 runs (runs so far, seconds, slowest seed so far), so a run that hits the test's timeout still shows how far it got, and the summary includes how long the runs took and the slowest seed (not counting the first run, which is slower just from warming up). The nightly workflow runs new seeds every night, see [Nightly checks](#nightly-checks).
 
 Run it with many more runs after changing `audio_player_service.dart`. When it fails, check first whether the fake player can do what the run shows: most false alarms so far were the fake doing something the real one can't (see `mock_audio_player.dart`, whose behaviors follow `PlaylistPlayer` and Media3). A real bug gets a readable regression test of its own in the matching test file.
 
