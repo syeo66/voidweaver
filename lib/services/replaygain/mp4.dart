@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'reader_log.dart';
@@ -12,137 +12,55 @@ bool isMp4(Uint8List bytes) =>
     bytes[6] == 0x79 &&
     bytes[7] == 0x70;
 
-/// ReplayGain from the iTunes metadata ('ilst') of an MP4/M4A file, or from
-/// ReplayGain keys anywhere in [bytes] if there is no 'ilst' atom.
+/// ReplayGain from the iTunes freeform items (`----`) of an MP4/M4A file,
+/// in `moov/udta/meta/ilst`, where taggers write them. Each item holds a
+/// `mean` box (`com.apple.iTunes`), a `name` box (`replaygain_track_gain`,
+/// in any case) and a `data` box with the value as text (`-8.54 dB`,
+/// `0.954132`).
+///
+/// A container box that runs past the end of [bytes] is read as far as it
+/// goes; a `name` or `data` box must be complete, so a cut-off value is
+/// never read as a shorter one.
 ReplayGainData parseMp4(Uint8List bytes) {
   readerLog(() => 'Parsing MP4/M4A metadata for ReplayGain tags');
+  final view = ByteData.sublistView(bytes);
+
+  final moov = _child(view, 0, bytes.length, 'moov');
+  if (moov == null) {
+    readerLog(() => 'No moov box in the data read');
+    return const ReplayGainData();
+  }
+  final udta = _child(view, moov.contentStart, moov.end, 'udta');
+  final meta = udta == null
+      ? null
+      : _child(view, udta.contentStart, udta.end, 'meta');
+  final ilst = meta == null
+      ? null
+      : _child(view, _metaChildrenStart(view, meta), meta.end, 'ilst');
+  if (ilst == null) {
+    readerLog(() => 'No moov/udta/meta/ilst box');
+    return const ReplayGainData();
+  }
 
   double? trackGain;
   double? albumGain;
   double? trackPeak;
   double? albumPeak;
-
-  // Look for iTunes-style tags or other metadata in the atom structure
-  int offset = 0;
-
-  while (offset + 8 < bytes.length) {
-    final atomSize =
-        (bytes[offset] << 24) |
-        (bytes[offset + 1] << 16) |
-        (bytes[offset + 2] << 8) |
-        bytes[offset + 3];
-
-    if (atomSize < 8 || atomSize > bytes.length - offset) {
-      break;
-    }
-
-    final atomType = String.fromCharCodes(
-      bytes.sublist(offset + 4, offset + 8),
-    );
-    readerLog(() => 'Found MP4 atom: $atomType, size: $atomSize');
-
-    // Look for metadata atoms
-    if (atomType == 'moov' || atomType == 'udta' || atomType == 'meta') {
-      // These contain metadata, search deeper
-      final atomData = bytes.sublist(offset + 8, offset + atomSize);
-      final nestedData = _searchMp4Metadata(atomData);
-      if (nestedData.hasAnyData) {
-        return nestedData;
-      }
-    }
-
-    // Look for iTunes metadata atom 'ilst'
-    if (atomType == 'ilst') {
-      readerLog(() => 'Found iTunes metadata atom');
-      final metadataData = bytes.sublist(offset + 8, offset + atomSize);
-      return _parseItunesMetadata(metadataData);
-    }
-
-    offset += atomSize;
-  }
-
-  // Also try searching for ReplayGain as text in the entire data
-  final textData = String.fromCharCodes(bytes);
-
-  // Look for common ReplayGain tag formats in M4A
-  final trackGainMatch = RegExp(
-    r'----:com\.apple\.iTunes:replaygain_track_gain[^\d-]*(-?\d+\.?\d*)',
-    caseSensitive: false,
-  ).firstMatch(textData);
-  if (trackGainMatch != null) {
-    trackGain = double.tryParse(trackGainMatch.group(1)!);
-    readerLog(() => 'Found iTunes ReplayGain track gain: $trackGain');
-  }
-
-  final albumGainMatch = RegExp(
-    r'----:com\.apple\.iTunes:replaygain_album_gain[^\d-]*(-?\d+\.?\d*)',
-    caseSensitive: false,
-  ).firstMatch(textData);
-  if (albumGainMatch != null) {
-    albumGain = double.tryParse(albumGainMatch.group(1)!);
-    readerLog(() => 'Found iTunes ReplayGain album gain: $albumGain');
-  }
-
-  final trackPeakMatch = RegExp(
-    r'----:com\.apple\.iTunes:replaygain_track_peak[^\d]*(\d+\.?\d*)',
-    caseSensitive: false,
-  ).firstMatch(textData);
-  if (trackPeakMatch != null) {
-    trackPeak = double.tryParse(trackPeakMatch.group(1)!);
-    readerLog(() => 'Found iTunes ReplayGain track peak: $trackPeak');
-  }
-
-  final albumPeakMatch = RegExp(
-    r'----:com\.apple\.iTunes:replaygain_album_peak[^\d]*(\d+\.?\d*)',
-    caseSensitive: false,
-  ).firstMatch(textData);
-  if (albumPeakMatch != null) {
-    albumPeak = double.tryParse(albumPeakMatch.group(1)!);
-    readerLog(() => 'Found iTunes ReplayGain album peak: $albumPeak');
-  }
-
-  // Also look for standard ReplayGain fields without iTunes prefix
-  if (trackGain == null) {
-    final stdTrackGainMatch = RegExp(
-      r'replaygain_track_gain[^\d-]*(-?\d+\.?\d*)',
-      caseSensitive: false,
-    ).firstMatch(textData);
-    if (stdTrackGainMatch != null) {
-      trackGain = double.tryParse(stdTrackGainMatch.group(1)!);
-      readerLog(() => 'Found standard ReplayGain track gain: $trackGain');
-    }
-  }
-
-  if (albumGain == null) {
-    final stdAlbumGainMatch = RegExp(
-      r'replaygain_album_gain[^\d-]*(-?\d+\.?\d*)',
-      caseSensitive: false,
-    ).firstMatch(textData);
-    if (stdAlbumGainMatch != null) {
-      albumGain = double.tryParse(stdAlbumGainMatch.group(1)!);
-      readerLog(() => 'Found standard ReplayGain album gain: $albumGain');
-    }
-  }
-
-  if (trackPeak == null) {
-    final stdTrackPeakMatch = RegExp(
-      r'replaygain_track_peak[^\d]*(\d+\.?\d*)',
-      caseSensitive: false,
-    ).firstMatch(textData);
-    if (stdTrackPeakMatch != null) {
-      trackPeak = double.tryParse(stdTrackPeakMatch.group(1)!);
-      readerLog(() => 'Found standard ReplayGain track peak: $trackPeak');
-    }
-  }
-
-  if (albumPeak == null) {
-    final stdAlbumPeakMatch = RegExp(
-      r'replaygain_album_peak[^\d]*(\d+\.?\d*)',
-      caseSensitive: false,
-    ).firstMatch(textData);
-    if (stdAlbumPeakMatch != null) {
-      albumPeak = double.tryParse(stdAlbumPeakMatch.group(1)!);
-      readerLog(() => 'Found standard ReplayGain album peak: $albumPeak');
+  for (final item in _boxes(view, ilst.contentStart, ilst.end)) {
+    if (item.type != '----') continue;
+    final (name, value) = _freeformItem(view, item);
+    if (name == null || value == null) continue;
+    final number = _leadingNumber(value);
+    readerLog(() => 'Found MP4 freeform item $name = "$value"');
+    switch (name.toLowerCase()) {
+      case 'replaygain_track_gain':
+        trackGain ??= number;
+      case 'replaygain_album_gain':
+        albumGain ??= number;
+      case 'replaygain_track_peak':
+        trackPeak ??= number;
+      case 'replaygain_album_peak':
+        albumPeak ??= number;
     }
   }
 
@@ -154,95 +72,104 @@ ReplayGainData parseMp4(Uint8List bytes) {
   );
 }
 
-/// The 'ilst' atom directly inside [bytes] (the contents of a 'moov',
-/// 'udta' or 'meta' atom), if there is one.
-ReplayGainData _searchMp4Metadata(Uint8List bytes) {
-  int offset = 0;
-
-  while (offset + 8 < bytes.length) {
-    final atomSize =
-        (bytes[offset] << 24) |
-        (bytes[offset + 1] << 16) |
-        (bytes[offset + 2] << 8) |
-        bytes[offset + 3];
-
-    if (atomSize < 8 || atomSize > bytes.length - offset) {
-      break;
-    }
-
-    final atomType = String.fromCharCodes(
-      bytes.sublist(offset + 4, offset + 8),
-    );
-
-    if (atomType == 'ilst') {
-      readerLog(() => 'Found nested iTunes metadata atom');
-      final metadataData = bytes.sublist(offset + 8, offset + atomSize);
-      return _parseItunesMetadata(metadataData);
-    }
-
-    offset += atomSize;
+/// Where the children of the `meta` box [meta] start. In MP4 files it's a
+/// full box (4 bytes of version and flags before its children); QuickTime
+/// writes it without them, starting right with its `hdlr` box.
+int _metaChildrenStart(ByteData view, _Box meta) {
+  final start = meta.contentStart;
+  if (start + 8 <= meta.end && _typeAt(view, start + 4) == 'hdlr') {
+    return start;
   }
-
-  return const ReplayGainData();
+  return start + 4;
 }
 
-ReplayGainData _parseItunesMetadata(Uint8List bytes) {
-  readerLog(() => 'Parsing iTunes metadata block');
-
-  // Convert to string and search for ReplayGain fields
-  final textData = String.fromCharCodes(bytes);
-  readerLog(
-    () =>
-        'iTunes metadata text sample: ${textData.substring(0, math.min(200, textData.length))}',
-  );
-
-  double? trackGain;
-  double? albumGain;
-  double? trackPeak;
-  double? albumPeak;
-
-  // Look for iTunes-style ReplayGain tags
-  final patterns = [
-    'replaygain_track_gain',
-    'replaygain_album_gain',
-    'replaygain_track_peak',
-    'replaygain_album_peak',
-    'REPLAYGAIN_TRACK_GAIN',
-    'REPLAYGAIN_ALBUM_GAIN',
-    'REPLAYGAIN_TRACK_PEAK',
-    'REPLAYGAIN_ALBUM_PEAK',
-  ];
-
-  for (final pattern in patterns) {
-    final regex = RegExp(
-      '$pattern[^\\d-]*(-?\\d+\\.?\\d*)',
-      caseSensitive: false,
-    );
-    final match = regex.firstMatch(textData);
-    if (match != null) {
-      final value = double.tryParse(match.group(1)!);
-      final lowerPattern = pattern.toLowerCase();
-
-      if (lowerPattern.contains('track_gain')) {
-        trackGain = value;
-        readerLog(() => 'Found iTunes track gain: $trackGain');
-      } else if (lowerPattern.contains('album_gain')) {
-        albumGain = value;
-        readerLog(() => 'Found iTunes album gain: $albumGain');
-      } else if (lowerPattern.contains('track_peak')) {
-        trackPeak = value;
-        readerLog(() => 'Found iTunes track peak: $trackPeak');
-      } else if (lowerPattern.contains('album_peak')) {
-        albumPeak = value;
-        readerLog(() => 'Found iTunes album peak: $albumPeak');
-      }
+/// The name and value of the freeform item [item]: the text of its `name`
+/// box and of its first `data` box. Null for one that's missing or cut off.
+(String?, String?) _freeformItem(ByteData view, _Box item) {
+  String? name;
+  String? value;
+  for (final box in _boxes(view, item.contentStart, item.end)) {
+    if (box.truncated) continue;
+    switch (box.type) {
+      case 'name':
+        // A full box: version and flags before the text
+        name ??= _text(view, box.contentStart + 4, box.end);
+      case 'data':
+        // The type of the value and its locale before it
+        value ??= _text(view, box.contentStart + 8, box.end);
     }
   }
+  return (name, value);
+}
 
-  return ReplayGainData(
-    trackGain: trackGain,
-    albumGain: albumGain,
-    trackPeak: trackPeak,
-    albumPeak: albumPeak,
+final _numberPattern = RegExp(r'^\s*([+-]?(?:\d+\.?\d*|\.\d+))');
+
+/// The number [text] starts with, e.g. -8.54 for `-8.54 dB`
+double? _leadingNumber(String text) {
+  final match = _numberPattern.firstMatch(text);
+  return match == null ? null : double.tryParse(match.group(1)!);
+}
+
+String? _text(ByteData view, int start, int end) {
+  if (start > end) return null;
+  return utf8.decode(
+    Uint8List.sublistView(view, start, end),
+    allowMalformed: true,
   );
+}
+
+String _typeAt(ByteData view, int offset) =>
+    String.fromCharCodes(Uint8List.sublistView(view, offset, offset + 4));
+
+/// The first box of [type] among the boxes from [start] to [end]
+_Box? _child(ByteData view, int start, int end, String type) {
+  for (final box in _boxes(view, start, end)) {
+    if (box.type == type) return box;
+  }
+  return null;
+}
+
+/// The boxes one after the other from [start] to [end]. Stops at a header
+/// that doesn't fit or is invalid. A box that runs past [end] is the last
+/// one, cut off at [end] ([_Box.truncated]).
+Iterable<_Box> _boxes(ByteData view, int start, int end) sync* {
+  var offset = start;
+  while (offset + 8 <= end) {
+    var size = view.getUint32(offset);
+    var headerSize = 8;
+    if (size == 1) {
+      // A 64-bit size after the type
+      if (offset + 16 > end) return;
+      size =
+          view.getUint32(offset + 8) * 0x100000000 +
+          view.getUint32(offset + 12);
+      headerSize = 16;
+    } else if (size == 0) {
+      // Extends to the end of its parent (the file, for a top-level box)
+      size = end - offset;
+    }
+    if (size < headerSize) return;
+    final declaredEnd = offset + size;
+    final truncated = declaredEnd > end;
+    yield _Box(
+      _typeAt(view, offset + 4),
+      offset + headerSize,
+      truncated ? end : declaredEnd,
+      truncated: truncated,
+    );
+    if (truncated) return;
+    offset = declaredEnd;
+  }
+}
+
+/// A box of [type] whose content runs from [contentStart] to [end]
+class _Box {
+  final String type;
+  final int contentStart;
+  final int end;
+
+  /// Whether the box runs past the data, which ends at [end]
+  final bool truncated;
+
+  _Box(this.type, this.contentStart, this.end, {required this.truncated});
 }

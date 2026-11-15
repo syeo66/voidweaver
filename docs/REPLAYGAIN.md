@@ -26,7 +26,7 @@ Supported tags:
 - ID3v2.3/2.4 `TXXX` frames (MP3), in any text encoding (Latin-1, UTF-16 with or without BOM, UTF-8), also after an extended header
 - Vorbis comments (FLAC, Ogg)
 - APE tags
-- MP4/M4A iTunes-style `ilst` tags (only when `moov` comes before the audio data)
+- MP4/M4A iTunes freeform items (`----` in `moov/udta/meta/ilst`, the item's `name` box naming the tag in any case, its `data` box holding the value as text), only when `moov` comes before the audio data. Read by walking the boxes, so only those items' values count: the same text elsewhere in the file (a comment) is ignored, and so is a value cut off at the end of the part read.
 - Opus `R128_TRACK_GAIN` / `R128_ALBUM_GAIN`, used when no `REPLAYGAIN_*` tags exist. These are Q7.8 values relative to -23 LUFS, converted with `value / 256 + 5` dB.
 
 ## Debugging

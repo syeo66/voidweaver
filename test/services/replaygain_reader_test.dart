@@ -668,6 +668,105 @@ void main() {
       );
       expect(data.hasAnyData, isFalse);
     });
+
+    test('reads the value, not the data box size, whatever its length', () {
+      // 40 characters: the data box is 56 bytes long, and its size's last
+      // byte is the digit '8' right after the name
+      final value = '-6.54 dB'.padRight(40);
+      final data = ReplayGainReader.parseBytes(
+        m4a([...freeform('replaygain_track_gain', value)]),
+      );
+      expect(data.trackGain, -6.54);
+    });
+
+    test('ignores ReplayGain names in other items', () {
+      final data = ReplayGainReader.parseBytes(
+        m4a([
+          ...atom(
+            '©cmt',
+            atom('data', [
+              0, 0, 0, 1, 0, 0, 0, 0, //
+              ...'replaygain_track_gain -3.00 dB'.codeUnits,
+            ]),
+          ),
+          ...freeform('replaygain_track_gain', '-7.03 dB'),
+        ]),
+      );
+      expect(data.trackGain, -7.03);
+    });
+
+    test('reads a QuickTime meta box without version and flags', () {
+      final data = ReplayGainReader.parseBytes(
+        Uint8List.fromList([
+          ...atom('ftyp', [...'M4A '.codeUnits, 0, 0, 2, 0]),
+          ...atom('moov', [
+            ...atom('udta', [
+              ...atom('meta', [
+                ...atom('hdlr', List.filled(25, 0)),
+                ...atom('ilst', freeform('replaygain_album_gain', '-5.10 dB')),
+              ]),
+            ]),
+          ]),
+        ]),
+      );
+      expect(data.albumGain, -5.10);
+    });
+
+    test('reads a moov box with a 64-bit size', () {
+      final udta = atom('udta', [
+        ...atom('meta', [
+          0, 0, 0, 0, //
+          ...atom('ilst', freeform('replaygain_track_peak', '0.98')),
+        ]),
+      ]);
+      final data = ReplayGainReader.parseBytes(
+        Uint8List.fromList([
+          ...atom('ftyp', [...'M4A '.codeUnits, 0, 0, 2, 0]),
+          ...uint32be(1),
+          ...'moov'.codeUnits,
+          ...uint32be(0),
+          ...uint32be(16 + udta.length),
+          ...udta,
+        ]),
+      );
+      expect(data.trackPeak, 0.98);
+    });
+
+    test('reads the items before a cut-off one, not the cut-off value', () {
+      final bytes = m4a([
+        ...freeform('replaygain_track_gain', '-7.03 dB'),
+        ...freeform('replaygain_album_gain', '-8.20 dB'),
+      ]);
+      // Ends in the middle of the album gain's value, '-8.2'
+      final end =
+          String.fromCharCodes(bytes).indexOf('-8.20 dB') + '-8.2'.length;
+      final data = ReplayGainReader.parseBytes(
+        Uint8List.sublistView(bytes, 0, end),
+      );
+      expect(data.trackGain, -7.03);
+      expect(data.albumGain, isNull);
+    });
+
+    test('reads each value exactly or not at all, wherever the data ends', () {
+      final bytes = m4a([
+        ...freeform('replaygain_track_gain', '-7.03 dB'),
+        ...freeform('replaygain_track_peak', '0.954132'),
+        ...freeform('replaygain_album_gain', '-8.20 dB'),
+        ...freeform('replaygain_album_peak', '0.999969'),
+      ]);
+      for (var end = 0; end <= bytes.length; end++) {
+        final data = ReplayGainReader.parseBytes(
+          Uint8List.sublistView(bytes, 0, end),
+        );
+        final reason = 'data ending at byte $end';
+        expect(data.trackGain, anyOf(isNull, -7.03), reason: reason);
+        expect(data.trackPeak, anyOf(isNull, 0.954132), reason: reason);
+        expect(data.albumGain, anyOf(isNull, -8.20), reason: reason);
+        expect(data.albumPeak, anyOf(isNull, 0.999969), reason: reason);
+      }
+      // Whole, all four are read
+      expect(ReplayGainReader.parseBytes(bytes).albumPeak, 0.999969);
+    });
   });
 
   group('Ogg Vorbis', () {
