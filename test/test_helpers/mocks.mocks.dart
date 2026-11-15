@@ -122,6 +122,12 @@ class MockSubsonicApi extends _i1.Mock implements _i7.SubsonicApi {
   ) as String);
 
   @override
+  String get userAgent => (super.noSuchMethod(
+    Invocation.getter(#userAgent),
+    returnValue: _i8.dummyValue<String>(this, Invocation.getter(#userAgent)),
+  ) as String);
+
+  @override
   _i3.NetworkConfig get networkConfig => (super.noSuchMethod(
     Invocation.getter(#networkConfig),
     returnValue: _FakeNetworkConfig_1(this, Invocation.getter(#networkConfig)),
