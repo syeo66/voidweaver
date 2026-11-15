@@ -1,8 +1,10 @@
+import 'dart:async';
+
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 import '../services/app_state.dart';
-import '../services/network_errors.dart';
 import '../utils/validators.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -17,6 +19,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final _serverUrlController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  // The failed login's message, scrolled into view after a failure: with the
+  // keyboard open it can be above the visible part of the form
+  final _errorKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -118,124 +123,145 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildLoginForm(bool isLoading, bool hasError, AppState appState) {
     return Form(
       key: _formKey,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (hasError && appState.configurationError != null) ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.errorContainer,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Theme.of(context).colorScheme.error),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.error,
-                    color: Theme.of(context).colorScheme.onErrorContainer,
+      // So password managers fill the three fields together and offer to
+      // save them. Saved only after a login that worked (see _login()), not
+      // when the screen goes away.
+      child: AutofillGroup(
+        onDisposeAction: AutofillContextAction.cancel,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (hasError && appState.configurationError != null) ...[
+              Container(
+                key: _errorKey,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.error,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      appState.configurationError!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onErrorContainer,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.error,
+                      color: Theme.of(context).colorScheme.onErrorContainer,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        appState.configurationError!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onErrorContainer,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(height: 16),
+            ],
+            TextFormField(
+              controller: _serverUrlController,
+              enabled: !isLoading,
+              decoration: const InputDecoration(
+                labelText: 'Server URL (HTTPS required)',
+                hintText: 'https://your-subsonic-server.com',
+                border: OutlineInputBorder(),
+                helperText: 'Must use HTTPS for secure connection',
+                prefixIcon: Icon(Icons.lock),
+              ),
+              keyboardType: TextInputType.url,
+              autofillHints: const [AutofillHints.url],
+              autocorrect: false,
+              enableSuggestions: false,
+              textInputAction: TextInputAction.next,
+              validator: Validators.validateServerUrl,
             ),
             const SizedBox(height: 16),
+            TextFormField(
+              controller: _usernameController,
+              enabled: !isLoading,
+              decoration: const InputDecoration(
+                labelText: 'Username',
+                border: OutlineInputBorder(),
+              ),
+              autofillHints: const [AutofillHints.username],
+              autocorrect: false,
+              enableSuggestions: false,
+              textInputAction: TextInputAction.next,
+              validator: Validators.validateUsername,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _passwordController,
+              enabled: !isLoading,
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                border: OutlineInputBorder(),
+              ),
+              obscureText: true,
+              autofillHints: const [AutofillHints.password],
+              textInputAction: TextInputAction.done,
+              onFieldSubmitted: (_) => unawaited(_login()),
+              validator: Validators.validatePassword,
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: isLoading ? null : () => unawaited(_login()),
+                child: isLoading
+                    ? const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 8),
+                          Text('Connecting...'),
+                        ],
+                      )
+                    : const Text('Connect'),
+              ),
+            ),
           ],
-          TextFormField(
-            controller: _serverUrlController,
-            enabled: !isLoading,
-            decoration: const InputDecoration(
-              labelText: 'Server URL (HTTPS required)',
-              hintText: 'https://your-subsonic-server.com',
-              border: OutlineInputBorder(),
-              helperText: 'Must use HTTPS for secure connection',
-              prefixIcon: Icon(Icons.lock),
-            ),
-            validator: Validators.validateServerUrl,
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _usernameController,
-            enabled: !isLoading,
-            decoration: const InputDecoration(
-              labelText: 'Username',
-              border: OutlineInputBorder(),
-            ),
-            validator: Validators.validateUsername,
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _passwordController,
-            enabled: !isLoading,
-            decoration: const InputDecoration(
-              labelText: 'Password',
-              border: OutlineInputBorder(),
-            ),
-            obscureText: true,
-            validator: Validators.validatePassword,
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: isLoading ? null : _login,
-              child: isLoading
-                  ? const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                        SizedBox(width: 8),
-                        Text('Connecting...'),
-                      ],
-                    )
-                  : const Text('Connect'),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) return;
+    final appState = context.read<AppState>();
+    if (appState.configurationLoadingState == LoadingState.loading ||
+        !_formKey.currentState!.validate()) {
+      return;
+    }
 
     try {
-      await context.read<AppState>().configure(
+      await appState.configure(
         Validators.sanitizeInput(_serverUrlController.text),
         Validators.sanitizeInput(_usernameController.text),
         // Not trimmed: spaces at either end can be part of a password
         _passwordController.text,
         verifyCredentials: true,
       );
-    } catch (e) {
-      // Error is already handled by AppState loading states
-      // Just ensure we still show a snackbar for immediate feedback
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              NetworkErrorHelper.getErrorMessage(
-                e,
-                context: 'Connection failed',
-              ),
-            ),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
+    } catch (_) {
+      // AppState's configurationError shows above the fields
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final errorBox = _errorKey.currentContext;
+        if (errorBox != null && errorBox.mounted) {
+          unawaited(Scrollable.ensureVisible(errorBox));
+        }
+      });
+      return;
     }
+    // The server accepted them: the password manager may offer to save them
+    TextInput.finishAutofillContext();
   }
 
   @override

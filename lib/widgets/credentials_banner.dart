@@ -107,6 +107,9 @@ class _UpdatePasswordDialogState extends State<UpdatePasswordDialog> {
               readOnly: _saving,
               autofocus: true,
               obscureText: true,
+              // A password manager can fill in the one saved for this login
+              autofillHints: const [AutofillHints.password],
+              textInputAction: TextInputAction.done,
               decoration: InputDecoration(
                 labelText: 'Password',
                 border: const OutlineInputBorder(),

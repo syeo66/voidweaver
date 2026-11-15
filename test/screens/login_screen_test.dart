@@ -175,23 +175,161 @@ void main() {
     expect(find.text('Connect'), findsOneWidget);
   });
 
-  testWidgets('shows a failed login as a message, not the exception', (
+  testWidgets('shows a failed login once, as a message, not the exception', (
     tester,
   ) async {
     appState.failWith = const SubsonicException(40, 'Wrong username or pw');
     await pumpLogin(tester);
     await fillIn(tester);
     await tapConnect(tester);
-    await tester.pump(); // the snackbar
+    await tester.pumpAndSettle();
 
-    // In the form and in the snackbar
+    // Above the form, not again in a snackbar
     expect(find.text('Wrong username or password.'), findsOneWidget);
-    expect(
-      find.text('Connection failed: Wrong username or password.'),
-      findsOneWidget,
-    );
+    expect(find.byType(SnackBar), findsNothing);
     expect(find.textContaining('Exception'), findsNothing);
     // The form can be sent again
     expect(find.widgetWithText(ElevatedButton, 'Connect'), findsOneWidget);
+  });
+
+  testWidgets('scrolls a failed login\'s message into view', (tester) async {
+    // A short window, as with the keyboard open: tapping Connect scrolled
+    // the error's place out of view
+    tester.view.devicePixelRatio = 2.625;
+    tester.view.physicalSize = const Size(1080, 700);
+    addTearDown(tester.view.reset);
+    appState.failWith = const SubsonicException(40, 'Wrong username or pw');
+    await pumpLogin(tester);
+    await fillIn(tester);
+    await tapConnect(tester);
+    await tester.pumpAndSettle();
+
+    final message = find.text('Wrong username or password.');
+    final top = tester.getTopLeft(message).dy;
+    expect(top, greaterThanOrEqualTo(0));
+    expect(top, lessThan(tester.view.physicalSize.height / 2.625));
+  });
+
+  TextField textField(WidgetTester tester, String label) => tester.widget(
+    find.descendant(of: field(label), matching: find.byType(TextField)),
+  );
+
+  testWidgets('sets up the fields for autofill and the keyboard', (
+    tester,
+  ) async {
+    await pumpLogin(tester);
+
+    expect(
+      find.ancestor(
+        of: field('Username'),
+        matching: find.byType(AutofillGroup),
+      ),
+      findsOneWidget,
+    );
+
+    final url = textField(tester, 'Server URL (HTTPS required)');
+    expect(url.autofillHints, [AutofillHints.url]);
+    expect(url.keyboardType, TextInputType.url);
+    expect(url.autocorrect, isFalse);
+    expect(url.enableSuggestions, isFalse);
+    expect(url.textInputAction, TextInputAction.next);
+
+    final username = textField(tester, 'Username');
+    expect(username.autofillHints, [AutofillHints.username]);
+    expect(username.autocorrect, isFalse);
+    expect(username.enableSuggestions, isFalse);
+    expect(username.textInputAction, TextInputAction.next);
+
+    final password = textField(tester, 'Password');
+    expect(password.autofillHints, [AutofillHints.password]);
+    expect(password.obscureText, isTrue);
+    expect(password.textInputAction, TextInputAction.done);
+  });
+
+  testWidgets('Next moves on to the following field', (tester) async {
+    await pumpLogin(tester);
+    await tester.enterText(field('Server URL (HTTPS required)'), 'https://a');
+    await tester.testTextInput.receiveAction(TextInputAction.next);
+    await tester.pump();
+
+    final focused = FocusManager.instance.primaryFocus!.context!;
+    expect(
+      focused.findAncestorWidgetOfExactType<TextFormField>()?.controller,
+      tester.widget<TextFormField>(field('Username')).controller,
+    );
+  });
+
+  testWidgets('Done on the password logs in', (tester) async {
+    await pumpLogin(tester);
+    await fillIn(tester);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(appState.configuredWith, [
+      'https://music.example.com',
+      'alice',
+      'secret',
+    ]);
+  });
+
+  bool autofillCommitted(WidgetTester tester) => tester.testTextInput.log.any(
+    (call) =>
+        call.method == 'TextInput.finishAutofillContext' &&
+        call.arguments == true,
+  );
+
+  testWidgets('lets the password manager save a login that worked', (
+    tester,
+  ) async {
+    await pumpLogin(tester);
+    await fillIn(tester);
+    tester.testTextInput.log.clear();
+    await tapConnect(tester);
+    await tester.pump();
+
+    expect(autofillCommitted(tester), isTrue);
+  });
+
+  testWidgets('asks to save before the screen is replaced', (tester) async {
+    // Like the app's router: the home screen replaces the login screen once
+    // the login worked, which disposes its autofill group
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppState>.value(
+        value: appState,
+        child: MaterialApp(
+          home: Consumer<AppState>(
+            builder: (context, state, _) =>
+                state.configurationLoadingState == LoadingState.success
+                ? const Text('home')
+                : const LoginScreen(),
+          ),
+        ),
+      ),
+    );
+    await fillIn(tester);
+    tester.testTextInput.log.clear();
+    await tapConnect(tester);
+    await tester.pump();
+
+    expect(find.text('home'), findsOneWidget);
+    final finishes = [
+      for (final call in tester.testTextInput.log)
+        if (call.method == 'TextInput.finishAutofillContext') call.arguments,
+    ];
+    // The save first; the group's cancel on dispose comes too late to undo it
+    expect(finishes.first, isTrue);
+  });
+
+  testWidgets('doesn\'t offer to save a login that failed', (tester) async {
+    appState.failWith = const SubsonicException(40, 'Wrong username or pw');
+    await pumpLogin(tester);
+    await fillIn(tester);
+    tester.testTextInput.log.clear();
+    await tapConnect(tester);
+    await tester.pumpAndSettle();
+    // Nor when the screen goes away
+    await tester.pumpWidget(const SizedBox());
+
+    expect(autofillCommitted(tester), isFalse);
   });
 }
