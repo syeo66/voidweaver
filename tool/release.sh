@@ -31,6 +31,19 @@ echo "$current -> $new"
 [ -z "$(git status --porcelain)" ] || { echo "Working tree isn't clean" >&2; exit 1; }
 git rev-parse "v$new" >/dev/null 2>&1 && { echo "Tag v$new exists" >&2; exit 1; }
 
+# The generated mocks must match their @GenerateMocks annotations, as CI's
+# test job checks. The push of the release commit skips CI, so without this
+# only the tag's run would notice, after the tag is out. The tree is clean
+# here, so any change is build_runner's.
+echo "Checking the generated mocks..."
+mocks_log=$(dart run build_runner build 2>&1) ||
+  { echo "$mocks_log" >&2; echo "build_runner failed, not releasing" >&2; exit 1; }
+if [ -n "$(git status --porcelain)" ]; then
+  git status --short >&2
+  echo "Regenerating the mocks changed these files (out-of-date mocks, or pub get rewrote pubspec.lock): commit them, then release again." >&2
+  exit 1
+fi
+
 # The integration tests, which CI doesn't run before a release (only nightly,
 # see docs/RELEASING.md). Only on an emulator: they reinstall the app and
 # clear its data, which on a phone would remove its login and cache.
