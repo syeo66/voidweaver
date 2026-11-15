@@ -103,7 +103,7 @@ When the server rejects the saved credentials (an auth error from any request, a
 
 **While the flag is set, nothing is sent on its own** (`SubsonicApi.hasRejectedCredentials`):
 
-- The scrobble queue holds its submissions and drops "now playing" requests.
+- The scrobble queue holds its requests (submissions and "now playing"), which keep their times, see [PLAYBACK.md](PLAYBACK.md#scrobbling).
 - Background sync skips, and downloads of upcoming tracks stop.
 - ReplayGain tags aren't read from the server (`SubsonicApi.readReplayGain()`, also for a track the user starts: it plays at the fallback gain, its stream still goes out).
 - Cover art that isn't cached isn't fetched (`CoverArtFileService`, see [CACHING.md](CACHING.md#cover-art-imagecachemanager)); a cover refused for the credentials sets the flag too. The media session still loads the artwork of a track that plays, unless it's cached: one request per track, like its stream.

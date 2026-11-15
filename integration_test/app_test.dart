@@ -137,11 +137,13 @@ void main() {
     ];
     await _pumpUntil(tester, () => plays().length == 3, 'three plays');
     expect(plays(), ['s-1', 's-2', 's-3']);
-    // Each track was announced as playing once
+    // Each track was announced as playing once, with when it started
+    final nowPlaying = server.scrobbles.where((s) => !s.submission);
     expect(
-      server.scrobbles.where((s) => !s.submission).map((s) => s.songId),
+      nowPlaying.map((s) => s.songId),
       containsAllInOrder(['s-1', 's-2', 's-3']),
     );
+    expect(nowPlaying.map((s) => s.time), everyElement(isNotNull));
   });
 
   testWidgets('plays random songs and pauses from the player controls', (

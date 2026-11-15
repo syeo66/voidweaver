@@ -251,11 +251,16 @@ class MockSubsonicApi extends _i1.Mock implements _i7.SubsonicApi {
   ) as String);
 
   @override
-  _i9.Future<void> scrobbleNowPlaying(String? songId) => (super.noSuchMethod(
-    Invocation.method(#scrobbleNowPlaying, [songId]),
-    returnValue: _i9.Future<void>.value(),
-    returnValueForMissingStub: _i9.Future<void>.value(),
-  ) as _i9.Future<void>);
+  _i9.Future<void> scrobbleNowPlaying(String? songId, {DateTime? startedAt}) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #scrobbleNowPlaying,
+          [songId],
+          {#startedAt: startedAt},
+        ),
+        returnValue: _i9.Future<void>.value(),
+        returnValueForMissingStub: _i9.Future<void>.value(),
+      ) as _i9.Future<void>);
 
   @override
   _i9.Future<void> scrobbleSubmission(String? songId, {DateTime? playedAt}) =>

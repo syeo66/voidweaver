@@ -102,7 +102,9 @@ void main() {
       await settle();
 
       // Verify now playing notification was sent
-      verify(mockApi.scrobbleNowPlaying('song1')).called(1);
+      verify(
+        mockApi.scrobbleNowPlaying('song1', startedAt: anyNamed('startedAt')),
+      ).called(1);
     });
 
     test('should scrobble song when it reaches 50% progress', () async {
@@ -435,7 +437,9 @@ void main() {
 
         // Verify nowPlaying was sent for the next song, but no additional scrobble
         // for song1 (already scrobbled)
-        verify(mockApi.scrobbleNowPlaying('song2')).called(1);
+        verify(
+          mockApi.scrobbleNowPlaying('song2', startedAt: anyNamed('startedAt')),
+        ).called(1);
         verifyNever(
           mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
         );
@@ -498,7 +502,9 @@ void main() {
       await settle();
 
       // Verify nowPlaying was sent
-      verify(mockApi.scrobbleNowPlaying('song1')).called(1);
+      verify(
+        mockApi.scrobbleNowPlaying('song1', startedAt: anyNamed('startedAt')),
+      ).called(1);
 
       // Simulate playback to 50% again
       clearInteractions(mockApi);
@@ -577,7 +583,9 @@ void main() {
       await settle();
 
       // Verify now playing was called when song started
-      verify(mockApi.scrobbleNowPlaying('song1')).called(1);
+      verify(
+        mockApi.scrobbleNowPlaying('song1', startedAt: anyNamed('startedAt')),
+      ).called(1);
 
       // Reset to check scrobble submission
       clearInteractions(mockApi);

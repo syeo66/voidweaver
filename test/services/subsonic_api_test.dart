@@ -51,6 +51,25 @@ void main() {
         HttpOverrides.global = previousOverrides;
       });
 
+      test('a now playing carries when the song started, in ms', () async {
+        final api = SubsonicApi(
+          serverUrl: server.url,
+          username: 'alice',
+          password: 'secret',
+        );
+        addTearDown(api.dispose);
+        final startedAt = DateTime.utc(2026, 11, 14, 23, 5, 7, 123);
+
+        await api.scrobbleNowPlaying('s-1', startedAt: startedAt);
+        await api.scrobbleNowPlaying('s-2');
+
+        final sent = server.requestsTo('scrobble');
+        expect(sent[0].params, containsPair('submission', 'false'));
+        expect(sent[0].params, containsPair('time', '1794697507123'));
+        expect(sent[1].params.containsKey('time'), isFalse);
+        expect(server.scrobbles.first.time!.toUtc(), startedAt);
+      });
+
       test('is sent with API requests and ReplayGain reads', () async {
         final api = SubsonicApi(
           serverUrl: server.url,
@@ -218,8 +237,7 @@ void main() {
       );
     });
 
-    // ScrobbleQueue drops it on failure; retries would hold up the
-    // submissions behind it
+    // ScrobbleQueue retries it itself, like a submission
     test('send a now playing notification only once', () async {
       expect(await attemptsOf((api) => api.scrobbleNowPlaying('song1')), 1);
     });

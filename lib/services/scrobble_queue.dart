@@ -45,20 +45,27 @@ class ScrobbleRequest {
   }
 }
 
-/// Persistent queue of scrobble requests, sent oldest first.
+/// Persistent queue of scrobble requests ("now playing" and submissions),
+/// sent oldest first.
 ///
-/// subsoxy tells plays from skips by the order and timestamps of scrobbles,
-/// so a submission that can't be sent (offline, server down, credentials
-/// refused) stays at the front and blocks the ones behind it until it goes
-/// through or expires after [_maxAge]. It's retried whenever a new request is
-/// queued, when the network is back ([networkAvailable]), and by a timer that
-/// only runs while something is blocked: after 30 s, then at twice the delay
-/// each time, up to 5 minutes. With nothing to send there's no timer, so a
-/// phone playing with the screen off isn't woken for an empty queue. A submission
-/// the server rejects for itself (e.g. unknown song) is dropped, and so is a
-/// "now playing" that fails: it would be stale by the time it's retried.
-/// For the same reason only submissions are saved: a "now playing" from the
-/// last session would mark a song as playing that isn't.
+/// subsoxy tells plays from skips by the order and times of scrobbles: a
+/// "now playing" followed by another song within twice its length, without
+/// a submission in between, is a skip. So every request is kept until the
+/// server has it, including "now playing", and each carries the time it
+/// happened (`time`: when the song started, or when the play started), which
+/// subsoxy measures with when both requests have one. Requests delivered
+/// late, after an offline stretch, a kill or a rejected password, are then
+/// judged as if they had arrived on time: a song skipped offline still counts
+/// as skipped, and one paused overnight before the next doesn't.
+///
+/// A request that can't be sent (offline, server down, credentials refused)
+/// stays at the front and blocks the ones behind it until it goes through or
+/// expires after [_maxAge]. It's retried whenever a new request is queued,
+/// when the network is back ([networkAvailable]), and by a timer that only
+/// runs while something is blocked: after 30 s, then at twice the delay each
+/// time, up to 5 minutes. With nothing to send there's no timer, so a phone
+/// playing with the screen off isn't woken for an empty queue. A request the
+/// server rejects for itself (e.g. unknown song) is dropped.
 class ScrobbleQueue {
   static const String _storageKey = 'scrobble_queue';
   static const Duration _maxAge = Duration(days: 7); // Drop old requests
@@ -150,14 +157,10 @@ class ScrobbleQueue {
       while (_queue.isNotEmpty && !_disposed) {
         if (_api.hasRejectedCredentials) {
           // Not sent: the server would refuse them (see
-          // SubsonicApi.hasRejectedCredentials). As if they had been: the
-          // "now playing" requests are dropped, the submissions wait for a
-          // new password (AppState.updatePassword() processes the queue) or
-          // the next timer tick after the flag cleared.
-          _queue.removeWhere((r) => r.type == ScrobbleType.nowPlaying);
-          _log.fine(
-            'Credentials rejected, holding ${_queue.length} submissions',
-          );
+          // SubsonicApi.hasRejectedCredentials). They wait for a new password
+          // (AppState.updatePassword() processes the queue) or the next timer
+          // tick after the flag cleared.
+          _log.fine('Credentials rejected, holding ${_queue.length} requests');
           blocked = true;
           break;
         }
@@ -183,9 +186,9 @@ class ScrobbleQueue {
           );
         } catch (e) {
           final rejected = e is SubsonicException && !e.isAuthError;
-          if (request.type == ScrobbleType.submission && !rejected) {
+          if (!rejected) {
             _log.warning(
-              'Failed to send submission for song ${request.songId}, will retry',
+              'Failed to send ${request.type.name} for song ${request.songId}, will retry',
               e,
             );
             blocked = true;
@@ -197,11 +200,15 @@ class ScrobbleQueue {
           );
         }
         _queue.remove(request);
-        if (sent && request.type == ScrobbleType.submission) {
+        if (sent && _queue.isNotEmpty) {
           // Saved right away rather than at the end of the pass: a process
-          // killed during a long backlog would send every play the server
-          // already counted again on the next start
+          // killed during a long backlog would send every request the server
+          // already has again on the next start, counting plays twice and
+          // taking songs played since for skipped. (Once the queue is empty,
+          // the end of the pass clears it.)
           await _saveQueue();
+        }
+        if (sent && request.type == ScrobbleType.submission) {
           onSubmitted?.call();
         }
 
@@ -271,7 +278,11 @@ class ScrobbleQueue {
   Future<void> _sendScrobble(ScrobbleRequest request) async {
     switch (request.type) {
       case ScrobbleType.nowPlaying:
-        await _api.scrobbleNowPlaying(request.songId);
+        // When the song started, so a late delivery is judged by that
+        await _api.scrobbleNowPlaying(
+          request.songId,
+          startedAt: request.queuedAt,
+        );
         break;
       case ScrobbleType.submission:
         await _api.scrobbleSubmission(
@@ -301,8 +312,7 @@ class ScrobbleQueue {
             _log.warning('Dropping unreadable scrobble request: $item', e);
             continue;
           }
-          // Saved by older versions; stale now
-          if (request.type == ScrobbleType.submission) _queue.add(request);
+          _queue.add(request);
         }
         _log.fine('Loaded ${_queue.length} scrobble requests from storage');
       }
@@ -312,20 +322,18 @@ class ScrobbleQueue {
     }
   }
 
-  /// Saves the submissions in the queue; "now playing" requests aren't kept
-  /// across sessions
+  /// Saves the queue, so the requests survive the process
   Future<void> _saveQueue() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final submissions = [
-        for (final request in _queue)
-          if (request.type == ScrobbleType.submission) request.toJson(),
-      ];
-      if (submissions.isEmpty) {
+      if (_queue.isEmpty) {
         await prefs.remove(_storageKey);
         return;
       }
-      await prefs.setString(_storageKey, json.encode(submissions));
+      await prefs.setString(
+        _storageKey,
+        json.encode([for (final request in _queue) request.toJson()]),
+      );
     } catch (e) {
       _log.warning('Error saving scrobble queue', e);
     }
@@ -344,8 +352,7 @@ class ScrobbleQueue {
   /// Get current queue size
   int get queueSize => _queue.length;
 
-  /// Plays not yet sent to the server. Without the "now playing" requests,
-  /// which are dropped rather than retried anyway.
+  /// Plays not yet sent to the server, without the "now playing" requests
   int get pendingSubmissions =>
       _queue.where((r) => r.type == ScrobbleType.submission).length;
 

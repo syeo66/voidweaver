@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -59,6 +60,11 @@ class AudioPlayerService extends ChangeNotifier {
   // Carries out the track changes on the player and follows its events, see
   // PlayerWorker. It holds the playlist.
   late final PlayerWorker _worker;
+
+  // The read-only view [playlist] hands out, and the worker's playlist it
+  // was made for
+  UnmodifiableListView<Song> _playlistView = UnmodifiableListView(const []);
+  List<Song>? _playlistViewOf;
 
   PlaybackState _playbackState = PlaybackState.stopped;
   int _currentIndex = 0;
@@ -194,7 +200,19 @@ class AudioPlayerService extends ChangeNotifier {
   bool get isSkipOperationInProgress => _skipping;
 
   PlaybackState get playbackState => _playbackState;
-  List<Song> get playlist => _playlist;
+
+  /// The queue, read-only. The same object until the queue is replaced, so
+  /// listeners can tell a new queue by identity. Shows ReplayGain data read
+  /// from a file once it's stored.
+  List<Song> get playlist {
+    final current = _playlist;
+    if (!identical(_playlistViewOf, current)) {
+      _playlistViewOf = current;
+      _playlistView = UnmodifiableListView(current);
+    }
+    return _playlistView;
+  }
+
   List<Song> get _playlist => _worker.playlist;
   int get currentIndex => _currentIndex;
   Duration get currentPosition => _currentPosition;

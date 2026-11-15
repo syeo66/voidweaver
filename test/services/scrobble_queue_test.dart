@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,7 +42,7 @@ void main() {
     });
 
     testInFakeTime('should queue now playing notification', (async) {
-      when(mockApi.scrobbleNowPlaying(any))
+      when(mockApi.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
           .thenAnswer((_) => Future.delayed(const Duration(milliseconds: 100)));
       awaitFake(async, scrobbleQueue.initialize());
 
@@ -64,7 +65,7 @@ void main() {
     });
 
     testInFakeTime('counts only submissions as pending plays', (async) {
-      when(mockApi.scrobbleNowPlaying(any))
+      when(mockApi.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
           .thenAnswer((_) => Future.delayed(const Duration(milliseconds: 100)));
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) => Future.delayed(const Duration(milliseconds: 100)));
@@ -85,13 +86,16 @@ void main() {
     });
 
     testInFakeTime('should process now playing request successfully', (async) {
-      when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {});
+      when(mockApi.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
+          .thenAnswer((_) async {});
 
       awaitFake(async, scrobbleQueue.initialize());
       awaitFake(async, scrobbleQueue.queueNowPlaying('song1'));
       settle(async);
 
-      verify(mockApi.scrobbleNowPlaying('song1')).called(1);
+      verify(
+        mockApi.scrobbleNowPlaying('song1', startedAt: anyNamed('startedAt')),
+      ).called(1);
       expect(scrobbleQueue.queueSize, 0);
     });
 
@@ -217,17 +221,48 @@ void main() {
       expect(scrobbleQueue.queueSize, 0);
     });
 
-    testInFakeTime('should drop a now playing notification that fails', (
-      async,
-    ) {
-      when(mockApi.scrobbleNowPlaying(any))
-          .thenThrow(Exception('Network error'));
+    testInFakeTime(
+      'keeps a now playing that fails and sends it later with its start time',
+      (async) {
+        final started = DateTime(2026, 11, 14, 23, 5);
+        final queue = ScrobbleQueue(mockApi, clock: () => started);
+        addTearDown(queue.dispose);
+        var online = false;
+        final sent = <(String, DateTime?)>[];
+        when(mockApi.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
+            .thenAnswer((invocation) async {
+              if (!online) throw const SocketException('offline');
+              sent.add((
+                invocation.positionalArguments[0] as String,
+                invocation.namedArguments[#startedAt] as DateTime?,
+              ));
+            });
+
+        awaitFake(async, queue.initialize());
+        awaitFake(async, queue.queueNowPlaying('song1'));
+        settle(async);
+        expect(queue.queueSize, 1);
+        expect(queue.retryScheduled, isTrue);
+
+        online = true;
+        queue.networkAvailable();
+        settle(async);
+        // When it was queued, not when it was sent
+        expect(sent, [('song1', started)]);
+        expect(queue.queueSize, 0);
+      },
+    );
+
+    testInFakeTime('should drop a now playing the server rejects', (async) {
+      when(mockApi.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
+          .thenThrow(const SubsonicException(70, 'Song not found'));
 
       awaitFake(async, scrobbleQueue.initialize());
       awaitFake(async, scrobbleQueue.queueNowPlaying('song1'));
       settle(async);
 
       expect(scrobbleQueue.queueSize, 0);
+      expect(scrobbleQueue.retryScheduled, isFalse);
     });
 
     testInFakeTime('should drop a submission the server rejects', (async) {
@@ -317,11 +352,12 @@ void main() {
       expect(scrobbleQueue.queueSize, 0);
     });
 
-    testInFakeTime('saves only submissions', (async) {
+    testInFakeTime('saves now playing requests too', (async) {
       final online = Completer<void>();
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) => online.future);
-      when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {});
+      when(mockApi.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
+          .thenAnswer((_) async {});
 
       awaitFake(async, scrobbleQueue.initialize());
       awaitFake(
@@ -335,7 +371,16 @@ void main() {
 
       final prefs = awaitFake(async, SharedPreferences.getInstance());
       final saved = jsonDecode(prefs.getString('scrobble_queue')!) as List;
-      expect(saved, [containsPair('songId', 'song1')]);
+      expect(saved, [
+        allOf(
+          containsPair('songId', 'song1'),
+          containsPair('type', 'submission'),
+        ),
+        allOf(
+          containsPair('songId', 'song2'),
+          containsPair('type', 'nowPlaying'),
+        ),
+      ]);
       online.complete();
     });
 
@@ -378,42 +423,100 @@ void main() {
       song2Sent.complete();
     });
 
-    testInFakeTime('drops now playing requests saved by older versions', (
+    testInFakeTime('removes each sent now playing from storage at once', (
       async,
     ) {
+      // A backlog of "now playing" requests: sent again after a kill, one
+      // the server already has would make the song played since look
+      // skipped
+      //
+      // Both queued before song1's answer, so queueing doesn't save the
+      // queue after song1 is sent
+      final song1Sent = Completer<void>();
+      final song2Sent = Completer<void>();
+      when(
+        mockApi.scrobbleNowPlaying('song1', startedAt: anyNamed('startedAt')),
+      ).thenAnswer((_) => song1Sent.future);
+      when(
+        mockApi.scrobbleNowPlaying('song2', startedAt: anyNamed('startedAt')),
+      ).thenAnswer((_) => song2Sent.future);
+
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(async, scrobbleQueue.queueNowPlaying('song1'));
+      awaitFake(async, scrobbleQueue.queueNowPlaying('song2'));
+      song1Sent.complete();
+      // Past the 100 ms between requests: song2 is being sent
+      settle(async);
+      verify(
+        mockApi.scrobbleNowPlaying('song2', startedAt: anyNamed('startedAt')),
+      ).called(1);
+
+      final prefs = awaitFake(async, SharedPreferences.getInstance());
+      final saved = jsonDecode(prefs.getString('scrobble_queue')!) as List;
+      expect(saved, [containsPair('songId', 'song2')]);
+      song2Sent.complete();
+    });
+
+    testInFakeTime('loads saved now playing requests and sends them in order', (
+      async,
+    ) {
+      // What a kill while offline leaves: a skipped song, then a play
+      final skippedAt = DateTime(2026, 11, 14, 22);
+      final playedAt = skippedAt.add(const Duration(seconds: 20));
       SharedPreferences.setMockInitialValues({
         'scrobble_queue': jsonEncode([
           ScrobbleRequest(
-            songId: 'stale',
+            songId: 'skipped',
             type: ScrobbleType.nowPlaying,
-            queuedAt: DateTime.now(),
+            queuedAt: skippedAt,
+          ).toJson(),
+          ScrobbleRequest(
+            songId: 'song1',
+            type: ScrobbleType.nowPlaying,
+            queuedAt: playedAt,
           ).toJson(),
           ScrobbleRequest(
             songId: 'song1',
             type: ScrobbleType.submission,
-            playedAt: DateTime.now(),
-            queuedAt: DateTime.now(),
+            playedAt: playedAt,
+            queuedAt: playedAt.add(const Duration(minutes: 2)),
           ).toJson(),
         ]),
       });
+      final sent = <String>[];
+      when(mockApi.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
+          .thenAnswer((invocation) async {
+            sent.add(
+              'now playing ${invocation.positionalArguments[0]} '
+              'at ${invocation.namedArguments[#startedAt]}',
+            );
+          });
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
-          .thenAnswer((_) async {});
+          .thenAnswer((invocation) async {
+            sent.add(
+              'play ${invocation.positionalArguments[0]} '
+              'at ${invocation.namedArguments[#playedAt]}',
+            );
+          });
 
       awaitFake(async, scrobbleQueue.initialize());
-      awaitFake(async, scrobbleQueue.processQueue());
+      settle(async);
 
-      verifyNever(mockApi.scrobbleNowPlaying(any));
-      verify(
-        mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
-      ).called(1);
+      expect(sent, [
+        'now playing skipped at $skippedAt',
+        'now playing song1 at $playedAt',
+        'play song1 at $playedAt',
+      ]);
+      expect(scrobbleQueue.queueSize, 0);
     });
 
     testInFakeTime('should persist queue to storage', (async) {
       // Make API calls slow so we can queue multiple items
-      when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-        throw Exception('Network error');
-      });
+      when(mockApi.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
+          .thenAnswer((_) async {
+            await Future<void>.delayed(const Duration(milliseconds: 100));
+            throw Exception('Network error');
+          });
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) async {
             await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -443,10 +546,11 @@ void main() {
 
     testInFakeTime('should restore queue from storage', (async) {
       // Make API calls slow so we can queue multiple items
-      when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-        throw Exception('Network error');
-      });
+      when(mockApi.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
+          .thenAnswer((_) async {
+            await Future<void>.delayed(const Duration(milliseconds: 100));
+            throw Exception('Network error');
+          });
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) async {
             await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -486,11 +590,12 @@ void main() {
       final processedSongs = <String>[];
 
       // Add delay to processing to allow queueing multiple items
-      when(mockApi.scrobbleNowPlaying(any)).thenAnswer((invocation) async {
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-        final songId = invocation.positionalArguments[0] as String;
-        processedSongs.add(songId);
-      });
+      when(mockApi.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
+          .thenAnswer((invocation) async {
+            await Future<void>.delayed(const Duration(milliseconds: 50));
+            final songId = invocation.positionalArguments[0] as String;
+            processedSongs.add(songId);
+          });
 
       awaitFake(async, scrobbleQueue.initialize());
       awaitFake(async, scrobbleQueue.queueNowPlaying('song1'));
@@ -506,9 +611,10 @@ void main() {
 
     testInFakeTime('should handle mixed request types', (async) {
       // Add delay to processing to allow queueing multiple items
-      when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-      });
+      when(mockApi.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
+          .thenAnswer((_) async {
+            await Future<void>.delayed(const Duration(milliseconds: 50));
+          });
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) async {
             await Future<void>.delayed(const Duration(milliseconds: 50));
@@ -525,18 +631,23 @@ void main() {
       // Wait for processing
       settle(async);
 
-      verify(mockApi.scrobbleNowPlaying('song1')).called(1);
+      verify(
+        mockApi.scrobbleNowPlaying('song1', startedAt: anyNamed('startedAt')),
+      ).called(1);
       verify(
         mockApi.scrobbleSubmission('song2', playedAt: anyNamed('playedAt')),
       ).called(1);
-      verify(mockApi.scrobbleNowPlaying('song3')).called(1);
+      verify(
+        mockApi.scrobbleNowPlaying('song3', startedAt: anyNamed('startedAt')),
+      ).called(1);
       expect(scrobbleQueue.queueSize, 0);
     });
 
     testInFakeTime('should not process when already processing', (async) {
-      when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {
-        await Future<void>.delayed(const Duration(milliseconds: 500));
-      });
+      when(mockApi.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
+          .thenAnswer((_) async {
+            await Future<void>.delayed(const Duration(milliseconds: 500));
+          });
 
       awaitFake(async, scrobbleQueue.initialize());
       awaitFake(async, scrobbleQueue.queueNowPlaying('song1'));
@@ -549,7 +660,9 @@ void main() {
       settle(async);
 
       // Should only process once
-      verify(mockApi.scrobbleNowPlaying('song1')).called(1);
+      verify(
+        mockApi.scrobbleNowPlaying('song1', startedAt: anyNamed('startedAt')),
+      ).called(1);
     });
 
     testInFakeTime('should handle empty queue gracefully', (async) {
@@ -562,7 +675,8 @@ void main() {
     });
 
     testInFakeTime('should clear queue from storage when empty', (async) {
-      when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {});
+      when(mockApi.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
+          .thenAnswer((_) async {});
 
       awaitFake(async, scrobbleQueue.initialize());
       awaitFake(async, scrobbleQueue.queueNowPlaying('song1'));
@@ -577,9 +691,10 @@ void main() {
     });
 
     testInFakeTime('should handle disposal during processing', (async) {
-      when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {
-        await Future<void>.delayed(const Duration(milliseconds: 500));
-      });
+      when(mockApi.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
+          .thenAnswer((_) async {
+            await Future<void>.delayed(const Duration(milliseconds: 500));
+          });
 
       awaitFake(async, scrobbleQueue.initialize());
       awaitFake(async, scrobbleQueue.queueNowPlaying('song1'));
@@ -592,7 +707,9 @@ void main() {
 
       // Should not throw, and not send the next one
       settle(async);
-      verifyNever(mockApi.scrobbleNowPlaying('song2'));
+      verifyNever(
+        mockApi.scrobbleNowPlaying('song2', startedAt: anyNamed('startedAt')),
+      );
     });
 
     test('ScrobbleRequest serialization', () {
@@ -620,7 +737,8 @@ void main() {
     });
 
     testInFakeTime('should immediately try to process on enqueue', (async) {
-      when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {});
+      when(mockApi.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
+          .thenAnswer((_) async {});
 
       awaitFake(async, scrobbleQueue.initialize());
 
@@ -628,7 +746,9 @@ void main() {
       awaitFake(async, scrobbleQueue.queueNowPlaying('song1'));
       async.flushMicrotasks();
 
-      verify(mockApi.scrobbleNowPlaying('song1')).called(1);
+      verify(
+        mockApi.scrobbleNowPlaying('song1', startedAt: anyNamed('startedAt')),
+      ).called(1);
       expect(scrobbleQueue.queueSize, 0);
     });
 
@@ -704,7 +824,8 @@ void main() {
     testInFakeTime('sends nothing while the server rejects the credentials', (
       async,
     ) {
-      when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {});
+      when(mockApi.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
+          .thenAnswer((_) async {});
       when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
           .thenAnswer((_) async {});
       when(mockApi.hasRejectedCredentials).thenReturn(true);
@@ -719,23 +840,25 @@ void main() {
         awaitFake(async, scrobbleQueue.processQueue());
       }
 
-      verifyNever(mockApi.scrobbleNowPlaying(any));
+      verifyNever(
+        mockApi.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')),
+      );
       verifyNever(
         mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')),
       );
-      // The play is kept, also in storage; the "now playing" is stale
-      expect(scrobbleQueue.queueSize, 1);
+      // Both are kept, also in storage
+      expect(scrobbleQueue.queueSize, 2);
       expect(scrobbleQueue.pendingSubmissions, 1);
       final prefs = awaitFake(async, SharedPreferences.getInstance());
-      expect(jsonDecode(prefs.getString('scrobble_queue')!), hasLength(1));
+      expect(jsonDecode(prefs.getString('scrobble_queue')!), hasLength(2));
 
-      // A new password
+      // A new password: sent in order
       when(mockApi.hasRejectedCredentials).thenReturn(false);
       awaitFake(async, scrobbleQueue.processQueue());
-      verify(
+      verifyInOrder([
         mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
-      ).called(1);
-      verifyNever(mockApi.scrobbleNowPlaying(any));
+        mockApi.scrobbleNowPlaying('song2', startedAt: anyNamed('startedAt')),
+      ]);
       expect(scrobbleQueue.queueSize, 0);
     });
   });
@@ -904,7 +1027,8 @@ void main() {
 
     retryTest('onSubmitted is called for a sent submission only', (async) {
       offline = false;
-      when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {});
+      when(mockApi.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
+          .thenAnswer((_) async {});
       var submitted = 0;
       queue = newQueue(onSubmitted: () => submitted++);
       awaitFake(async, queue.initialize());

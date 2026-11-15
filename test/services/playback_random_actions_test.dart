@@ -305,7 +305,8 @@ class _Run {
     );
     when(api.readReplayGain(any))
         .thenAnswer((_) async => const ReplayGainData());
-    when(api.scrobbleNowPlaying(any)).thenAnswer((_) async {});
+    when(api.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
+        .thenAnswer((_) async {});
     when(api.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
         .thenAnswer((_) async {});
 

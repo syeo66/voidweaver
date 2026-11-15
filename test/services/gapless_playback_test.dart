@@ -144,6 +144,27 @@ void main() {
       expect(player.loadedSources, [urlFor('s1')]);
     });
 
+    test(
+      'hands out the queue read-only, the same object until it changes',
+      () async {
+        cache.reachable = false;
+        when(mockApi.readReplayGain('s1'))
+            .thenAnswer((_) async => const ReplayGainData(trackGain: -3.0));
+        await service.playAlbum(album([unread('s1'), song('s2')]));
+
+        final queue = service.playlist;
+        expect(() => queue[0] = song('x'), throwsUnsupportedError);
+        expect(() => queue.add(song('x')), throwsUnsupportedError);
+        expect(identical(service.playlist, queue), isTrue);
+        // The gain read from the file is stored in the queue it shows
+        expect(queue[0].replayGainTrackGain, -3.0);
+
+        await service.playAlbum(albumOf(2));
+        expect(identical(service.playlist, queue), isFalse);
+        expect(service.playlist.map((s) => s.id), ['s1', 's2']);
+      },
+    );
+
     test('identifies each track in the cache by server and song', () async {
       cache.reachable = false;
       await service.playAlbum(albumOf(2));
@@ -511,7 +532,8 @@ void main() {
 
       verify(mockApi.scrobbleSubmission('s1', playedAt: anyNamed('playedAt')))
           .called(1);
-      verify(mockApi.scrobbleNowPlaying('s2')).called(1);
+      verify(mockApi.scrobbleNowPlaying('s2', startedAt: anyNamed('startedAt')))
+          .called(1);
     });
 
     test('pauses at the start of the last track after it ends', () async {

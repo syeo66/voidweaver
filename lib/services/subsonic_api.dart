@@ -495,15 +495,22 @@ class SubsonicApi {
   String coverArtCacheKey(String id, {int size = 300}) =>
       '$serverUrl#$id@$size';
 
-  /// Notifies the server that a song is now playing.
+  /// Notifies the server that a song is now playing, since [startedAt]
+  /// (sent as `time`, in milliseconds since the epoch, like a submission's).
   /// This updates the "now playing" status but doesn't affect play counts.
-  /// Throws on failure; use [ScrobbleQueue] rather than calling this directly.
+  /// subsoxy tells skips from it: a "now playing" followed by another song
+  /// within twice its length, measured with the `time` of both when they
+  /// have one, so one delivered late still counts as when it happened.
+  /// Navidrome ignores `time` here. Throws on failure; use [ScrobbleQueue]
+  /// rather than calling this directly.
   ///
-  /// Sent once, without retries: the queue drops a "now playing" that fails
-  /// anyway, and while retries ran, the submissions queued behind it would
-  /// wait.
-  Future<void> scrobbleNowPlaying(String songId) async {
+  /// Sent once, without the retries of other requests: the queue retries it
+  /// itself, like a submission, so retries here would only send it twice.
+  Future<void> scrobbleNowPlaying(String songId, {DateTime? startedAt}) async {
     final params = {'id': songId, 'submission': 'false'};
+    if (startedAt != null) {
+      params['time'] = startedAt.millisecondsSinceEpoch.toString();
+    }
 
     await _makeRequest('scrobble', params: params, retry: false);
     _log.fine('Now playing notification sent for song: $songId');

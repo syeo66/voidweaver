@@ -267,7 +267,9 @@ void main() {
 
       await service.play();
       await settle();
-      verify(mockApi.scrobbleNowPlaying('song1')).called(1);
+      verify(
+        mockApi.scrobbleNowPlaying('song1', startedAt: anyNamed('startedAt')),
+      ).called(1);
 
       mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 150));
       await settle();
@@ -310,7 +312,9 @@ void main() {
 
       expect(mockAudioPlayer.playing, isTrue);
       expect(service.currentPosition, const Duration(seconds: 90));
-      verify(mockApi.scrobbleNowPlaying('song1')).called(1);
+      verify(
+        mockApi.scrobbleNowPlaying('song1', startedAt: anyNamed('startedAt')),
+      ).called(1);
     });
 
     test('stays paused when not started for a media button', () async {

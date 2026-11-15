@@ -26,7 +26,7 @@ subsoxy answers `getRandomSongs` with weighted picks based on your listening his
 - Lock screen, notification and Bluetooth media controls, with background playback
 - The next 3 tracks are downloaded while you listen, so playback survives network drops; library data and cover art stay browsable offline, see [docs/CACHING.md](docs/CACHING.md)
 - Gapless playback between tracks once the next one is downloaded
-- Scrobbles are queued and retried, so play counts aren't lost while offline
+- Scrobbles and "now playing" are queued and retried with the time they happened, so play counts, and the skips subsoxy learns from, aren't lost while offline
 - Configurable scrobble threshold (minimum play time or percentage, whichever comes first)
 - Queue and playback position restored on restart
 - Sleep timer that fades out over its last 30 seconds, dark mode, landscape layouts

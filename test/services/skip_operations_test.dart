@@ -455,7 +455,9 @@ void main() {
         await scrobblesSent();
 
         // The load didn't announce the skip's target as playing
-        verifyNever(mockApi.scrobbleNowPlaying('s2'));
+        verifyNever(
+          mockApi.scrobbleNowPlaying('s2', startedAt: anyNamed('startedAt')),
+        );
         expect(service.currentSong?.id, 's2');
         expect(service.playbackState, PlaybackState.stopped);
         expect(service.startsInProgress, 0);
@@ -778,7 +780,8 @@ void main() {
     });
 
     test('a restart counts as a new play', () async {
-      when(mockApi.scrobbleNowPlaying(any)).thenAnswer((_) async {});
+      when(mockApi.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
+          .thenAnswer((_) async {});
       await service.playAlbum(album(3));
       player.simulatePositionChange(const Duration(seconds: 10));
       await settle();
@@ -786,7 +789,8 @@ void main() {
       await service.previous();
       await scrobblesSent();
 
-      verify(mockApi.scrobbleNowPlaying('s1')).called(2);
+      verify(mockApi.scrobbleNowPlaying('s1', startedAt: anyNamed('startedAt')))
+          .called(2);
     });
 
     test('goes back from the target when pressed during a skip', () async {
