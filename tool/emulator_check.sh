@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Checks the system integration of a release build in a running emulator:
 # media session, notification, media keys (the path Bluetooth/AVRCP buttons
-# use), the gapless move to the next track and playback resumption after the
-# process died. These are what unit tests can't catch, see docs/ANDROID.md.
+# use), the gapless move to the next track, playing again after Android
+# stopped the idle service, and playback resumption after the process died.
+# These are what unit tests can't catch, see docs/ANDROID.md.
 #
 # Needs a booted emulator with the app logged in (a fresh install can log in
 # with --login), or --fake-server. Plays the first album on the home screen.
@@ -328,6 +329,51 @@ else
   fail "still on '$title' after seeking to its end"
 fi
 expect_state PLAYING "after the track ended"
+
+step "Playing again after Android stopped the idle service"
+# Overnight: stopped (or paused for long), Android stops the service about a
+# minute after the app went idle in the background; the sessions stay. The
+# next play must bring the foreground service and notification back.
+service_records() {
+  "$ADB" shell dumpsys activity services "$PKG" | grep -c 'ServiceRecord' | tr -d '\r'
+}
+stale_intents() { "$ADB" logcat -d | grep -c 'stale start intent' | tr -d '\r'; }
+stale_before="$(stale_intents)"
+key KEYCODE_HOME
+sleep 1
+key KEYCODE_MEDIA_STOP
+sleep 2
+"$ADB" shell am make-uid-idle "$PKG"
+for _ in $(seq 1 60); do
+  [ "$(service_records)" = 0 ] && break
+  sleep 3
+done
+if [ "$(service_records)" = 0 ]; then
+  pass "service stopped while idle, process still running ($(app_pid))"
+  "$ADB" shell am start -W -n "$PKG/.MainActivity" >/dev/null
+  wait_ui "$HOME_SCREEN" 30 || fatal "no home screen after reopening the app" reopen
+  tap_ui 'content-desc="[^"]*&#10;[0-9]+ songs? ' || fatal "no album on the home screen" reopen
+  expect_state PLAYING "after tapping the first album"
+  key KEYCODE_HOME
+  sleep 10
+  if "$ADB" shell dumpsys activity services "$PKG" | grep -q 'isForeground=true'; then
+    pass "foreground service back"
+  else
+    fail "no foreground service while playing in the background"
+  fi
+  if "$ADB" shell dumpsys notification | grep -q "pkg=$PKG"; then
+    pass "notification back"
+  else
+    fail "no notification while playing in the background"
+  fi
+  if [ "$(stale_intents)" = "$stale_before" ]; then
+    pass "no stale start intents"
+  else
+    fail "Media3 stopped the service for a stale start intent"
+  fi
+else
+  fail "the service still runs after the app was idle for 3 minutes"
+fi
 
 step "Playback resumption after the process died"
 key KEYCODE_MEDIA_PAUSE

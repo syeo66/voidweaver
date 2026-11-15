@@ -33,6 +33,14 @@ import java.util.Set;
  * media buttons (and Bluetooth) then only reached {@code MediaButtonReceiver}, which ignores all
  * but Play while the app runs.
  *
+ * <p>Android stops the service while the app is in the background and not playing (after a stop,
+ * or once Media3 left the foreground after a pause). The sessions outlive it, and the next play
+ * starts a new instance ({@link #ensureStarted}). A dying instance removes its sessions, which
+ * Media3 doesn't do: otherwise its notification manager stays connected to them, and when playback
+ * starts again it sends its own start intents, which the new instance takes as stale and stops
+ * itself for. The app then plays without a foreground service or notification, and Android
+ * freezes it in the background.
+ *
  * <p>It's a library service so System UI can ask it for the recent track ({@link PlayerSession}).
  * Without that, System UI dropped the media controls once the app had been paused for about 10
  * minutes, instead of showing resumption controls.
@@ -99,8 +107,9 @@ public final class PlaybackService extends MediaLibraryService {
   }
 
   /**
-   * Starts the service again if it stopped, e.g. after the app was removed from the recent apps
-   * while paused. Called before playback starts.
+   * Starts the service again if it stopped: Android stops it while the app is in the background
+   * and not playing, e.g. after a stop, after Media3 left the foreground after a pause, or after
+   * the app was removed from the recent apps while paused. Called before playback starts.
    */
   static void ensureStarted(Context context) {
     if (instance == null && !sessions.isEmpty()) start(context);
@@ -210,6 +219,10 @@ public final class PlaybackService extends MediaLibraryService {
   public void onDestroy() {
     // A claimed session belongs to the app's player and outlives the service
     handOver();
+    // The sessions outlive the service, so it lets go of them, see the class doc
+    for (MediaSession session : getSessions()) {
+      removeSession(session);
+    }
     instance = null;
     super.onDestroy();
   }
