@@ -98,17 +98,30 @@ jobs:
       with:
         cache-provider: basic
 
-    # The NDK and CMake the Gradle build installs on every run (about two
-    # minutes of download and unzipping). The versions come from the app's
-    # build.gradle.kts (ndkVersion) and AGP, so the key follows those files.
-    # The runner image's SDK path, as the env context doesn't have ANDROID_HOME.
-    - name: Cache the NDK and CMake
+    # The NDK version the app's build.gradle.kts asks for (ndkVersion), which
+    # the runner image doesn't have. If an image ever ships it, its directory
+    # is root-owned and the restore fails like below: drop the caching then.
+    - name: Read the NDK version
+      id: ndk
+      run: |
+        version=$(sed -n 's/^ *ndkVersion *= *"\([^"]*\)".*/\1/p' android/app/build.gradle.kts)
+        # Empty would cache the whole ndk directory, see below
+        test -n "$version"
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+
+    # The NDK the Gradle build installs on every run otherwise (about three
+    # minutes of download and unzipping). Only its own directory: the image
+    # ships other NDK and CMake versions in root-owned directories, which tar
+    # can't restore as the runner user (it fails with exit code 2, and the
+    # cache counts as a miss), and which made the cache 2.8 GB instead of
+    # about 0.4. CMake isn't cached: AGP's default version installs in
+    # seconds. The runner image's SDK path, as the env context doesn't have
+    # ANDROID_HOME.
+    - name: Cache the NDK
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: |
-          /usr/local/lib/android/sdk/ndk
-          /usr/local/lib/android/sdk/cmake
-        key: android-ndk-cmake-${{ runner.os }}-${{ hashFiles('android/app/build.gradle.kts', 'android/settings.gradle.kts') }}
+        path: /usr/local/lib/android/sdk/ndk/${{ steps.ndk.outputs.version }}
+        key: android-ndk-${{ runner.os }}-${{ steps.ndk.outputs.version }}
 
     # Hardware acceleration for the emulator
     - name: Enable KVM
