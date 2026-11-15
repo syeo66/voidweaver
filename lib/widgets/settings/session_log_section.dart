@@ -107,16 +107,15 @@ class _SessionLogSectionState extends State<SessionLogSection> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.orange.withAlpha(25),
+                color: theme.colorScheme.tertiaryContainer,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.withAlpha(76)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.privacy_tip_outlined,
-                    color: Colors.orange,
+                    color: theme.colorScheme.onTertiaryContainer,
                     size: 20,
                   ),
                   const SizedBox(width: 8),
@@ -127,7 +126,7 @@ class _SessionLogSectionState extends State<SessionLogSection> {
                       'share it with people you trust.',
                       style: TextStyle(
                         fontSize: 12,
-                        color: theme.colorScheme.onSurface,
+                        color: theme.colorScheme.onTertiaryContainer,
                       ),
                     ),
                   ),

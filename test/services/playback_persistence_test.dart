@@ -24,8 +24,6 @@ void main() {
           playlist: songs,
           currentIndex: index,
           currentPosition: Duration(seconds: seconds),
-          isPlaying: true,
-          lastUpdated: DateTime.now(),
         );
 
     setUp(() async {
@@ -143,12 +141,7 @@ void main() {
     });
 
     test('a position saved by an earlier version is restored', () async {
-      final legacy = {
-        'currentIndex': 1,
-        'currentPositionMs': 42000,
-        'isPlaying': false,
-        'lastUpdated': 0,
-      };
+      final legacy = {'currentIndex': 1, 'currentPositionMs': 42000};
       SharedPreferences.setMockInitialValues({
         'playbackQueue': jsonEncode({
           'playlist': [for (final s in songs) s.toJson()],
@@ -181,6 +174,45 @@ void main() {
       expect(saved.currentPosition, Duration.zero);
     });
 
+    test('a position saved for another queue is ignored', () async {
+      await persistence.savePlaybackState(stateAt(1, 30));
+      // The queue was replaced, but the process ended before the new
+      // queue's first position was written
+      final prefs = await SharedPreferences.getInstance();
+      final queue =
+          jsonDecode(prefs.getString('playbackQueue')!) as Map<String, dynamic>;
+      await prefs.setString(
+        'playbackQueue',
+        jsonEncode({
+          ...queue,
+          'queueId': 'another queue',
+          'playlist': [songs[0].toJson()],
+        }),
+      );
+
+      final saved = await persistence.loadPlaybackState();
+      expect(saved!.playlist, [songs[0]]);
+      expect(saved.currentIndex, 0);
+      expect(saved.currentPosition, Duration.zero);
+    });
+
+    test('a replaced queue is saved with a position of its own', () async {
+      await persistence.savePlaybackState(stateAt(1, 30));
+      await persistence.savePlaybackState(
+        PersistedPlaybackState(
+          playlist: [songs[1]],
+          currentIndex: 0,
+          currentPosition: const Duration(seconds: 5),
+          playlistSource: 'song',
+          sourceId: 'song2',
+        ),
+      );
+
+      final saved = await persistence.loadPlaybackState();
+      expect(saved!.playlist, [songs[1]]);
+      expect(saved.currentPosition, const Duration(seconds: 5));
+    });
+
     test(
       'without storage for the position, the queue is still saved',
       () async {
@@ -206,8 +238,6 @@ void main() {
           playlist: [songs[1]],
           currentIndex: 0,
           currentPosition: Duration.zero,
-          isPlaying: true,
-          lastUpdated: DateTime.now(),
           playlistSource: 'song',
           sourceId: 'song2',
         ),
@@ -224,8 +254,6 @@ void main() {
         playlist: playlist,
         currentIndex: 0,
         currentPosition: Duration(seconds: seconds),
-        isPlaying: true,
-        lastUpdated: DateTime.now(),
       );
       await persistence.savePlaybackState(state(0));
 
@@ -240,6 +268,38 @@ void main() {
       final saved = await persistence.loadPlaybackState();
       expect(saved!.playlist[1].replayGainTrackGain, -6.5);
       expect(saved.currentPosition, const Duration(seconds: 10));
+    });
+
+    test('a song that changed keeps the id of its queue', () async {
+      final prefs = await SharedPreferences.getInstance();
+      String queueId() =>
+          (jsonDecode(prefs.getString('playbackQueue')!)
+                  as Map<String, dynamic>)['queueId']
+              as String;
+      final playlist = List.of(songs);
+      PersistedPlaybackState state() => PersistedPlaybackState(
+        playlist: playlist,
+        currentIndex: 0,
+        currentPosition: Duration.zero,
+      );
+      await persistence.savePlaybackState(state());
+      final id = queueId();
+
+      playlist[1] = playlist[1].copyWith(replayGainTrackGain: -6.5);
+      persistence.queueChanged();
+      await persistence.savePlaybackState(state());
+      // The queue was written again, with the song's change, under its id
+      expect(prefs.getString('playbackQueue'), contains('-6.5'));
+      expect(queueId(), id);
+
+      await persistence.savePlaybackState(
+        PersistedPlaybackState(
+          playlist: [songs[1]],
+          currentIndex: 0,
+          currentPosition: Duration.zero,
+        ),
+      );
+      expect(queueId(), isNot(id));
     });
 
     test('clear discards a pending position save', () async {

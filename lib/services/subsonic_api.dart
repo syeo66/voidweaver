@@ -160,14 +160,14 @@ class SubsonicApi {
   /// Without [retry], a failed request isn't sent again, see
   /// [scrobbleSubmission].
   Future<XmlDocument> _makeRequest(
-    String endpoint, [
-    Map<String, String>? extraParams,
+    String endpoint, {
+    Map<String, String>? params,
     NetworkRequestType requestType = NetworkRequestType.metadata,
     bool retry = true,
-  ]) async {
+  }) async {
     return _watchCredentials(
       () async => _parseBody(
-        await _fetchBody(endpoint, extraParams, requestType, retry: retry),
+        await _fetchBody(endpoint, params, requestType, retry: retry),
       ),
     );
   }
@@ -274,7 +274,7 @@ class SubsonicApi {
 
   /// Checks that the server is reachable and accepts the credentials.
   Future<void> ping() async {
-    await _makeRequest('ping', null, NetworkRequestType.connection);
+    await _makeRequest('ping', requestType: NetworkRequestType.connection);
   }
 
   static Object? _albumsToJson(List<Album> albums) =>
@@ -336,11 +336,7 @@ class SubsonicApi {
   Future<String?> getLibraryVersion() async {
     final XmlDocument doc;
     try {
-      doc = await _makeRequest(
-        'getScanStatus',
-        null,
-        NetworkRequestType.metadata,
-      );
+      doc = await _makeRequest('getScanStatus');
     } on SubsonicException catch (e) {
       // Not supported, or not allowed for this user
       _log.fine('getScanStatus failed', e);
@@ -388,9 +384,7 @@ class SubsonicApi {
       'getAlbum',
       {'id': id},
       () async {
-        final doc = await _makeRequest('getAlbum', {
-          'id': id,
-        }, NetworkRequestType.metadata);
+        final doc = await _makeRequest('getAlbum', params: {'id': id});
         final albumElements = doc.findAllElements('album');
         if (albumElements.isEmpty) {
           _log.fine(() => 'getAlbum response for ID $id: ${doc.toXmlString()}');
@@ -408,9 +402,10 @@ class SubsonicApi {
   /// A fresh pick of random songs on every call. Not cached: subsoxy weights
   /// each pick by the listening history, so a repeated call must reach it.
   Future<List<Song>> getRandomSongs([int count = 50]) async {
-    final doc = await _makeRequest('getRandomSongs', {
-      'size': count.toString(),
-    });
+    final doc = await _makeRequest(
+      'getRandomSongs',
+      params: {'size': count.toString()},
+    );
     return [
       for (final element in doc.findAllElements('song')) Song.fromXml(element),
     ];
@@ -510,7 +505,7 @@ class SubsonicApi {
   Future<void> scrobbleNowPlaying(String songId) async {
     final params = {'id': songId, 'submission': 'false'};
 
-    await _makeRequest('scrobble', params, NetworkRequestType.metadata, false);
+    await _makeRequest('scrobble', params: params, retry: false);
     _log.fine('Now playing notification sent for song: $songId');
   }
 
@@ -531,7 +526,7 @@ class SubsonicApi {
       params['time'] = playedAt.millisecondsSinceEpoch.toString();
     }
 
-    await _makeRequest('scrobble', params, NetworkRequestType.metadata, false);
+    await _makeRequest('scrobble', params: params, retry: false);
     _log.info('Scrobble submission sent for song: $songId');
   }
 
@@ -552,9 +547,8 @@ class SubsonicApi {
     return await _cache.getOrFetch<SearchResult>(
       'search3',
       params,
-      () async => SearchResult.fromXml(
-        await _makeRequest('search3', params, NetworkRequestType.metadata),
-      ),
+      () async =>
+          SearchResult.fromXml(await _makeRequest('search3', params: params)),
       // Only in memory: every query would add an entry that's never read
       // again
       cacheDuration: const Duration(minutes: 5),
@@ -593,8 +587,9 @@ class SubsonicApi {
     return await _cache.getOrFetch<List<Album>>(
       'getArtist',
       {'id': artistId},
-      () async =>
-          albumsFromXml(await _makeRequest('getArtist', {'id': artistId})),
+      () async => albumsFromXml(
+        await _makeRequest('getArtist', params: {'id': artistId}),
+      ),
       cacheDuration: const Duration(minutes: 10),
       usePersistentCache: true,
       toJson: _albumsToJson,

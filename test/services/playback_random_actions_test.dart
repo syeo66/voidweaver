@@ -472,8 +472,6 @@ class _Run {
         playlist: songs,
         currentIndex: index,
         currentPosition: position,
-        isPlaying: random.nextBool(),
-        lastUpdated: now,
         playlistSource: random.nextBool() ? 'album' : 'random',
         sourceId: 'r',
       ),

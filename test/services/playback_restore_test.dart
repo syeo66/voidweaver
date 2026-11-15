@@ -114,8 +114,6 @@ void main() {
         playlist: playlist ?? [song],
         currentIndex: 0,
         currentPosition: position,
-        isPlaying: true,
-        lastUpdated: DateTime.now(),
       );
       SharedPreferences.setMockInitialValues({});
       final writer = newPersistenceAt(storage);

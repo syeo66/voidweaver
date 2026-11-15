@@ -185,6 +185,46 @@ void main() {
           await checkGuidelines(tester);
         });
 
+        testWidgets('Now Playing with a sleep timer meets the guidelines', (
+          tester,
+        ) async {
+          _setOrientation(tester, orientation);
+          await pump(tester, const HomeScreen(), brightness: brightness);
+          await openNowPlaying(tester);
+          service.startSleepTimer(const Duration(minutes: 20));
+          addTearDown(service.cancelSleepTimer);
+          await tester.pump();
+          expect(find.textContaining('Sleep timer:'), findsOneWidget);
+
+          await checkGuidelines(tester);
+
+          // Its countdown timer must not outlive the test
+          service.cancelSleepTimer();
+          await tester.pumpAndSettle();
+        });
+
+        testWidgets('the sleep timer dialog meets the guidelines', (
+          tester,
+        ) async {
+          _setOrientation(tester, orientation);
+          await pump(tester, const HomeScreen(), brightness: brightness);
+
+          await tester.tap(find.byTooltip('Sleep timer'));
+          await tester.pumpAndSettle();
+          expect(find.text('Sleep Timer'), findsOneWidget);
+          await checkGuidelines(tester);
+
+          // Once a timer runs, the dialog shows it instead of the presets
+          service.startSleepTimer(const Duration(minutes: 20));
+          addTearDown(service.cancelSleepTimer);
+          await tester.pump(const Duration(seconds: 1));
+          expect(find.text('Time remaining:'), findsOneWidget);
+          await checkGuidelines(tester);
+
+          service.cancelSleepTimer();
+          await tester.pumpWidget(const SizedBox());
+        });
+
         // The list builds only what's in view, so each section is scrolled to
         testWidgets('every section of Settings meets the guidelines', (
           tester,

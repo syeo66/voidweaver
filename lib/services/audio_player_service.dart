@@ -381,8 +381,6 @@ class AudioPlayerService extends ChangeNotifier {
     playlist: _playlist,
     currentIndex: _currentIndex,
     currentPosition: _currentPosition,
-    isPlaying: _playbackState == PlaybackState.playing,
-    lastUpdated: _clock(),
     playlistSource: _playlistSource?.name,
     sourceId: _sourceId,
   );

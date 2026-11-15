@@ -231,20 +231,20 @@ class _SleepTimerIndicator extends StatelessWidget {
           return const SizedBox.shrink();
         }
 
+        final colors = Theme.of(context).colorScheme;
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
           decoration: BoxDecoration(
-            color: Colors.orange.withValues(alpha: 0.1),
+            color: colors.tertiaryContainer,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
           ),
-          child: const Row(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.bedtime, size: 16, color: Colors.orange),
-              SizedBox(width: 8),
-              _SleepTimerCountdown(),
+              Icon(Icons.bedtime, size: 16, color: colors.onTertiaryContainer),
+              const SizedBox(width: 8),
+              const _SleepTimerCountdown(),
             ],
           ),
         );
@@ -283,9 +283,9 @@ class _SleepTimerCountdownState extends State<_SleepTimerCountdown> {
     final remaining = context.read<AudioPlayerService>().sleepTimerRemaining;
     return Text(
       'Sleep timer: ${remaining != null ? formatClock(remaining) : "0:00"}',
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 12,
-        color: Colors.orange,
+        color: Theme.of(context).colorScheme.onTertiaryContainer,
         fontWeight: FontWeight.w500,
       ),
     );

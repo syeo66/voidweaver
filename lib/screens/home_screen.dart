@@ -120,7 +120,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 builder: (context, child) {
                   return IconButton(
                     icon: appState.audioPlayerService!.isSleepTimerActive
-                        ? const Icon(Icons.bedtime, color: Colors.orange)
+                        ? Icon(
+                            Icons.bedtime,
+                            color: Theme.of(context).colorScheme.tertiary,
+                          )
                         : const Icon(Icons.bedtime_outlined),
                     tooltip: 'Sleep timer',
                     onPressed: () => unawaited(

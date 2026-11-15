@@ -60,42 +60,15 @@ class SleepTimerDialogState2 extends State<SleepTimerDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Sleep Timer'),
+      // The running timer's content is taller than a phone in landscape
+      scrollable: true,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (widget.playerService.isSleepTimerActive) ...[
             const Text('Timer Active'),
             const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-              ),
-              child: Column(
-                children: [
-                  const Icon(Icons.bedtime, color: Colors.orange, size: 32),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Time remaining:',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  Text(
-                    formatClock(
-                      widget.playerService.sleepTimerRemaining ?? Duration.zero,
-                    ),
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.orange,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _ActiveTimer(playerService: widget.playerService),
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -144,6 +117,44 @@ class SleepTimerDialogState2 extends State<SleepTimerDialog> {
           child: const Text('Close'),
         ),
       ],
+    );
+  }
+}
+
+/// The running timer's remaining time. Colors come from the theme, so the
+/// text keeps its contrast in both of them.
+class _ActiveTimer extends StatelessWidget {
+  final AudioPlayerService playerService;
+
+  const _ActiveTimer({required this.playerService});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.tertiaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.bedtime, color: colors.onTertiaryContainer, size: 32),
+          const SizedBox(height: 8),
+          Text(
+            'Time remaining:',
+            style: TextStyle(color: colors.onTertiaryContainer),
+          ),
+          Text(
+            formatClock(playerService.sleepTimerRemaining ?? Duration.zero),
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: colors.onTertiaryContainer,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

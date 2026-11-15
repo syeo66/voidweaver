@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
@@ -15,8 +16,6 @@ class PersistedPlaybackState {
   final List<Song> playlist;
   final int currentIndex;
   final Duration currentPosition;
-  final bool isPlaying;
-  final DateTime lastUpdated;
   final String? playlistSource;
   final String? sourceId;
 
@@ -24,8 +23,6 @@ class PersistedPlaybackState {
     required this.playlist,
     required this.currentIndex,
     required this.currentPosition,
-    required this.isPlaying,
-    required this.lastUpdated,
     this.playlistSource,
     this.sourceId,
   });
@@ -41,10 +38,6 @@ class PersistedPlaybackState {
         currentIndex: json['currentIndex'] as int? ?? 0,
         currentPosition: Duration(
           milliseconds: json['currentPositionMs'] as int? ?? 0,
-        ),
-        isPlaying: json['isPlaying'] as bool? ?? false,
-        lastUpdated: DateTime.fromMillisecondsSinceEpoch(
-          json['lastUpdated'] as int? ?? DateTime.now().millisecondsSinceEpoch,
         ),
         playlistSource: json['playlistSource'] as String?,
         sourceId: json['sourceId'] as String?,
@@ -68,8 +61,15 @@ class PersistedPlaybackState {
 /// small file of its own (`playback_position.json`, written to a temporary
 /// name and renamed): SharedPreferences on Android rewrites its whole file,
 /// with the queue, the pending scrobbles and the settings, on every change.
+///
+/// The two are written one after the other, so a failed or interrupted write
+/// can leave a position that belongs to another queue. Each new queue gets an
+/// id, saved with the queue and with every position written for it; a
+/// position whose id isn't the queue's is ignored when loading.
 class PlaybackPersistenceService {
   static const String _queueKey = 'playbackQueue';
+  // In the queue's JSON and in the position's: which queue the position is for
+  static const String _queueIdKey = 'queueId';
   // Where the position was kept before it had a file; read when there is no
   // file yet, and removed with the next position write
   static const String _legacyPositionKey = 'playbackPosition';
@@ -93,6 +93,12 @@ class PlaybackPersistenceService {
   List<Song>? _savedPlaylist;
   String? _savedPlaylistSource;
   String? _savedSourceId;
+  bool _queueChanged = false;
+
+  // The id of the queue the positions are written for. It changes before a
+  // new queue is written, whether or not that write works, so a position
+  // never matches a queue that wasn't saved.
+  String? _queueId;
 
   /// [directory] holds the position file; by default the app's private
   /// storage.
@@ -132,13 +138,22 @@ class PlaybackPersistenceService {
       return;
     }
 
+    // The id of the queue this save is for, taken before anything is awaited:
+    // a save for a newer queue can change [_queueId] while this one writes,
+    // and its position must not be stamped with that id
+    var queueId = _queueId;
     try {
-      if (!identical(state.playlist, _savedPlaylist) ||
+      final isNewQueue =
+          !identical(state.playlist, _savedPlaylist) ||
           state.playlistSource != _savedPlaylistSource ||
-          state.sourceId != _savedSourceId) {
+          state.sourceId != _savedSourceId;
+      if (isNewQueue || _queueChanged) {
+        // A song that changed in the same queue keeps the queue's id
+        if (isNewQueue) queueId = _queueId = _newQueueId();
         await _prefs!.setString(
           _queueKey,
           jsonEncode({
+            _queueIdKey: queueId,
             'playlist': state.playlist.map((s) => s.toJson()).toList(),
             'playlistSource': state.playlistSource,
             'sourceId': state.sourceId,
@@ -147,20 +162,20 @@ class PlaybackPersistenceService {
         _savedPlaylist = state.playlist;
         _savedPlaylistSource = state.playlistSource;
         _savedSourceId = state.sourceId;
+        _queueChanged = false;
         _log.fine('Saved playback queue: ${state.playlist.length} songs');
       }
     } catch (e) {
       _log.warning('Failed to save the playback queue', e);
     }
-    await _writePosition(state);
+    await _writePosition(state, queueId);
   }
 
-  Future<void> _writePosition(PersistedPlaybackState state) {
+  Future<void> _writePosition(PersistedPlaybackState state, String? queueId) {
     final json = jsonEncode({
+      _queueIdKey: queueId,
       'currentIndex': state.currentIndex,
       'currentPositionMs': state.currentPosition.inMilliseconds,
-      'isPlaying': state.isPlaying,
-      'lastUpdated': state.lastUpdated.millisecondsSinceEpoch,
     });
     return _inFileOrder(() async {
       final file = await _positionFile();
@@ -180,6 +195,8 @@ class PlaybackPersistenceService {
       }
     });
   }
+
+  static String _newQueueId() => Random().nextInt(1 << 32).toRadixString(36);
 
   Future<void> _inFileOrder(Future<void> Function() operation) {
     final result = _fileOps.then((_) => operation());
@@ -201,10 +218,20 @@ class PlaybackPersistenceService {
       }
       // Without a readable position the queue still comes back, from its
       // first song
-      final position = await _readPosition() ?? <String, dynamic>{};
+      final queueJson = jsonDecode(queue) as Map<String, dynamic>;
+      var position = await _readPosition() ?? <String, dynamic>{};
+      // Saved by an earlier version, neither has an id
+      if (position.isNotEmpty &&
+          position[_queueIdKey] != queueJson[_queueIdKey]) {
+        _log.warning(
+          'The saved position belongs to another queue, restoring the queue '
+          'from its first song',
+        );
+        position = <String, dynamic>{};
+      }
 
       final state = PersistedPlaybackState.fromJson({
-        ...jsonDecode(queue) as Map<String, dynamic>,
+        ...queueJson,
         ...position,
       });
 
@@ -248,7 +275,7 @@ class PlaybackPersistenceService {
   /// read from its file), so the next save writes the queue again rather
   /// than only the position.
   void queueChanged() {
-    _savedPlaylist = null;
+    _queueChanged = true;
   }
 
   /// Saves [state] at most once per interval. Called on every position
@@ -274,6 +301,8 @@ class PlaybackPersistenceService {
   Future<void> clearPlaybackState() async {
     _cancelPendingPositionSave();
     _savedPlaylist = null;
+    _queueChanged = false;
+    _queueId = null;
     final prefs = _prefs;
     if (prefs != null) {
       try {
