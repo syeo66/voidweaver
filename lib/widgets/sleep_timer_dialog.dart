@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
+import 'package:provider/provider.dart';
 
+import '../services/app_state.dart';
 import '../services/audio_player_service.dart';
 import '../utils/format.dart';
 
@@ -14,6 +16,30 @@ Future<void> showSleepTimerDialog(
   builder: (context) => SleepTimerDialog(playerService: playerService),
 );
 
+/// The app bar's button for the sleep timer, highlighted while one runs.
+/// Nothing while there is no player (not logged in).
+class SleepTimerButton extends StatelessWidget {
+  const SleepTimerButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final player = context.select<AppState, AudioPlayerService?>(
+      (appState) => appState.isConfigured ? appState.audioPlayerService : null,
+    );
+    if (player == null) return const SizedBox.shrink();
+    return ListenableBuilder(
+      listenable: player,
+      builder: (context, child) => IconButton(
+        icon: player.isSleepTimerActive
+            ? Icon(Icons.bedtime, color: Theme.of(context).colorScheme.tertiary)
+            : const Icon(Icons.bedtime_outlined),
+        tooltip: 'Sleep timer',
+        onPressed: () => unawaited(showSleepTimerDialog(context, player)),
+      ),
+    );
+  }
+}
+
 /// Starts a sleep timer from presets, or shows the running one's remaining
 /// time with buttons to extend or cancel it.
 class SleepTimerDialog extends StatefulWidget {
@@ -22,10 +48,10 @@ class SleepTimerDialog extends StatefulWidget {
   const SleepTimerDialog({super.key, required this.playerService});
 
   @override
-  State<SleepTimerDialog> createState() => SleepTimerDialogState2();
+  State<SleepTimerDialog> createState() => _SleepTimerDialogState();
 }
 
-class SleepTimerDialogState2 extends State<SleepTimerDialog> {
+class _SleepTimerDialogState extends State<SleepTimerDialog> {
   static const List<Duration> _presetDurations = [
     Duration(minutes: 5),
     Duration(minutes: 10),

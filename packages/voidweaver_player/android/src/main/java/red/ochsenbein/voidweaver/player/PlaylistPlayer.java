@@ -54,6 +54,7 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
   private final MethodChannel methodChannel;
   private final EventChannel eventChannel;
   private final GainAudioProcessor gainProcessor = new GainAudioProcessor();
+  private final TrackBufferLoadControl loadControl = new TrackBufferLoadControl();
   private final ArtworkLoader artwork;
   private final ExoPlayer player;
   private final SessionPlayer sessionPlayer;
@@ -91,6 +92,8 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
                 new DefaultMediaSourceFactory(
                         MediaCache.dataSourceFactory(context), extractorsFactory)
                     .setLoadErrorHandlingPolicy(new LoadErrorPolicy()))
+            // The playing track buffers far ahead, so a stream survives a longer network drop
+            .setLoadControl(loadControl)
             // ExoPlayer requests audio focus, pauses for interruptions and resumes after
             // transient ones. Nothing else in the app may request focus.
             .setAudioAttributes(
@@ -308,6 +311,7 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
       // For the system's resumption controls, see RecentItem
       if (item != null) RecentItem.save(context, item);
     }
+    loadControl.setPlayingIndex(player.getCurrentMediaItemIndex());
     int state = player.getPlaybackState();
     if (pendingLoad != null && (state == Player.STATE_READY || state == Player.STATE_ENDED)) {
       pendingLoad.success(snapshot());

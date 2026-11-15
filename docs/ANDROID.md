@@ -25,7 +25,7 @@ $ADB shell am start -n red.ochsenbein.voidweaver/.MainActivity      # `monkey` f
 - tap the Server URL field at (540, 1186) in device pixels (1080x2400);
 - type with `adb shell input text '...'`;
 - move to the next field with `input keyevent 61` (Tab), not taps, because the keyboard shifts the layout;
-- after the password, `input keyevent 66` (Enter) closes the keyboard; then tap Connect at (540, 1817).
+- after the password, `input keyevent 66` (Enter) submits the form, like the Connect button.
 
 Don't send Back (`keyevent 4`) when the keyboard is already hidden, because that closes the app. `adb shell pm clear red.ochsenbein.voidweaver` resets to the login screen.
 

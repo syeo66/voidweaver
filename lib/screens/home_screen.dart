@@ -10,13 +10,13 @@ import '../widgets/playback_error_listener.dart';
 import '../widgets/album_list.dart';
 import '../widgets/now_playing_view.dart';
 import '../widgets/player_controls.dart';
+import '../widgets/random_songs_button.dart';
 import '../widgets/sleep_timer_dialog.dart';
 import '../widgets/sync_status_indicator.dart';
 import '../widgets/error_boundary.dart';
 import 'settings_screen.dart';
 import 'search_screen.dart';
 import 'artist_screen.dart';
-import '../services/network_errors.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -29,7 +29,6 @@ class _HomeScreenState extends State<HomeScreen> {
   static const int _nowPlayingTabIndex = 2;
 
   int _currentIndex = 0;
-  bool _isPlayingRandomSongs = false;
 
   // Incremented whenever the 'Now Playing' tab is tapped so the playlist
   // scrolls to the current track, even if the tab is already selected.
@@ -68,75 +67,8 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
           ),
-          IconButton(
-            icon: _isPlayingRandomSongs
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.shuffle),
-            tooltip: 'Play random songs',
-            onPressed: _isPlayingRandomSongs
-                ? null
-                : () async {
-                    setState(() => _isPlayingRandomSongs = true);
-
-                    final appState = context.read<AppState>();
-                    final messenger = ScaffoldMessenger.of(context);
-                    final errorColor = Theme.of(context).colorScheme.error;
-
-                    try {
-                      await appState.audioPlayerService?.playRandomSongs();
-                    } catch (e) {
-                      if (mounted) {
-                        messenger.showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              NetworkErrorHelper.getErrorMessage(
-                                e,
-                                context: 'Failed to play random songs',
-                              ),
-                            ),
-                            backgroundColor: errorColor,
-                          ),
-                        );
-                      }
-                    } finally {
-                      if (mounted) {
-                        setState(() => _isPlayingRandomSongs = false);
-                      }
-                    }
-                  },
-          ),
-          Consumer<AppState>(
-            builder: (context, appState, child) {
-              if (appState.audioPlayerService == null ||
-                  !appState.isConfigured) {
-                return const SizedBox(width: 0, height: 0);
-              }
-              return ListenableBuilder(
-                listenable: appState.audioPlayerService!,
-                builder: (context, child) {
-                  return IconButton(
-                    icon: appState.audioPlayerService!.isSleepTimerActive
-                        ? Icon(
-                            Icons.bedtime,
-                            color: Theme.of(context).colorScheme.tertiary,
-                          )
-                        : const Icon(Icons.bedtime_outlined),
-                    tooltip: 'Sleep timer',
-                    onPressed: () => unawaited(
-                      showSleepTimerDialog(
-                        context,
-                        appState.audioPlayerService!,
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
+          const RandomSongsButton(),
+          const SleepTimerButton(),
           PopupMenuButton(
             icon: const Icon(Icons.more_vert),
             onSelected: (value) {

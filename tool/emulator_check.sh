@@ -266,10 +266,9 @@ if $login; then
   type_text "$VOIDWEAVER_USER"
   key 61
   type_text "$VOIDWEAVER_PASSWORD"
+  # Enter in the password field submits the form, like the Connect button
   key 66
-  sleep 1
-  tap_ui 'content-desc="Connect"' || fatal "no Connect button" login
-  wait_ui "$HOME_SCREEN" 60 || fatal "no home screen 60s after Connect" login
+  wait_ui "$HOME_SCREEN" 60 || fatal "no home screen 60s after submitting the login" login
   pass "logged in"
 fi
 
