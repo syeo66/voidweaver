@@ -227,6 +227,12 @@ class MockSubsonicApi extends _i1.Mock implements _i7.SubsonicApi {
   ) as bool);
 
   @override
+  bool checkRefusal(String? body) => (super.noSuchMethod(
+    Invocation.method(#checkRefusal, [body]),
+    returnValue: false,
+  ) as bool);
+
+  @override
   String getCoverArtUrl(String? id, {int? size = 300}) => (super.noSuchMethod(
     Invocation.method(#getCoverArtUrl, [id], {#size: size}),
     returnValue: _i8.dummyValue<String>(

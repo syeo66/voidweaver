@@ -22,29 +22,42 @@ public final class ArtworkLoaderTest {
       Uri.parse("https://music.example/rest/getCoverArt?id=al-1&u=me&t=token&s=salt");
 
   private final List<Uri> loaded = new ArrayList<>();
+  // The real URLs loaded through the media cache, and the keys they were loaded under
+  private final List<Uri> loadedCached = new ArrayList<>();
+  private final List<String> cacheKeys = new ArrayList<>();
+
+  /** Records the URIs it loads in [into]. */
+  private static BitmapLoader recording(List<Uri> into) {
+    return new BitmapLoader() {
+      @Override
+      public boolean supportsMimeType(String mimeType) {
+        return true;
+      }
+
+      @Override
+      public ListenableFuture<Bitmap> decodeBitmap(byte[] data) {
+        return Futures.immediateFuture(null);
+      }
+
+      @Override
+      public ListenableFuture<Bitmap> loadBitmap(Uri uri) {
+        into.add(uri);
+        return Futures.immediateFuture(null);
+      }
+    };
+  }
+
   private final ArtworkLoader loader =
       new ArtworkLoader(
-          new BitmapLoader() {
-            @Override
-            public boolean supportsMimeType(String mimeType) {
-              return true;
-            }
-
-            @Override
-            public ListenableFuture<Bitmap> decodeBitmap(byte[] data) {
-              return Futures.immediateFuture(null);
-            }
-
-            @Override
-            public ListenableFuture<Bitmap> loadBitmap(Uri uri) {
-              loaded.add(uri);
-              return Futures.immediateFuture(null);
-            }
+          recording(loaded),
+          key -> {
+            cacheKeys.add(key);
+            return recording(loadedCached);
           });
 
   @Test
   public void givesTheSessionUrisWithoutCredentials() {
-    Uri uri = loader.register("7", ART);
+    Uri uri = loader.register("7", ART, null);
 
     assertEquals("voidweaver-art://7", uri.toString());
     assertFalse(uri.toString().contains("token"));
@@ -52,14 +65,32 @@ public final class ArtworkLoaderTest {
 
   @Test
   public void loadsTheRealUrl() throws Exception {
-    loader.loadBitmap(loader.register("7", ART)).get();
+    loader.loadBitmap(loader.register("7", ART, null)).get();
 
     assertEquals(List.of(ART), loaded);
   }
 
   @Test
+  public void loadsArtworkWithACacheKeyThroughTheCacheUnderThatKey() throws Exception {
+    loader.loadBitmap(loader.register("7", ART, "server|art|al-1@300")).get();
+
+    assertEquals(List.of(ART), loadedCached);
+    assertEquals(List.of("server|art|al-1@300"), cacheKeys);
+    assertTrue(loaded.isEmpty());
+  }
+
+  @Test
+  public void passesOtherUrisOn() throws Exception {
+    Uri content = Uri.parse("content://media/art/1");
+
+    loader.loadBitmap(content).get();
+
+    assertEquals(List.of(content), loaded);
+  }
+
+  @Test
   public void failsForArtworkOfAReplacedPlaylist() {
-    Uri uri = loader.register("7", ART);
+    Uri uri = loader.register("7", ART, null);
     loader.clear();
 
     ListenableFuture<Bitmap> result = loader.loadBitmap(uri);
@@ -72,5 +103,6 @@ public final class ArtworkLoaderTest {
       // Expected
     }
     assertTrue(loaded.isEmpty());
+    assertTrue(loadedCached.isEmpty());
   }
 }

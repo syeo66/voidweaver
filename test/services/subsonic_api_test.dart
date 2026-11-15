@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voidweaver/services/network_config.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 
+import '../test_helpers/fake_subsonic_server.dart';
+
 void main() {
   // Initialize Flutter test binding
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +33,42 @@ void main() {
       addTearDown(api.dispose);
 
       expect(api.userAgent, 'voidweaver');
+    });
+
+    group('against the fake server', () {
+      late FakeSubsonicServer server;
+      late HttpOverrides? previousOverrides;
+
+      setUp(() async {
+        previousOverrides = HttpOverrides.current;
+        HttpOverrides.global = FakeSubsonicServer.httpOverrides;
+        server = FakeSubsonicServer();
+        await server.start();
+      });
+
+      tearDown(() async {
+        await server.close();
+        HttpOverrides.global = previousOverrides;
+      });
+
+      test('is sent with API requests and ReplayGain reads', () async {
+        final api = SubsonicApi(
+          serverUrl: server.url,
+          username: 'alice',
+          password: 'secret',
+          appVersion: '1.3.0',
+        );
+        addTearDown(api.dispose);
+
+        await api.ping();
+        await api.readReplayGain('s-1');
+
+        expect(server.requests.map((r) => r.endpoint), contains('download'));
+        expect(
+          server.requests.map((r) => r.userAgent),
+          everyElement('voidweaver/1.3.0'),
+        );
+      });
     });
   });
 
@@ -507,6 +545,8 @@ class _ThrowingHttpClient implements HttpClient {
   Duration? connectionTimeout;
   @override
   int? maxConnectionsPerHost;
+  @override
+  String? userAgent;
 
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) {

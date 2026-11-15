@@ -39,7 +39,10 @@ class FakeRequest {
   final String endpoint;
   final Map<String, String> params;
 
-  const FakeRequest(this.endpoint, this.params);
+  /// Its `User-Agent` header
+  final String? userAgent;
+
+  const FakeRequest(this.endpoint, this.params, {this.userAgent});
 
   @override
   String toString() => '$endpoint $params';
@@ -176,7 +179,13 @@ class FakeSubsonicServer {
         endpoint = endpoint.substring(0, endpoint.length - 5);
       }
       final params = request.uri.queryParameters;
-      requests.add(FakeRequest(endpoint, params));
+      requests.add(
+        FakeRequest(
+          endpoint,
+          params,
+          userAgent: request.headers.value(HttpHeaders.userAgentHeader),
+        ),
+      );
 
       if (!_authenticated(params)) {
         return _xmlError(response, 40, 'Wrong username or password');

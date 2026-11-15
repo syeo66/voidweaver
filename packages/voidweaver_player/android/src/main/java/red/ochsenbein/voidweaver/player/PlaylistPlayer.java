@@ -189,7 +189,10 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
             .setArtist((String) source.get("artist"))
             .setAlbumTitle((String) source.get("album"));
     String artUri = (String) source.get("artUri");
-    if (artUri != null) metadata.setArtworkUri(artwork.register(id, Uri.parse(artUri)));
+    if (artUri != null) {
+      metadata.setArtworkUri(
+          artwork.register(id, Uri.parse(artUri), (String) source.get("artCacheKey")));
+    }
     return new MediaItem.Builder()
         .setMediaId(id)
         .setUri(Uri.parse((String) source.get("uri")))

@@ -81,6 +81,10 @@ public class VoidweaverPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
             ((Number) call.argument("read")).intValue());
         result.success(null);
         break;
+      case "network.setUserAgent":
+        MediaCache.setUserAgent(call.argument("userAgent"));
+        result.success(null);
+        break;
       case "cache.prefetch":
         {
           // Registered here, so a cancel reaches it while it waits for the download before it

@@ -7,7 +7,6 @@ import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.Player;
-import androidx.media3.datasource.DataSourceBitmapLoader;
 import androidx.media3.session.CacheBitmapLoader;
 import androidx.media3.session.LibraryResult;
 import androidx.media3.session.MediaLibraryService.LibraryParams;
@@ -38,7 +37,7 @@ final class PlayerSession {
   }
 
   static PlayerSession create(Context context, String id, Player player) {
-    ArtworkLoader artwork = new ArtworkLoader(new DataSourceBitmapLoader.Builder(context).build());
+    ArtworkLoader artwork = ArtworkLoader.create(context);
     MediaLibrarySession.Builder builder =
         new MediaLibrarySession.Builder(context, player, new Callback(context))
             .setId(id)

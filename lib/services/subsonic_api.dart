@@ -101,7 +101,10 @@ class SubsonicApi {
   void _initializeHttpClient() {
     _innerClient = HttpClient()
       ..connectionTimeout = _networkConfig.connectionTimeout
-      ..maxConnectionsPerHost = 8;
+      ..maxConnectionsPerHost = 8
+      // Also for the requests that don't go through _fetchBody (ReplayGain
+      // reads)
+      ..userAgent = userAgent;
     _httpClient = IOClient(_innerClient);
 
     _retryService = NetworkRetryService(
@@ -113,7 +116,8 @@ class SubsonicApi {
   String get password => _password;
 
   /// The `User-Agent` of the requests: `voidweaver/1.3.0`, or `voidweaver`
-  /// without a known version
+  /// without a known version. The player's streams and downloads, the media
+  /// session's artwork and the cover art send it too.
   String get userAgent =>
       appVersion == null ? clientName : '$clientName/$appVersion';
 
@@ -458,18 +462,25 @@ class SubsonicApi {
   /// any other error (e.g. downloads disabled), and for a body that can't be
   /// parsed (JSON, a proxy's page).
   @visibleForTesting
-  bool tryOtherUrlAfterRefusal(String body) {
+  bool tryOtherUrlAfterRefusal(String body) => !checkRefusal(body);
+
+  /// Whether [body], a document the server answered with instead of a file
+  /// (ReplayGain tags, cover art), refuses the credentials. Sets
+  /// [credentialsRejected] then, so nothing else is sent on its own. False
+  /// for any other error, and for a body that can't be parsed (JSON, a
+  /// proxy's page).
+  bool checkRefusal(String body) {
     try {
       parseResponse(body);
     } on SubsonicException catch (e) {
       if (e.isAuthError) {
         _setCredentialsRejected(true);
-        return false;
+        return true;
       }
     } on Exception catch (e) {
-      _log.fine('Unreadable refusal of a ReplayGain read', e);
+      _log.fine('Unreadable refusal', e);
     }
-    return true;
+    return false;
   }
 
   /// URL of the cover art [id], scaled by the server to [size] pixels

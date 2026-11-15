@@ -296,4 +296,101 @@ void main() {
       expect(cache.cancelled, isEmpty);
     });
   });
+
+  group('cover art', () {
+    setUp(() {
+      when(api.getCoverArtUrl(any, size: anyNamed('size'))).thenAnswer(
+        (invocation) =>
+            'https://music.test/getCoverArt?id=${invocation.positionalArguments.first}'
+            '&size=${invocation.namedArguments[#size]}',
+      );
+    });
+
+    List<Song> withArt(List<Song> songs) => [
+      for (final (i, s) in songs.indexed)
+        s.copyWith(coverArt: i < 2 ? 'al-1' : 'al-2'),
+    ];
+
+    test(
+      'is downloaded with each track, at the size the session shows',
+      () async {
+        await downloads.start(withArt(songs(10)), 1, isCurrent: always);
+
+        expect(cache.downloaded, ['s1', 's2', 's3']);
+        expect(cache.artDownloaded, ['al-1', 'al-2', 'al-2']);
+        verify(api.getCoverArtUrl('al-1', size: 300));
+      },
+    );
+
+    test('isn\'t downloaded for a track that failed', () async {
+      cache.failing.add('s1');
+      await downloads.start(withArt(songs(2)), 1, isCurrent: always);
+
+      expect(cache.artDownloaded, isEmpty);
+    });
+
+    test('a download in progress is cancelled when the downloads start '
+        'again', () async {
+      cache.artGate = Completer<void>();
+      final first = downloads.start(withArt(songs(5)), 1, isCurrent: always);
+      await pumpUntil(() => cache.isArtWaiting('al-1'), reason: 'al-1');
+      // Another queue started
+      final second = downloads.start(
+        [song('x1').copyWith(coverArt: 'al-9')],
+        0,
+        isCurrent: always,
+      );
+      expect(cache.artCancelled, ['al-1']);
+      cache.artGate!.complete();
+      await Future.wait([first, second]);
+
+      // The first run stopped; the second got its cover
+      expect(cache.downloaded, ['s1', 'x1']);
+      expect(cache.artDownloaded, ['al-9']);
+    });
+
+    test('a download in progress is cancelled by cancel', () async {
+      cache.artGate = Completer<void>();
+      final run = downloads.start(withArt(songs(5)), 1, isCurrent: always);
+      await pumpUntil(() => cache.isArtWaiting('al-1'), reason: 'al-1');
+      downloads.cancel();
+      cache.artGate!.complete();
+      await run;
+
+      expect(cache.artCancelled, ['al-1']);
+      expect(cache.downloaded, ['s1']);
+      expect(cache.artDownloaded, isEmpty);
+    });
+
+    test('isn\'t downloaded once the run is superseded', () async {
+      var wanted = true;
+      // The track's download finishes after its playlist was replaced
+      cache.gate = Completer<void>();
+      final run = downloads.start(
+        withArt(songs(3)),
+        1,
+        isCurrent: () => wanted,
+      );
+      await pumpUntil(() => cache.isWaiting('s1'), reason: 's1 waiting');
+      wanted = false;
+      cache.gate!.complete();
+      await run;
+
+      expect(cache.downloaded, ['s1']);
+      expect(cache.artDownloaded, isEmpty);
+    });
+
+    test('isn\'t downloaded while the credentials are rejected', () async {
+      final playlist = withArt(songs(3));
+      cache.gate = Completer<void>();
+      final run = downloads.start(playlist, 1, isCurrent: always);
+      await pumpUntil(() => cache.isWaiting('s1'), reason: 's1 waiting');
+      when(api.hasRejectedCredentials).thenReturn(true);
+      cache.gate!.complete();
+      await run;
+
+      expect(cache.downloaded, ['s1']);
+      expect(cache.artDownloaded, isEmpty);
+    });
+  });
 }

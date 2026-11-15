@@ -9,10 +9,14 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart'
         FileSystem,
         FileServiceResponse,
         NonStoringObjectProvider;
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:voidweaver/services/image_cache_manager.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
+
+import '../test_helpers/fake_subsonic_server.dart';
 
 /// Never has a file and fails every download, so no platform plugin is needed
 class _OfflineFileService extends FileService {
@@ -37,6 +41,8 @@ CacheManager _offlineManager() => CacheManager(
 );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   tearDown(() => ImageCacheManager.cacheManager = null);
 
   group('ImageCacheManager.coverArtSizeFor', () {
@@ -150,6 +156,149 @@ void main() {
 
       expect(Uri.parse(image.imageUrl).queryParameters['size'], '600');
       expect(image.cacheKey, api.coverArtCacheKey('al-1', size: 600));
+    });
+  });
+
+  group('CoverArtFileService', () {
+    late FakeSubsonicServer server;
+    late HttpOverrides? previousOverrides;
+
+    setUp(() async {
+      // After the test binding, which installs overrides that fail every
+      // request
+      previousOverrides = HttpOverrides.current;
+      HttpOverrides.global = FakeSubsonicServer.httpOverrides;
+      server = FakeSubsonicServer();
+      await server.start();
+    });
+
+    tearDown(() async {
+      await server.close();
+      HttpOverrides.global = previousOverrides;
+    });
+
+    SubsonicApi login({String password = 'secret'}) {
+      final api = SubsonicApi(
+        serverUrl: server.url,
+        username: 'alice',
+        password: password,
+        appVersion: '1.3.0',
+      );
+      addTearDown(api.dispose);
+      return api;
+    }
+
+    String rejection() =>
+        '<subsonic-response status="failed">'
+        '<error code="40" message="Wrong username or password"/>'
+        '</subsonic-response>';
+
+    test('fetches a cover with the API\'s user agent', () async {
+      final api = login();
+      final response = await CoverArtFileService(() => api)
+          .get(api.getCoverArtUrl('al-1'));
+      await response.content.drain<void>();
+
+      expect(response.statusCode, 200);
+      expect(response.fileExtension, '.png');
+      expect(
+        server.requestsTo('getCoverArt').single.userAgent,
+        'voidweaver/1.3.0',
+      );
+    });
+
+    test('a cover refused for the credentials is an error, and rejects '
+        'them', () async {
+      // The server answers with HTTP 200 and XML, as Navidrome does
+      final api = login(password: 'old');
+
+      await expectLater(
+        CoverArtFileService(() => api).get(api.getCoverArtUrl('al-1')),
+        throwsA(isA<HttpException>()),
+      );
+      expect(api.credentialsRejected.value, isTrue);
+    });
+
+    test('fetches nothing while the credentials are rejected', () async {
+      final api = login();
+      api.checkRefusal(rejection());
+
+      await expectLater(
+        CoverArtFileService(() => api).get(api.getCoverArtUrl('al-1')),
+        throwsA(isA<HttpException>()),
+      );
+      expect(server.requestsTo('getCoverArt'), isEmpty);
+    });
+
+    test(
+      'another document is an error, leaving the credentials alone',
+      () async {
+        final api = login();
+        final service = CoverArtFileService(
+          () => api,
+          httpClient: MockClient(
+            (request) async => http.Response(
+              '<html>Maintenance</html>',
+              200,
+              headers: {'content-type': 'text/html'},
+            ),
+          ),
+        );
+
+        await expectLater(
+          service.get(api.getCoverArtUrl('al-1')),
+          throwsA(isA<HttpException>()),
+        );
+        expect(api.credentialsRejected.value, isFalse);
+      },
+    );
+
+    test('the cache manager stores no file for a refused cover', () async {
+      final api = login();
+      final manager = CacheManager(
+        Config(
+          'test',
+          repo: NonStoringObjectProvider(),
+          // Throws if the manager tried to store a file
+          fileSystem: _NoFileSystem(),
+          fileService: CoverArtFileService(
+            () => api,
+            httpClient: MockClient(
+              (request) async => http.Response(
+                rejection(),
+                200,
+                headers: {'content-type': 'application/xml'},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await expectLater(
+        manager.downloadFile(api.getCoverArtUrl('al-1')),
+        throwsA(isA<HttpException>()),
+      );
+      expect(api.credentialsRejected.value, isTrue);
+    });
+
+    test('tells documents from images', () {
+      for (final type in [
+        'application/xml',
+        'text/xml; charset=utf-8',
+        'application/json',
+        'text/html',
+        'text/plain',
+      ]) {
+        expect(CoverArtFileService.isDocument(type), isTrue, reason: type);
+      }
+      for (final type in [
+        'image/jpeg',
+        'image/png',
+        'image/svg+xml; charset=utf-8',
+        'application/octet-stream',
+      ]) {
+        expect(CoverArtFileService.isDocument(type), isFalse, reason: type);
+      }
     });
   });
 }

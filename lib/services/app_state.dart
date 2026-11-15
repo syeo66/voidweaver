@@ -193,6 +193,8 @@ class AppState extends ChangeNotifier {
       }
       _api = api;
       api.credentialsRejected.addListener(notifyListeners);
+      ImageCacheManager.currentApi = api;
+      _setPlayerUserAgent(api.userAgent);
 
       _audioCache = AudioCache(namespace: serverUrl);
       _scrobbleQueue = ScrobbleQueue(api, onSubmitted: _onScrobbled);
@@ -304,6 +306,16 @@ class AppState extends ChangeNotifier {
           .catchError((Object e) {
             _log.warning('Could not set the player\'s timeouts', e);
           }),
+    );
+  }
+
+  /// Hands the API's `User-Agent` to the player, for its streams, downloads
+  /// and artwork, so the server's logs show them as the same app.
+  void _setPlayerUserAgent(String userAgent) {
+    unawaited(
+      const MediaCache().setUserAgent(userAgent).catchError((Object e) {
+        _log.warning('Could not set the player\'s user agent', e);
+      }),
     );
   }
 
@@ -523,6 +535,9 @@ class AppState extends ChangeNotifier {
     // Already disposed by the player; kept to clear it on logout
     _scrobbleQueue = null;
     _audioCache = null;
+    if (identical(ImageCacheManager.currentApi, _api)) {
+      ImageCacheManager.currentApi = null;
+    }
     _api?.dispose();
     _api = null;
   }

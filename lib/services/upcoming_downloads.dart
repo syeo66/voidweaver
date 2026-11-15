@@ -39,6 +39,9 @@ class UpcomingDownloads {
   // The download in progress, see _cancelUnwanted()
   _Download? _inFlight;
 
+  // The cover art download in progress, see _downloadArt()
+  _ArtDownload? _artInFlight;
+
   // The current run, once one of its downloads failed: it's waiting to try
   // again, or gave up. networkAvailable() starts it again.
   _Run? _failedRun;
@@ -79,7 +82,7 @@ class UpcomingDownloads {
     for (var index = firstIndex; index < end; index++) {
       var delay = _retryDelay;
       for (var attempt = 0; current(); attempt++) {
-        if (await _download(playlist, index)) break;
+        if (await _download(playlist, index, current)) break;
         if (run == _run) {
           _failedRun = _Run(playlist, firstIndex, isCurrent);
         }
@@ -116,7 +119,16 @@ class UpcomingDownloads {
   /// Cancels the download in progress unless it's of [playlist] at an index
   /// from [start] to before [end]. Then it's wanted: the new run would only
   /// start it again.
+  ///
+  /// A cover art download in progress is always cancelled: it's a few KB,
+  /// and the native downloads run one at a time, so the new run's first
+  /// track would wait for it.
   void _cancelUnwanted(List<Song> playlist, int start, int end) {
+    final art = _artInFlight;
+    if (art != null) {
+      _artInFlight = null;
+      unawaited(_audioCache.cancelArtDownload(art.coverArt));
+    }
     final inFlight = _inFlight;
     if (inFlight == null) return;
     if (identical(inFlight.playlist, playlist) &&
@@ -132,8 +144,13 @@ class UpcomingDownloads {
 
   /// Downloads the track at [index] and reads its ReplayGain metadata from
   /// the cache if the server didn't provide it. Returns whether the track is
-  /// completely cached.
-  Future<bool> _download(List<Song> playlist, int index) async {
+  /// completely cached. The track's cover art is downloaded too while the
+  /// run is [current].
+  Future<bool> _download(
+    List<Song> playlist,
+    int index,
+    bool Function() current,
+  ) async {
     final song = playlist[index];
     final download = _Download(playlist, index);
     _inFlight = download;
@@ -144,6 +161,7 @@ class UpcomingDownloads {
       if (identical(_inFlight, download)) _inFlight = null;
     }
     if (!cached) return false;
+    if (current()) await _downloadArt(song);
     if (song.replayGainTrackGain != null || song.replayGainAlbumGain != null) {
       return true;
     }
@@ -156,6 +174,32 @@ class UpcomingDownloads {
     _onReplayGain(playlist, index, data);
     return true;
   }
+
+  /// Downloads the cover art the media session shows for [song], so the
+  /// notification and lock screen have it when the track plays offline. A
+  /// failure doesn't count against the track: the session loads it when the
+  /// track plays, if the network is there.
+  /// A later run cancels it, see [_cancelUnwanted].
+  Future<void> _downloadArt(Song song) async {
+    final coverArt = song.coverArt;
+    if (coverArt == null || _api.hasRejectedCredentials) return;
+    final download = _artInFlight = _ArtDownload(coverArt);
+    try {
+      await _audioCache.prefetchArt(
+        coverArt,
+        _api.getCoverArtUrl(coverArt, size: AudioCache.artSize),
+      );
+    } finally {
+      if (identical(_artInFlight, download)) _artInFlight = null;
+    }
+  }
+}
+
+/// A download of the cover art [coverArt].
+class _ArtDownload {
+  final String coverArt;
+
+  _ArtDownload(this.coverArt);
 }
 
 /// The arguments of a [UpcomingDownloads.start] call.

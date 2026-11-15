@@ -67,6 +67,49 @@ class FakeAudioCache implements AudioCache {
       ? '$namespace|${song.id}'
       : '$namespace|${song.id}|${song.size}';
 
+  /// Cover art ids downloaded with [prefetchArt], in order.
+  final List<String> artDownloaded = [];
+
+  @override
+  String artKeyFor(String coverArtId) =>
+      '$namespace|art|$coverArtId@${AudioCache.artSize}';
+
+  /// When set, cover art downloads wait for it to complete.
+  Completer<void>? artGate;
+
+  /// Every cover art id whose download was cancelled, in order.
+  final List<String> artCancelled = [];
+
+  // Cover art downloads waiting at [artGate], by id
+  final Map<String, List<Completer<void>>> _artWaiting = {};
+
+  /// Whether a cover art download of [coverArtId] waits at [artGate].
+  bool isArtWaiting(String coverArtId) =>
+      _artWaiting[coverArtId]?.isNotEmpty ?? false;
+
+  @override
+  Future<bool> prefetchArt(String coverArtId, String url) async {
+    final gate = artGate;
+    if (gate != null) {
+      final cancel = Completer<void>();
+      _artWaiting.putIfAbsent(coverArtId, () => []).add(cancel);
+      await Future.any([gate.future, cancel.future]);
+      _artWaiting[coverArtId]!.remove(cancel);
+      if (cancel.isCompleted) return false;
+    }
+    if (!reachable) return false;
+    artDownloaded.add(coverArtId);
+    return true;
+  }
+
+  @override
+  Future<void> cancelArtDownload(String coverArtId) async {
+    artCancelled.add(coverArtId);
+    for (final cancel in _artWaiting[coverArtId] ?? const <Completer<void>>[]) {
+      if (!cancel.isCompleted) cancel.complete();
+    }
+  }
+
   @override
   Future<bool> prefetch(Song song, String url) async {
     final songId = song.id;

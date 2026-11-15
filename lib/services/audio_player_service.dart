@@ -618,8 +618,9 @@ class AudioPlayerService extends ChangeNotifier {
   AudioSource _sourceFor(int index, Object tag) {
     final song = _playlist[index];
     final gain = _gainFor(song);
-    final artUri = song.coverArt != null
-        ? Uri.parse(_api.getCoverArtUrl(song.coverArt!))
+    final coverArt = song.coverArt;
+    final artUri = coverArt != null
+        ? Uri.parse(_api.getCoverArtUrl(coverArt, size: AudioCache.artSize))
         : null;
     return AudioSource.uri(
       Uri.parse(_api.getStreamUrl(song.id)),
@@ -630,6 +631,7 @@ class AudioPlayerService extends ChangeNotifier {
       artist: song.artist,
       album: song.album,
       artUri: artUri,
+      artCacheKey: coverArt != null ? _audioCache.artKeyFor(coverArt) : null,
     );
   }
 

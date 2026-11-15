@@ -91,6 +91,7 @@ void main() {
     artist: 'Artist',
     album: 'Album',
     artUri: Uri.parse('https://music.example.com/art/$name'),
+    artCacheKey: 'server|art|$name',
   );
 
   group('setAudioSources', () {
@@ -121,6 +122,7 @@ void main() {
             'artist': 'Artist',
             'album': 'Album',
             'artUri': 'https://music.example.com/art/a',
+            'artCacheKey': 'server|art|a',
           },
           containsPair('id', b.id),
         ]);
@@ -422,6 +424,14 @@ void main() {
       expect(platform.lastCall('network.setTimeouts').arguments, {
         'connect': 15000,
         'read': 60000,
+      });
+    });
+
+    test('passes the user agent', () async {
+      await cache.setUserAgent('voidweaver/1.2.3');
+
+      expect(platform.lastCall('network.setUserAgent').arguments, {
+        'userAgent': 'voidweaver/1.2.3',
       });
     });
 

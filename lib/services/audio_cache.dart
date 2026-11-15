@@ -12,7 +12,8 @@ final _log = Logger('audio_cache');
 /// The cache itself is the player's ([MediaCache]): songs are cached while
 /// they play and cached songs play from it, see docs/CACHING.md. Entries are
 /// keyed by [namespace] (the server URL), song id and file size, see
-/// [keyFor].
+/// [keyFor]. The media session's artwork is cached there as well, see
+/// [artKeyFor].
 class AudioCache {
   /// Prefix for cache keys, e.g. the server URL, so song ids from different
   /// servers can't collide.
@@ -30,6 +31,40 @@ class AudioCache {
   String keyFor(Song song) => song.size == null
       ? '$namespace|${song.id}'
       : '$namespace|${song.id}|${song.size}';
+
+  /// The size, in pixels, of the cover art the player's media session shows
+  /// (notification, lock screen, Bluetooth), see [artKeyFor].
+  static const artSize = 300;
+
+  /// The cache key of the cover art [coverArtId] at [artSize], see
+  /// [AudioSource.artCacheKey]. The media session reads its artwork from the
+  /// cache under it, so the artwork of a downloaded track shows offline too.
+  String artKeyFor(String coverArtId) => '$namespace|art|$coverArtId@$artSize';
+
+  /// Downloads the cover art [coverArtId] from [url] into the cache, unless
+  /// it's there already (all tracks of an album share one). Returns whether
+  /// it's cached.
+  Future<bool> prefetchArt(String coverArtId, String url) async {
+    try {
+      await _cache.prefetch(artKeyFor(coverArtId), Uri.parse(url));
+      return true;
+    } on PrefetchCancelledException {
+      return false;
+    } catch (e) {
+      _log.fine('Download of cover art $coverArtId failed', e);
+      return false;
+    }
+  }
+
+  /// Stops a download of the cover art [coverArtId] that is running or
+  /// waiting, see [cancelDownload].
+  Future<void> cancelArtDownload(String coverArtId) async {
+    try {
+      await _cache.cancelPrefetch(artKeyFor(coverArtId));
+    } catch (e) {
+      _log.warning('Could not cancel the download of cover art $coverArtId', e);
+    }
+  }
 
   /// Downloads [song] from [url] completely into the cache, unless it's
   /// there already. Returns whether it's completely cached; false also if

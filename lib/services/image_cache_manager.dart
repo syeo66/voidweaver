@@ -1,10 +1,18 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:http/http.dart' as http;
+import 'package:logging/logging.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'subsonic_api.dart';
+
+final _log = Logger('image_cache');
 
 /// Loads cover art with consistent caching: every image goes through here, so
 /// the cache key ([SubsonicApi.coverArtCacheKey]) is the same everywhere.
@@ -27,12 +35,18 @@ class ImageCacheManager {
 
   static CacheManager? _cacheManager;
 
+  /// The login whose cover art is shown, set by `AppState` while logged in.
+  /// While the server rejects its credentials, covers that aren't cached
+  /// aren't fetched, see [CoverArtFileService].
+  static SubsonicApi? currentApi;
+
   /// The disk cache of all cover art. Created on first use.
   static CacheManager get cacheManager => _cacheManager ??= CacheManager(
     Config(
       'voidweaverCoverArt',
       stalePeriod: cachedImageLifetime,
       maxNrOfCacheObjects: maxCachedImages,
+      fileService: CoverArtFileService(() => currentApi),
     ),
   );
 
@@ -198,5 +212,91 @@ class ImageCacheManager {
     // Covers cached by versions that used the default manager
     await CachedNetworkImageProvider.defaultCacheManager.emptyCache();
     PaintingBinding.instance.imageCache.clear();
+  }
+}
+
+/// Fetches cover art for [ImageCacheManager.cacheManager], which stores
+/// every response with HTTP 200 as the image, for a week unless the server
+/// says otherwise. A Subsonic server reports errors (also a rejected
+/// password) with HTTP 200 and an XML document; stored, such a cover would
+/// show as broken until then. So a document is an error here, as for the
+/// player's audio (`ErrorDocumentGuard`).
+///
+/// For the login [api] returns (null: none), it also
+/// - fetches nothing while the server rejects its credentials
+///   ([SubsonicApi.hasRejectedCredentials]): every cover of a scrolled list
+///   would be another failed login. Covers already cached still show.
+/// - sets [SubsonicApi.credentialsRejected] when a cover is refused for the
+///   credentials, see [SubsonicApi.checkRefusal]
+/// - sends its `User-Agent` ([SubsonicApi.userAgent])
+class CoverArtFileService extends FileService {
+  CoverArtFileService(this._api, {http.Client? httpClient})
+    : _client = httpClient ?? http.Client();
+
+  final SubsonicApi? Function() _api;
+  final http.Client _client;
+
+  // A Subsonic error response is a few hundred bytes
+  static const _maxDocumentBytes = 16 * 1024;
+
+  @override
+  Future<FileServiceResponse> get(
+    String url, {
+    Map<String, String>? headers,
+  }) async {
+    final api = _api();
+    if (api != null && api.hasRejectedCredentials) {
+      throw const HttpException('Credentials rejected, cover art not fetched');
+    }
+    final request = http.Request('GET', Uri.parse(url));
+    if (headers != null) request.headers.addAll(headers);
+    if (api != null) request.headers['User-Agent'] = api.userAgent;
+    final response = await _client.send(request);
+    final type = response.headers['content-type'];
+    if (response.statusCode == 200 && type != null && isDocument(type)) {
+      final body = await _readStart(response.stream);
+      final refused = api?.checkRefusal(body) ?? false;
+      _log.fine(
+        () =>
+            'Got a document ($type) instead of cover art'
+            '${refused ? ': credentials rejected' : ''}',
+      );
+      throw HttpException(
+        refused
+            ? 'Cover art refused: credentials rejected'
+            : 'Got a document ($type) instead of cover art',
+      );
+    }
+    return HttpGetResponse(response, request.url);
+  }
+
+  /// Whether [contentType] is a document rather than an image: XML or JSON
+  /// (a Subsonic error) or any text (a reverse proxy's page), but no image
+  /// type (`image/svg+xml`). Not a list of image types, which would fail art
+  /// a server sends under a type nobody thought of
+  /// (application/octet-stream, ...).
+  @visibleForTesting
+  static bool isDocument(String contentType) {
+    final type = contentType.trim().toLowerCase();
+    if (type.startsWith('image/')) return false;
+    return type.startsWith('text/') ||
+        type.contains('xml') ||
+        type.contains('json');
+  }
+
+  /// The start of [stream], up to [_maxDocumentBytes]; the rest isn't read.
+  static Future<String> _readStart(Stream<List<int>> stream) async {
+    final bytes = BytesBuilder(copy: false);
+    await for (final chunk in stream) {
+      bytes.add(chunk);
+      if (bytes.length >= _maxDocumentBytes) break;
+    }
+    final read = bytes.toBytes();
+    return utf8.decode(
+      read.length > _maxDocumentBytes
+          ? read.sublist(0, _maxDocumentBytes)
+          : read,
+      allowMalformed: true,
+    );
   }
 }

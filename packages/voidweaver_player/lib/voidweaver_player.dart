@@ -109,6 +109,13 @@ class AudioSource {
   final String? album;
   final Uri? artUri;
 
+  /// Identifies the artwork at [artUri] in the [MediaCache], like [cacheKey]
+  /// for the audio: the media session's artwork (notification, lock screen,
+  /// Bluetooth) is read from there, so it shows without the network, and is
+  /// cached when it's loaded. [MediaCache.prefetch] with this key downloads
+  /// it ahead. Null: the artwork is loaded from [artUri] every time.
+  final String? artCacheKey;
+
   AudioSource.uri(
     this.uri, {
     this.tag,
@@ -118,6 +125,7 @@ class AudioSource {
     this.artist,
     this.album,
     this.artUri,
+    this.artCacheKey,
   }) : id = '${++_lastId}';
 
   Map<String, Object?> _toMap() => {
@@ -129,6 +137,7 @@ class AudioSource {
     'artist': artist,
     'album': album,
     'artUri': artUri?.toString(),
+    'artCacheKey': artCacheKey,
   };
 }
 
@@ -391,6 +400,12 @@ class MediaCache {
     'connect': connect.inMilliseconds,
     'read': read.inMilliseconds,
   });
+
+  /// The `User-Agent` of the HTTP requests that playback, [prefetch] and the
+  /// media session's artwork make from now on, for all players. Until this
+  /// is called, it's `voidweaver`.
+  Future<void> setUserAgent(String userAgent) =>
+      _channel.invokeMethod('network.setUserAgent', {'userAgent': userAgent});
 
   /// Downloads [uri] completely into the cache under [key]. Downloads run one
   /// at a time. Throws if the download fails, [PrefetchCancelledException]

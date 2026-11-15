@@ -51,6 +51,9 @@ class FakeMediaCache implements MediaCache {
     required Duration connect,
     required Duration read,
   }) async {}
+
+  @override
+  Future<void> setUserAgent(String userAgent) async {}
 }
 
 Song song(String id, {int? size}) =>
@@ -89,6 +92,33 @@ void main() {
     expect(await cache.firstCached([replaced]), isNull);
     // Nor the entry of a song saved without a size
     expect(await cache.firstCached([s1]), isNull);
+  });
+
+  test('keys cover art by server, cover and size, apart from songs', () async {
+    final other = AudioCache(namespace: 'https://b.test', cache: mediaCache);
+
+    expect(
+      await cache.prefetchArt('al-1', 'https://a.test/rest/getCoverArt'),
+      isTrue,
+    );
+
+    expect(mediaCache.prefetched, ['https://a.test|art|al-1@300']);
+    expect(cache.artKeyFor('al-1'), 'https://a.test|art|al-1@300');
+    expect(other.artKeyFor('al-1'), isNot(cache.artKeyFor('al-1')));
+    // A song with the cover's id isn't the cover
+    expect(cache.artKeyFor('al-1'), isNot(cache.keyFor(song('al-1'))));
+  });
+
+  test('cancelArtDownload cancels by the cover\'s key', () async {
+    await cache.cancelArtDownload('al-1');
+
+    expect(mediaCache.cancelledKeys, ['https://a.test|art|al-1@300']);
+  });
+
+  test('a failed cover art download reports false', () async {
+    mediaCache.reachable = false;
+
+    expect(await cache.prefetchArt('al-1', 'url'), isFalse);
   });
 
   test('a failed download reports false', () async {

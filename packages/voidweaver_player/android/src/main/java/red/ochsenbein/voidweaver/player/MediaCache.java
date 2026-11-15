@@ -40,6 +40,8 @@ final class MediaCache {
   // For the HTTP connections of playback and downloads, set from Dart's network settings
   private static volatile int connectTimeoutMs = DefaultHttpDataSource.DEFAULT_CONNECT_TIMEOUT_MILLIS;
   private static volatile int readTimeoutMs = DefaultHttpDataSource.DEFAULT_READ_TIMEOUT_MILLIS;
+  // Of the same connections; Dart sets it to the one of its own requests, with the app's version
+  private static volatile String userAgent = "voidweaver";
 
   private MediaCache() {}
 
@@ -62,6 +64,11 @@ final class MediaCache {
   static void setTimeouts(int connectMs, int readMs) {
     connectTimeoutMs = connectMs;
     readTimeoutMs = readMs;
+  }
+
+  /** The {@code User-Agent} of the HTTP connections opened from now on, see {@link #setTimeouts}. */
+  static void setUserAgent(String agent) {
+    userAgent = agent;
   }
 
   /** Data source factory for playback: cache first, network for whatever isn't cached. */
@@ -239,10 +246,11 @@ final class MediaCache {
     static final class Factory implements DataSource.Factory {
       @Override
       public DataSource createDataSource() {
-        // A new HTTP factory each time, so changed timeouts apply to the next connection
+        // A new HTTP factory each time, so changed timeouts and user agent apply to the next
+        // connection
         DataSource http =
             new DefaultHttpDataSource.Factory()
-                .setUserAgent("voidweaver")
+                .setUserAgent(userAgent)
                 .setAllowCrossProtocolRedirects(true)
                 .setConnectTimeoutMs(connectTimeoutMs)
                 .setReadTimeoutMs(readTimeoutMs)
