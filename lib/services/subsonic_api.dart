@@ -596,6 +596,8 @@ class SubsonicApi implements CoverArtLogin {
       fromJson: (json) => (json as List<dynamic>)
           .map((a) => Artist.fromJson(a as Map<String, dynamic>))
           .toList(),
+      // The whole library's artists, which only a scan changes
+      version: getLibraryVersion,
     );
   }
 

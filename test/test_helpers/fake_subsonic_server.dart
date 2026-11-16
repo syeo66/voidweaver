@@ -115,6 +115,9 @@ class FakeSubsonicServer {
   /// connection error.
   final Set<String> failingEndpoints = {};
 
+  /// The `lastScan` of `getScanStatus`; change it to simulate a library scan.
+  String lastScan = '2026-01-01T00:00:00Z';
+
   /// How long `stream` waits before it answers, to keep a load pending
   /// while a test acts on it. Applies to requests that arrive while it's
   /// set. `download` isn't delayed.
@@ -216,7 +219,7 @@ class FakeSubsonicServer {
         case 'getScanStatus':
           return _xml(
             response,
-            '<scanStatus scanning="false" count="${_songs.length}" lastScan="2026-01-01T00:00:00Z"/>',
+            '<scanStatus scanning="false" count="${_songs.length}" lastScan="$lastScan"/>',
           );
         case 'scrobble':
           return _scrobble(response, params);

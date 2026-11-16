@@ -11,6 +11,8 @@ each release. A release with nothing a user would notice says so.
 
 ## Unreleased
 
+- The artist list isn't downloaded again every 15 minutes: the app first asks the server whether the library changed, so the Artists tab opens faster on a slow connection.
+
 ## 1.3.8 - 2026-11-16
 
 - The album and artist lists have a draggable scrollbar, to get through a big library quickly.
