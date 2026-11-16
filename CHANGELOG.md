@@ -11,6 +11,8 @@ each release. A release with nothing a user would notice says so.
 
 ## Unreleased
 
+## 1.3.8 - 2026-11-16
+
 - The album and artist lists have a draggable scrollbar, to get through a big library quickly.
 
 ## 1.3.7 - 2026-11-15
