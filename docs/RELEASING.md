@@ -7,6 +7,8 @@ make deploy             # = deploy-patch; or deploy-minor, deploy-major (runs to
 tool/release.sh 1.3.0-beta.1   # an explicit version
 ```
 
+Write what users will notice under `## Unreleased` in [`CHANGELOG.md`](../CHANGELOG.md) as you make a change, and commit it with the change. A release needs that section: `tool/release.sh` asks (before its checks) whether to go on without notes if it's empty, and the working tree must be clean, so the notes are committed first. The release commit moves the section under `## X.Y.Z - date` (`tool/changelog.sh`, which CI uses to read it back). Beta and final releases each consume the section, so write the final's own notes after a beta, or release it without them.
+
 It bumps `version:` in `pubspec.yaml`, commits "release vX.Y.Z", tags it, and after a confirmation pushes `main` and the tag (`--dry-run` only prints the new version). It refuses to run off `main`, with uncommitted changes, or if the tag exists. Pushing goes to all of `origin`'s push URLs; only GitHub runs the workflow. Wait for CI on the pushed commit if you want the checks before the tag; otherwise the tag's own run does them before publishing.
 
 Before the bump it regenerates the mocks (`dart run build_runner build`) and stops if that changes a file (stale mocks, or a `pubspec.lock` rewritten by `pub get`): CI's test job fails on stale mocks, and as the push of the release commit skips CI, only the tag's run would notice. The regenerated files are left in the tree to commit. Then it runs the integration tests (`flutter test integration_test`), which CI doesn't run for a release, on the first running Android emulator, and stops if they fail or change a file (a `pubspec.lock` rewritten by `pub get` would end up in the release commit). Only on an emulator: the tests reinstall the app and clear its data, which on a phone would remove the login and the cache. Without an emulator, the nightly workflow's integration tests count instead: if the newest completed nightly run on exactly this commit (`gh run list --workflow nightly.yml --commit`) has a passed `integration-test` job, it goes on. In any other case (no such run, the job failed or was skipped, `gh` missing or not logged in) it says why and asks whether to release without them; anything but `y` stops. To get a run for the commit, push it and start one: `gh workflow run nightly.yml`. It needs `jq` to read `flutter devices`.
@@ -17,7 +19,7 @@ The `release` job in `.github/workflows/flutter.yml` runs after tests and the re
 
 - fails if the tag differs from the `version:` in `pubspec.yaml`,
 - fails if the APK is signed with the debug key (`tool/check_apk_signature.sh`),
-- creates the release with generated notes (from the commits and PRs since the last tag), `voidweaver-v1.2.0.apk` and its `.sha256`. A version with a suffix (`1.2.0-beta.1`) is marked as a prerelease.
+- creates the release with the `CHANGELOG.md` section of that version on top of generated notes (from the commits and PRs since the last tag), `voidweaver-v1.2.0.apk` and its `.sha256`. A version with a suffix (`1.2.0-beta.1`) is marked as a prerelease.
 
 ## Signing key (one time)
 

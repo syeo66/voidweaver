@@ -9,6 +9,7 @@ import '../services/subsonic_api.dart';
 import '../services/network_errors.dart';
 import '../utils/format.dart';
 import '../widgets/artist_albums_view.dart';
+import '../widgets/list_scrollbar.dart';
 
 class ArtistScreen extends StatefulWidget {
   const ArtistScreen({super.key});
@@ -148,12 +149,15 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
     return RefreshIndicator(
       onRefresh: _loadArtists,
-      child: ListView.builder(
-        itemCount: _artists.length,
-        itemBuilder: (context, index) {
-          final artist = _artists[index];
-          return _buildArtistTile(artist);
-        },
+      child: ListScrollbar(
+        builder: (context, controller) => ListView.builder(
+          controller: controller,
+          itemCount: _artists.length,
+          itemBuilder: (context, index) {
+            final artist = _artists[index];
+            return _buildArtistTile(artist);
+          },
+        ),
       ),
     );
   }

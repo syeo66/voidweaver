@@ -6,6 +6,8 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart'
+    show CacheManager;
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:xml/xml.dart';
@@ -14,6 +16,7 @@ import 'package:logging/logging.dart';
 import '../models/album_list_type.dart';
 import '../models/subsonic_models.dart';
 import 'api_cache.dart';
+import 'cover_art_cache.dart';
 import 'network_config.dart';
 import 'network_errors.dart';
 import 'network_retry.dart';
@@ -42,7 +45,7 @@ class SubsonicException implements Exception {
   String toString() => message;
 }
 
-class SubsonicApi {
+class SubsonicApi implements CoverArtLogin {
   final String serverUrl;
   final String username;
   String _password;
@@ -60,6 +63,8 @@ class SubsonicApi {
   );
   // When cached responses expire is measured against this
   final DateTime Function() _clock;
+  // Created on first use, see coverArtCache
+  CacheManager? _coverArtCache;
   late HttpClient _innerClient;
   late http.Client _httpClient;
   late NetworkRetryService _retryService;
@@ -79,6 +84,7 @@ class SubsonicApi {
   /// server), which would then refuse the new password too. Requests the
   /// user starts still go out, so a password changed back on the server
   /// clears it.
+  @override
   bool get hasRejectedCredentials => credentialsRejected.value;
 
   SubsonicApi({
@@ -88,6 +94,7 @@ class SubsonicApi {
     NetworkConfig? networkConfig,
     this.appVersion,
     this._clock = DateTime.now,
+    @visibleForTesting this._coverArtCache,
   }) : _networkConfig = networkConfig ?? NetworkConfig.defaultConfig {
     // Enforce HTTPS for security
     final uri = Uri.tryParse(serverUrl);
@@ -118,6 +125,7 @@ class SubsonicApi {
   /// The `User-Agent` of the requests: `voidweaver/1.3.0`, or `voidweaver`
   /// without a known version. The player's streams and downloads, the media
   /// session's artwork and the cover art send it too.
+  @override
   String get userAgent =>
       appVersion == null ? clientName : '$clientName/$appVersion';
 
@@ -464,6 +472,7 @@ class SubsonicApi {
   /// [credentialsRejected] then, so nothing else is sent on its own. False
   /// for any other error, and for a body that can't be parsed (JSON, a
   /// proxy's page).
+  @override
   bool checkRefusal(String body) {
     try {
       parseResponse(body);
@@ -488,6 +497,13 @@ class SubsonicApi {
         .replace(queryParameters: params);
     return uri.toString();
   }
+
+  /// The disk cache of this login's cover art, which fetches nothing while
+  /// the credentials are rejected (see [CoverArtFileService]). Created on
+  /// first use. Never closed: successive logins open the same files, and
+  /// closing one's connection asynchronously could cut the next one's off.
+  CacheManager get coverArtCache =>
+      _coverArtCache ??= createCoverArtCache(this);
 
   /// Image cache key (disk and memory) for the cover art [id] at [size]. Not
   /// the URL, whose token changes with every request, and not the id alone,

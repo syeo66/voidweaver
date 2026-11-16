@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/app_state.dart';
 import '../models/album_list_type.dart';
 import 'album_tile.dart';
+import 'list_scrollbar.dart';
 
 class AlbumList extends StatelessWidget {
   const AlbumList({super.key});
@@ -95,28 +96,33 @@ class AlbumList extends StatelessWidget {
               ).showSnackBar(SnackBar(content: Text('Refresh failed: $error')));
             }
           },
-          child: isLandscape
-              ? GridView.builder(
-                  padding: const EdgeInsets.all(8),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
-                    childAspectRatio: 0.85,
+          child: ListScrollbar(
+            builder: (context, controller) => isLandscape
+                ? GridView.builder(
+                    controller: controller,
+                    padding: const EdgeInsets.all(8),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          mainAxisSpacing: 8,
+                          crossAxisSpacing: 8,
+                          childAspectRatio: 0.85,
+                        ),
+                    itemCount: appState.albums.length,
+                    itemBuilder: (context, index) {
+                      final album = appState.albums[index];
+                      return AlbumGridTile(album: album);
+                    },
+                  )
+                : ListView.builder(
+                    controller: controller,
+                    itemCount: appState.albums.length,
+                    itemBuilder: (context, index) {
+                      final album = appState.albums[index];
+                      return AlbumTile(album: album);
+                    },
                   ),
-                  itemCount: appState.albums.length,
-                  itemBuilder: (context, index) {
-                    final album = appState.albums[index];
-                    return AlbumGridTile(album: album);
-                  },
-                )
-              : ListView.builder(
-                  itemCount: appState.albums.length,
-                  itemBuilder: (context, index) {
-                    final album = appState.albums[index];
-                    return AlbumTile(album: album);
-                  },
-                ),
+          ),
         );
       },
     );

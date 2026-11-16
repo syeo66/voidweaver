@@ -31,6 +31,17 @@ echo "$current -> $new"
 [ -z "$(git status --porcelain)" ] || { echo "Working tree isn't clean" >&2; exit 1; }
 git rev-parse "v$new" >/dev/null 2>&1 && { echo "Tag v$new exists" >&2; exit 1; }
 
+# What users read on the release page: CHANGELOG.md's Unreleased section, which
+# goes on top of the generated list of commits. Asked before the checks below,
+# which take minutes.
+notes=$(tool/changelog.sh notes Unreleased)
+if [ -z "$notes" ]; then
+  echo "CHANGELOG.md has nothing under '## Unreleased'; the release page would only list commits." >&2
+  answer=
+  read -r -p "Release without notes? [y/N] " answer || true
+  [ "$answer" = y ] || { echo "Not released: write the notes, commit them, and run this again." >&2; exit 1; }
+fi
+
 # The generated mocks must match their @GenerateMocks annotations, as CI's
 # test job checks. The push of the release commit skips CI, so without this
 # only the tag's run would notice, after the tag is out. The tree is clean
@@ -108,6 +119,8 @@ fi
   { echo "The integration tests changed files, not releasing:" >&2; git status --short >&2; exit 1; }
 
 sed -i.bak "s/^version: *[^+ ]*/version: $new/" pubspec.yaml && rm pubspec.yaml.bak
+# The notes move under the new version, in the release commit
+[ -z "$notes" ] || tool/changelog.sh release "$new"
 git commit -q -am "release v$new"
 git tag "v$new"
 echo "Committed and tagged v$new."

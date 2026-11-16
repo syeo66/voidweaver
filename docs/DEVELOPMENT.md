@@ -41,7 +41,7 @@ Endpoints used: `ping` (checks the credentials on login), `getAlbumList2` (`type
 | `lib/services/upcoming_downloads.dart`, `replaygain_resolver.dart` | The player service's downloads of the next tracks with their retries (see [CACHING.md](CACHING.md)), and where a song's ReplayGain data comes from and the gain it plays at (see [REPLAYGAIN.md](REPLAYGAIN.md)) |
 | `lib/services/listening_tracker.dart`, `sleep_timer.dart` | The player service's listening time and scrobble decision per play, and the sleep timer with its fade, see [PLAYBACK.md](PLAYBACK.md) |
 | `packages/voidweaver_player/` | Local plugin: playlist player on Media3 ExoPlayer with a gain stage per item, the Media3 media session for notification, lock screen and Bluetooth controls, the audio cache, and events when the network is back (Java on the Android side) |
-| `lib/services/api_cache.dart`, `audio_cache.dart`, `image_cache_manager.dart` | Caching, see [CACHING.md](CACHING.md) |
+| `lib/services/api_cache.dart`, `audio_cache.dart`, `image_cache_manager.dart`, `cover_art_cache.dart` | Caching, see [CACHING.md](CACHING.md) |
 | `lib/services/scrobble_queue.dart` | Persistent scrobble queue with retries |
 | `lib/services/replaygain_reader.dart`, `lib/services/replaygain/` | ReplayGain tag reading: `ReplayGainReader` fetches the start of the file and parses it on a background isolate; one parser per tag format (`id3v2.dart`, `ape.dart`, `vorbis.dart`, `mp4.dart`), see [REPLAYGAIN.md](REPLAYGAIN.md) |
 | `lib/services/playback_persistence.dart` | Saves and restores queue and position: the queue in SharedPreferences (written when it changes), the position in its own small file (`playback_position.json`, saved every 5 s while playing), so those saves don't rewrite SharedPreferences, see [PLAYBACK.md](PLAYBACK.md#restoring-playback) |
@@ -54,6 +54,8 @@ State is managed with Provider. Services take optional dependencies (`Voidweaver
 
 - Logging has its own section: [Logging](#logging), with the [session log](#session-log) users can send.
 - Every service and `State` that owns subscriptions, timers, controllers or HTTP clients disposes them in `dispose()`. `test/services/memory_leak_test.dart` covers the services.
+- Per-login state lives on the login's objects (`SubsonicApi`, the player service), not in statics: a static that says "the current login" would be set by `AppState` and break tests that run several. The singletons that remain are process-wide by nature: `ErrorHandler` (it owns `FlutterError.onError`) and `SessionLog` (one file).
+- User-visible changes get a line under `## Unreleased` in `CHANGELOG.md`, see [RELEASING.md](RELEASING.md).
 - Check `mounted` after `await` in widgets.
 - Screens choose layouts with `MediaQuery.of(context).orientation`, using `_buildPortraitLayout()` / `_buildLandscapeLayout()`. Test both orientations when changing a screen.
 - Wrap independent screen sections in `.withErrorBoundary()`.

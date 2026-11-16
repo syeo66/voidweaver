@@ -185,6 +185,10 @@ jobs:
         sha256sum "voidweaver-v$VERSION.apk" > "voidweaver-v$VERSION.apk.sha256"
         # 1.2.0-beta.1 is a prerelease
         case "$VERSION" in *-*) pre=--prerelease ;; *) pre= ;; esac
-        gh release create "$GITHUB_REF_NAME" $pre --verify-tag --generate-notes \
+        # CHANGELOG.md's section of this version (written before the release,
+        # see tool/release.sh) on top of the generated list of commits
+        tool/changelog.sh notes "$VERSION" > release-notes.md
+        if [ -s release-notes.md ]; then notes=(--notes-file release-notes.md); else notes=(); fi
+        gh release create "$GITHUB_REF_NAME" $pre --verify-tag --generate-notes "${notes[@]}" \
           --title "Voidweaver $VERSION" \
           "voidweaver-v$VERSION.apk" "voidweaver-v$VERSION.apk.sha256"

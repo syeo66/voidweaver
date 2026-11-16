@@ -193,7 +193,6 @@ class AppState extends ChangeNotifier {
       }
       _api = api;
       api.credentialsRejected.addListener(notifyListeners);
-      ImageCacheManager.currentApi = api;
       _setPlayerUserAgent(api.userAgent);
 
       _audioCache = AudioCache(namespace: serverUrl);
@@ -324,7 +323,7 @@ class AppState extends ChangeNotifier {
     await Future.wait([
       if (_audioPlayerService != null) _audioPlayerService!.clearAudioCache(),
       if (_api != null) _api!.clearCache(),
-      ImageCacheManager.clearCache(),
+      if (_api != null) ImageCacheManager.clearCache(_api!),
     ]);
   }
 
@@ -535,9 +534,6 @@ class AppState extends ChangeNotifier {
     // Already disposed by the player; kept to clear it on logout
     _scrobbleQueue = null;
     _audioCache = null;
-    if (identical(ImageCacheManager.currentApi, _api)) {
-      ImageCacheManager.currentApi = null;
-    }
     _api?.dispose();
     _api = null;
   }
@@ -619,7 +615,8 @@ class AppState extends ChangeNotifier {
         clear('the pending scrobbles', scrobbleQueue.clear),
       if (_persistenceService != null)
         clear('the saved queue', _persistenceService!.clearPlaybackState),
-      clear('the cover art', ImageCacheManager.clearCache),
+      if (api != null)
+        clear('the cover art', () => ImageCacheManager.clearCache(api)),
       if (audioCache != null)
         clear('the downloaded audio', () async {
           // Once the player no longer streams into the cache. Its downloads

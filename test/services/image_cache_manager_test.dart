@@ -13,6 +13,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:voidweaver/services/cover_art_cache.dart';
 import 'package:voidweaver/services/image_cache_manager.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 
@@ -43,8 +44,6 @@ CacheManager _offlineManager() => CacheManager(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  tearDown(() => ImageCacheManager.cacheManager = null);
-
   group('ImageCacheManager.coverArtSizeFor', () {
     test('picks the smallest size covering the box in physical pixels', () {
       expect(ImageCacheManager.coverArtSizeFor(50, 2.625), 150);
@@ -67,20 +66,37 @@ void main() {
   group('ImageCacheManager cache', () {
     test('keeps far more than the default 200 images', () {
       // Scrolling through a library's album grid must not push covers out
-      expect(ImageCacheManager.maxCachedImages, greaterThan(1000));
-      expect(
-        ImageCacheManager.cachedImageLifetime,
-        greaterThan(const Duration(days: 30)),
+      expect(maxCachedCoverArt, greaterThan(1000));
+      expect(cachedCoverArtLifetime, greaterThan(const Duration(days: 30)));
+    });
+
+    test('each login has its own disk cache, made on first use', () {
+      final one = SubsonicApi(
+        serverUrl: 'https://one.example.com',
+        username: 'testuser',
+        password: 'testpass',
+        coverArtCache: _offlineManager(),
       );
+      final other = SubsonicApi(
+        serverUrl: 'https://two.example.com',
+        username: 'testuser',
+        password: 'testpass',
+        coverArtCache: _offlineManager(),
+      );
+      addTearDown(one.dispose);
+      addTearDown(other.dispose);
+
+      expect(one.coverArtCache, same(one.coverArtCache));
+      expect(one.coverArtCache, isNot(same(other.coverArtCache)));
     });
 
     test('cover art providers use it', () {
       final manager = _offlineManager();
-      ImageCacheManager.cacheManager = manager;
       final api = SubsonicApi(
         serverUrl: 'https://music.example.com',
         username: 'testuser',
         password: 'testpass',
+        coverArtCache: manager,
       );
       addTearDown(api.dispose);
 
@@ -100,11 +116,11 @@ void main() {
 
     setUp(() {
       manager = _offlineManager();
-      ImageCacheManager.cacheManager = manager;
       api = SubsonicApi(
         serverUrl: 'https://music.example.com',
         username: 'testuser',
         password: 'testpass',
+        coverArtCache: manager,
       );
     });
 
@@ -195,7 +211,7 @@ void main() {
 
     test('fetches a cover with the API\'s user agent', () async {
       final api = login();
-      final response = await CoverArtFileService(() => api)
+      final response = await CoverArtFileService(api)
           .get(api.getCoverArtUrl('al-1'));
       await response.content.drain<void>();
 
@@ -213,7 +229,7 @@ void main() {
       final api = login(password: 'old');
 
       await expectLater(
-        CoverArtFileService(() => api).get(api.getCoverArtUrl('al-1')),
+        CoverArtFileService(api).get(api.getCoverArtUrl('al-1')),
         throwsA(isA<HttpException>()),
       );
       expect(api.credentialsRejected.value, isTrue);
@@ -224,7 +240,7 @@ void main() {
       api.checkRefusal(rejection());
 
       await expectLater(
-        CoverArtFileService(() => api).get(api.getCoverArtUrl('al-1')),
+        CoverArtFileService(api).get(api.getCoverArtUrl('al-1')),
         throwsA(isA<HttpException>()),
       );
       expect(server.requestsTo('getCoverArt'), isEmpty);
@@ -235,7 +251,7 @@ void main() {
       () async {
         final api = login();
         final service = CoverArtFileService(
-          () => api,
+          api,
           httpClient: MockClient(
             (request) async => http.Response(
               '<html>Maintenance</html>',
@@ -262,7 +278,7 @@ void main() {
           // Throws if the manager tried to store a file
           fileSystem: _NoFileSystem(),
           fileService: CoverArtFileService(
-            () => api,
+            api,
             httpClient: MockClient(
               (request) async => http.Response(
                 rejection(),
