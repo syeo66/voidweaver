@@ -11,6 +11,8 @@ each release. A release with nothing a user would notice says so.
 
 ## Unreleased
 
+## 1.3.10 - 2026-11-17
+
 - Plays and skips aren't lost when the server fails for a moment (for example a busy database, or a proxy that can't reach Navidrome): they're sent again for up to an hour instead of being dropped at the first error.
 - Logging out shows a "Logging out…" screen while the app clears its saved data (downloaded audio can take a moment), instead of leaving the old screens up, where a tap on Play or an album could fail. A second tap on Logout is ignored.
 
