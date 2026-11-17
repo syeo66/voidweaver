@@ -26,6 +26,27 @@ void main() {
     /// Lets the queue send what it can. Well short of the first retry (30 s).
     void settle(FakeAsync async) => async.elapse(const Duration(seconds: 1));
 
+    /// The songs a start after the process was killed would send, in order:
+    /// a new queue loads what's stored and sends it to a server that accepts
+    /// everything. Empties the storage.
+    List<String> sentByNextStart(FakeAsync async) {
+      final api = newMockApi();
+      final songs = <String>[];
+      when(api.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
+          .thenAnswer((call) async {
+            songs.add(call.positionalArguments.first as String);
+          });
+      when(api.scrobbleNowPlaying(any, startedAt: anyNamed('startedAt')))
+          .thenAnswer((call) async {
+            songs.add(call.positionalArguments.first as String);
+          });
+      final next = ScrobbleQueue(api);
+      awaitFake(async, next.initialize());
+      settle(async);
+      next.dispose();
+      return songs;
+    }
+
     setUp(() async {
       mockApi = newMockApi();
       SharedPreferences.setMockInitialValues({});
@@ -415,11 +436,9 @@ void main() {
         mockApi.scrobbleSubmission('song2', playedAt: anyNamed('playedAt')),
       ).called(1);
 
-      // What the next start would load: only the play the server hasn't
+      // What the next start would send: only the play the server hasn't
       // confirmed, not song1 a second time
-      final prefs = awaitFake(async, SharedPreferences.getInstance());
-      final saved = jsonDecode(prefs.getString('scrobble_queue')!) as List;
-      expect(saved, [containsPair('songId', 'song2')]);
+      expect(sentByNextStart(async), ['song2']);
       song2Sent.complete();
     });
 
@@ -451,10 +470,290 @@ void main() {
         mockApi.scrobbleNowPlaying('song2', startedAt: anyNamed('startedAt')),
       ).called(1);
 
-      final prefs = awaitFake(async, SharedPreferences.getInstance());
-      final saved = jsonDecode(prefs.getString('scrobble_queue')!) as List;
-      expect(saved, [containsPair('songId', 'song2')]);
+      expect(sentByNextStart(async), ['song2']);
       song2Sent.complete();
+    });
+
+    testInFakeTime('a backlog doesn\'t rewrite the stored list per request', (
+      async,
+    ) {
+      // Android rewrites its whole preferences file on every write, the
+      // settings and the saved queue included: a week offline would do that
+      // thousands of times if each sent request saved the list again
+      final blocked = Completer<void>();
+      final sentIds = <String>[];
+      when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
+          .thenAnswer((call) {
+            final id = call.positionalArguments.first as String;
+            if (id == 'song4') return blocked.future;
+            sentIds.add(id);
+            return Future.value();
+          });
+      final playedAt = DateTime.now();
+      SharedPreferences.setMockInitialValues({
+        'scrobble_queue': jsonEncode([
+          for (final id in ['song1', 'song2', 'song3', 'song4', 'song5'])
+            ScrobbleRequest(
+              songId: id,
+              type: ScrobbleType.submission,
+              playedAt: playedAt,
+              queuedAt: playedAt,
+            ).toJson(),
+        ]),
+      });
+      final prefs = awaitFake(async, SharedPreferences.getInstance());
+      final before = prefs.getString('scrobble_queue');
+
+      awaitFake(async, scrobbleQueue.initialize());
+      settle(async);
+
+      // Three sent, the fourth is on its way
+      expect(sentIds, ['song1', 'song2', 'song3']);
+      expect(prefs.getString('scrobble_queue'), before);
+      // A restart sends what's left, not what the server has
+      expect(sentByNextStart(async), ['song4', 'song5']);
+      blocked.complete();
+    });
+
+    testInFakeTime('a restart skips what the stored progress says was sent', (
+      async,
+    ) {
+      final playedAt = DateTime.now();
+      final requests = [
+        for (final id in ['song1', 'song2', 'song3'])
+          ScrobbleRequest(
+            songId: id,
+            type: ScrobbleType.submission,
+            playedAt: playedAt,
+            queuedAt: playedAt,
+          ).toJson(),
+      ];
+      SharedPreferences.setMockInitialValues({
+        'scrobble_queue': jsonEncode(requests),
+        'scrobble_queue_sent': jsonEncode({
+          'first':
+              'submission/song1/${playedAt.millisecondsSinceEpoch}/'
+              '${playedAt.millisecondsSinceEpoch}',
+          'handled': 2,
+        }),
+      });
+
+      expect(sentByNextStart(async), ['song3']);
+    });
+
+    testInFakeTime('a restart ignores progress stored for another list', (
+      async,
+    ) {
+      // The list was written again (a request queued) after the progress,
+      // and the app was killed before the progress was removed
+      final playedAt = DateTime.now();
+      SharedPreferences.setMockInitialValues({
+        'scrobble_queue': jsonEncode([
+          for (final id in ['song2', 'song3'])
+            ScrobbleRequest(
+              songId: id,
+              type: ScrobbleType.submission,
+              playedAt: playedAt,
+              queuedAt: playedAt,
+            ).toJson(),
+        ]),
+        'scrobble_queue_sent': jsonEncode({
+          'first':
+              'submission/song1/${playedAt.millisecondsSinceEpoch}/'
+              '${playedAt.millisecondsSinceEpoch}',
+          'handled': 1,
+        }),
+      });
+
+      expect(sentByNextStart(async), ['song2', 'song3']);
+    });
+
+    testInFakeTime('a restart with everything sent leaves nothing stored', (
+      async,
+    ) {
+      final playedAt = DateTime.now();
+      final request = ScrobbleRequest(
+        songId: 'song1',
+        type: ScrobbleType.submission,
+        playedAt: playedAt,
+        queuedAt: playedAt,
+      );
+      SharedPreferences.setMockInitialValues({
+        'scrobble_queue': jsonEncode([request.toJson()]),
+        'scrobble_queue_sent': jsonEncode({
+          'first':
+              'submission/song1/${playedAt.millisecondsSinceEpoch}/'
+              '${playedAt.millisecondsSinceEpoch}',
+          'handled': 1,
+        }),
+      });
+
+      awaitFake(async, scrobbleQueue.initialize());
+      settle(async);
+
+      verifyNever(
+        mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')),
+      );
+      final prefs = awaitFake(async, SharedPreferences.getInstance());
+      expect(prefs.getString('scrobble_queue'), isNull);
+      expect(prefs.getString('scrobble_queue_sent'), isNull);
+    });
+
+    testInFakeTime('a restart after an unreadable entry skips what was sent', (
+      async,
+    ) {
+      // The unreadable entry in the middle isn't in the queue, so the
+      // progress must count from a list without it
+      final playedAt = DateTime.now();
+      final blocked = Completer<void>();
+      when(mockApi.scrobbleSubmission(any, playedAt: anyNamed('playedAt')))
+          .thenAnswer((call) {
+            return call.positionalArguments.first == 'songD'
+                ? blocked.future
+                : Future.value();
+          });
+      Map<String, dynamic> submission(String id) => ScrobbleRequest(
+        songId: id,
+        type: ScrobbleType.submission,
+        playedAt: playedAt,
+        queuedAt: playedAt,
+      ).toJson();
+      SharedPreferences.setMockInitialValues({
+        'scrobble_queue': jsonEncode([
+          submission('songA'),
+          {'type': 'love'},
+          submission('songC'),
+          submission('songD'),
+        ]),
+      });
+
+      awaitFake(async, scrobbleQueue.initialize());
+      settle(async);
+
+      verify(
+        mockApi.scrobbleSubmission('songC', playedAt: anyNamed('playedAt')),
+      ).called(1);
+      // Killed with songD on its way: A and C aren't sent again
+      expect(sentByNextStart(async), ['songD']);
+      blocked.complete();
+    });
+
+    testInFakeTime('knows which server errors are generic', (async) {
+      expect(const SubsonicException(0, 'x').isGenericError, isTrue);
+      expect(const SubsonicException(null, 'x').isGenericError, isTrue);
+      expect(const SubsonicException(70, 'x').isGenericError, isFalse);
+      expect(const SubsonicException(40, 'x').isGenericError, isFalse);
+    });
+
+    testInFakeTime(
+      'keeps a request after a generic server error without a code',
+      (async) {
+        when(
+          mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
+        ).thenThrow(const SubsonicException(null, 'something went wrong'));
+
+        awaitFake(async, scrobbleQueue.initialize());
+        awaitFake(
+          async,
+          scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now()),
+        );
+        settle(async);
+
+        expect(scrobbleQueue.queueSize, 1);
+        expect(scrobbleQueue.retryScheduled, isTrue);
+      },
+    );
+
+    testInFakeTime('counts the hour from the last time it failed that way', (
+      async,
+    ) {
+      // A generic error, then a long time offline: the next generic error
+      // starts a new hour rather than ending the first
+      final start = DateTime(2026, 11, 17, 9);
+      scrobbleQueue.dispose();
+      scrobbleQueue = ScrobbleQueue(
+        mockApi,
+        clock: () => start.add(async.elapsed),
+      );
+      var answer = 'generic';
+      when(mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')))
+          .thenAnswer((_) async {
+            if (answer == 'offline') throw Exception('offline');
+            throw const SubsonicException(0, 'database is locked');
+          });
+
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(async, scrobbleQueue.queueSubmission('song1', playedAt: start));
+      settle(async);
+      answer = 'offline';
+      async.elapse(const Duration(hours: 3));
+      answer = 'generic';
+      async.elapse(const Duration(minutes: 6));
+
+      expect(scrobbleQueue.queueSize, 1);
+    });
+
+    testInFakeTime('keeps a request after a generic server error', (async) {
+      // Code 0: no reason given, maybe the server's trouble of the moment
+      var failing = true;
+      when(mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')))
+          .thenAnswer((_) async {
+            if (failing) throw const SubsonicException(0, 'database is locked');
+          });
+
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
+      settle(async);
+
+      expect(scrobbleQueue.queueSize, 1);
+      expect(scrobbleQueue.retryScheduled, isTrue);
+
+      failing = false;
+      async.elapse(const Duration(seconds: 30));
+      expect(scrobbleQueue.queueSize, 0);
+    });
+
+    testInFakeTime('drops a request that keeps failing with a generic error', (
+      async,
+    ) {
+      // One that never works must not block the plays behind it until it's a
+      // week old
+      // The queue's clock follows the fake time (DateTime.now() doesn't)
+      final start = DateTime(2026, 11, 17, 9);
+      scrobbleQueue.dispose();
+      scrobbleQueue = ScrobbleQueue(
+        mockApi,
+        clock: () => start.add(async.elapsed),
+      );
+      when(mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')))
+          .thenThrow(const SubsonicException(0, 'cannot be scrobbled'));
+      when(mockApi.scrobbleSubmission('song2', playedAt: anyNamed('playedAt')))
+          .thenAnswer((_) async {});
+
+      awaitFake(async, scrobbleQueue.initialize());
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song1', playedAt: DateTime.now()),
+      );
+      awaitFake(
+        async,
+        scrobbleQueue.queueSubmission('song2', playedAt: DateTime.now()),
+      );
+      settle(async);
+      expect(scrobbleQueue.queueSize, 2);
+
+      async.elapse(const Duration(minutes: 59));
+      expect(scrobbleQueue.queueSize, 2);
+
+      // The timer's tries are at most 5 minutes apart
+      async.elapse(const Duration(minutes: 7));
+      expect(scrobbleQueue.queueSize, 0);
+      verify(
+        mockApi.scrobbleSubmission('song2', playedAt: anyNamed('playedAt')),
+      ).called(1);
     });
 
     testInFakeTime('loads saved now playing requests and sends them in order', (

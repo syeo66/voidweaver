@@ -41,6 +41,11 @@ class SubsonicException implements Exception {
   /// itself.
   bool get isAuthError => code != null && code! >= 40 && code! <= 44;
 
+  /// Whether the server gave no specific reason (code 0, or no code): it
+  /// may be the server's trouble of the moment, so the same request can
+  /// work later, unlike one refused for itself (code 70, unknown id).
+  bool get isGenericError => code == null || code == 0;
+
   @override
   String toString() => message;
 }

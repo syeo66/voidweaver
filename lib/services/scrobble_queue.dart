@@ -65,10 +65,17 @@ class ScrobbleRequest {
 /// runs while something is blocked: after 30 s, then at twice the delay each
 /// time, up to 5 minutes. With nothing to send there's no timer, so a phone
 /// playing with the screen off isn't woken for an empty queue. A request the
-/// server rejects for itself (e.g. unknown song) is dropped.
+/// server rejects for itself (e.g. unknown song) is dropped. A generic error
+/// (code 0) may be the server's trouble of the moment (a busy database, a
+/// proxy that can't reach Navidrome), so that request is retried like a
+/// network failure, for up to [_genericRetryWindow].
 class ScrobbleQueue {
   static const String _storageKey = 'scrobble_queue';
+  // How far the stored list has been sent, see _saveProgress()
+  static const String _progressKey = 'scrobble_queue_sent';
   static const Duration _maxAge = Duration(days: 7); // Drop old requests
+  // How long a request that fails with a generic server error is kept
+  static const Duration _genericRetryWindow = Duration(hours: 1);
 
   final SubsonicApi _api;
 
@@ -84,6 +91,14 @@ class ScrobbleQueue {
   late Duration _retryDelay = _initialRetryDelay;
   bool _isProcessing = false;
   bool _disposed = false;
+  // The request that last failed with a generic server error, and since when
+  ScrobbleRequest? _genericFailing;
+  DateTime? _genericFailingSince;
+  // What the stored list holds (see _saveProgress()): a key of its first
+  // request, and how many requests from its start are done (sent or dropped)
+  // and have left [_queue]. Null while nothing is stored.
+  String? _storedHead;
+  int _handled = 0;
 
   ScrobbleQueue(
     this._api, {
@@ -172,7 +187,7 @@ class ScrobbleQueue {
           _log.info(
             'Dropping old scrobble request for song ${request.songId} (age: ${age.inDays} days)',
           );
-          _queue.remove(request);
+          _removeFirst(request);
           continue;
         }
 
@@ -181,11 +196,13 @@ class ScrobbleQueue {
           await _sendScrobble(request);
           sent = true;
           _retryDelay = _initialRetryDelay;
+          _genericFailing = null;
+          _genericFailingSince = null;
           _log.fine(
             'Successfully sent ${request.type.name} for song ${request.songId}',
           );
         } catch (e) {
-          final rejected = e is SubsonicException && !e.isAuthError;
+          final rejected = _isRejected(request, e);
           if (!rejected) {
             _log.warning(
               'Failed to send ${request.type.name} for song ${request.songId}, will retry',
@@ -199,14 +216,14 @@ class ScrobbleQueue {
             e,
           );
         }
-        _queue.remove(request);
+        _removeFirst(request);
         if (sent && _queue.isNotEmpty) {
           // Saved right away rather than at the end of the pass: a process
           // killed during a long backlog would send every request the server
           // already has again on the next start, counting plays twice and
           // taking songs played since for skipped. (Once the queue is empty,
           // the end of the pass clears it.)
-          await _saveQueue();
+          await _saveProgress();
         }
         if (sent && request.type == ScrobbleType.submission) {
           onSubmitted?.call();
@@ -222,7 +239,9 @@ class ScrobbleQueue {
         _log.fine(
           'Scrobble queue processing stopped (${_queue.length} requests remaining)',
         );
-        await _saveQueue();
+        // Compacts the stored list if requests have left it, see
+        // _saveProgress()
+        if (_handled > 0) await _saveQueue();
       } else {
         _log.fine('Scrobble queue empty');
         await _clearQueue();
@@ -239,6 +258,36 @@ class ScrobbleQueue {
       // Requests queued while the queue was being saved
       if (_queue.isNotEmpty && !_disposed) unawaited(_processQueue());
     }
+  }
+
+  /// Removes [request], the one at the front of the queue, which is done:
+  /// sent, or dropped. Not there any more after [clear] ended the pass's
+  /// work.
+  void _removeFirst(ScrobbleRequest request) {
+    if (_queue.isEmpty || !identical(_queue.first, request)) return;
+    _queue.removeAt(0);
+    _handled++;
+  }
+
+  /// Whether [request] is dropped after failing with [error], rather than
+  /// kept and retried: the server refused it for itself (e.g. unknown song).
+  /// Not a failure to reach the server, nor the credentials (the queue waits
+  /// for a new password), nor a generic server error before
+  /// [_genericRetryWindow] has passed since it first failed that way.
+  bool _isRejected(ScrobbleRequest request, Object error) {
+    if (error is! SubsonicException || error.isAuthError) {
+      // Not "failed that way" any more: counted again from the next generic
+      // error (e.g. after a stretch offline)
+      _genericFailing = null;
+      _genericFailingSince = null;
+      return false;
+    }
+    if (!error.isGenericError) return true;
+    if (!identical(_genericFailing, request)) {
+      _genericFailing = request;
+      _genericFailingSince = _clock();
+    }
+    return _clock().difference(_genericFailingSince!) > _genericRetryWindow;
   }
 
   /// Sends the blocked submission again after the current delay, which
@@ -293,6 +342,13 @@ class ScrobbleQueue {
     }
   }
 
+  /// Identifies a stored request by what it says, so a stored position in the
+  /// list (see [_saveProgress]) can tell the list it was written for
+  static String _keyOf(Object? request) => request is Map<String, dynamic>
+      ? '${request['type']}/${request['songId']}/${request['queuedAt']}/'
+            '${request['playedAt']}'
+      : 'unreadable';
+
   /// Load queue from persistent storage
   Future<void> _loadQueue() async {
     try {
@@ -302,48 +358,119 @@ class ScrobbleQueue {
       if (queueJson != null) {
         final queueData = json.decode(queueJson) as List<dynamic>;
         _queue.clear();
+        // The requests at the start were sent already, see _saveProgress()
+        final handled = _handledOf(prefs, queueData);
+        _storedHead = queueData.isEmpty ? null : _keyOf(queueData.first);
+        _handled = handled;
         // Entry by entry: one that can't be read (e.g. written by a newer
         // version) is dropped, not the plays around it
-        for (final item in queueData) {
+        var droppedUnreadable = false;
+        for (final item in queueData.skip(handled)) {
           final ScrobbleRequest request;
           try {
             request = ScrobbleRequest.fromJson(item as Map<String, dynamic>);
           } catch (e) {
             _log.warning('Dropping unreadable scrobble request: $item', e);
+            droppedUnreadable = true;
             continue;
           }
           _queue.add(request);
         }
-        _log.fine('Loaded ${_queue.length} scrobble requests from storage');
+        _log.fine(
+          'Loaded ${_queue.length} scrobble requests from storage '
+          '($handled of the stored list were sent already)',
+        );
+        if (_queue.isEmpty) {
+          // Nothing left to send: don't leave the list for the next start
+          await _clearQueue();
+        } else if (droppedUnreadable) {
+          // The queue is no longer the stored list from [handled] on, which
+          // _saveProgress() counts on: write it as it is
+          await _saveQueue();
+        }
       }
     } catch (e) {
       _log.warning('Error loading scrobble queue', e);
       _queue.clear();
+      _storedHead = null;
+      _handled = 0;
     }
   }
 
-  /// Saves the queue, so the requests survive the process
+  /// How many requests at the start of the stored list [stored] were sent
+  /// already, from [_progressKey]; 0 if that was written for another list
+  int _handledOf(SharedPreferences prefs, List<dynamic> stored) {
+    final progressJson = prefs.getString(_progressKey);
+    if (progressJson == null || stored.isEmpty) return 0;
+    try {
+      final progress = json.decode(progressJson) as Map<String, dynamic>;
+      final handled = progress['handled'] as int;
+      if (progress['first'] == _keyOf(stored.first) &&
+          handled >= 0 &&
+          handled <= stored.length) {
+        return handled;
+      }
+    } catch (e) {
+      _log.warning('Ignoring unreadable scrobble queue progress', e);
+    }
+    return 0;
+  }
+
+  /// Saves the whole queue, so the requests survive the process. Requests
+  /// sent since the last save are gone from the stored list afterwards.
   Future<void> _saveQueue() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       if (_queue.isEmpty) {
-        await prefs.remove(_storageKey);
+        await _clearQueue();
         return;
       }
-      await prefs.setString(
-        _storageKey,
-        json.encode([for (final request in _queue) request.toJson()]),
-      );
+      // What is stored is worked out right before the write, so it always
+      // describes what the write puts there
+      final requests = [for (final request in _queue) request.toJson()];
+      _storedHead = _keyOf(requests.first);
+      _handled = 0;
+      await prefs.setString(_storageKey, json.encode(requests));
+      // Belonged to the list before
+      await prefs.remove(_progressKey);
     } catch (e) {
       _log.warning('Error saving scrobble queue', e);
     }
   }
 
+  /// Saves that the requests that have left the queue since the stored list
+  /// was written are done, so a restart doesn't send them again. Writes a
+  /// few bytes: Android's SharedPreferences rewrites its whole file (the
+  /// settings and the saved queue too) on every change, so saving the list
+  /// again after each request would make a backlog of thousands of requests
+  /// (a week offline) rewrite it that many times. The list itself is written
+  /// again once the pass is over ([_saveQueue]) and when a request is added.
+  Future<void> _saveProgress() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final head = _storedHead;
+      if (head == null) {
+        // Nothing stored yet (the first save is still on its way)
+        await _saveQueue();
+        return;
+      }
+      await prefs.setString(
+        _progressKey,
+        json.encode({'first': head, 'handled': _handled}),
+      );
+    } catch (e) {
+      _log.warning('Error saving scrobble queue progress', e);
+    }
+  }
+
   /// Clear queue from persistent storage
   Future<void> _clearQueue() async {
+    _storedHead = null;
+    _handled = 0;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_storageKey);
+      await prefs.remove(_progressKey);
     } catch (e) {
       _log.warning('Error clearing scrobble queue', e);
     }
