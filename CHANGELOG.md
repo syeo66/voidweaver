@@ -11,6 +11,8 @@ each release. A release with nothing a user would notice says so.
 
 ## Unreleased
 
+## 1.3.11 - 2026-11-17
+
 - New: a "Random" shortcut on the app icon. Long-press the icon (or drag the shortcut to the home screen) to start random songs in one step, for example at bedtime. It opens the app and plays a fresh random pick, replacing what was playing.
 
 ## 1.3.10 - 2026-11-17
