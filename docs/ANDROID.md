@@ -41,7 +41,7 @@ After login, tapping the first album card at (400, 550) starts playback. Tapping
 
 This is the part most likely to break silently.
 
-`tool/check_release_apk.sh` checks the release APK itself, without a device: Media3's notification icons are there and not shrinker placeholders, the manifest declares `PlaybackService` and the media button receiver, their classes survived R8, and the native code is for arm64 only (also the plugins' libraries, which `android/app/build.gradle.kts` limits to the ABIs of `--target-platform`). CI runs it after the release build; `make check-apk` builds and runs it. It catches the shrinker failure described under [Known pitfalls](#known-pitfalls), but not a session that's broken at runtime.
+`tool/check_release_apk.sh` checks the release APK itself, without a device: Media3's notification icons are there and not shrinker placeholders, the manifest declares `PlaybackService` and the media button receiver, the [launcher shortcut](#launcher-shortcut) and its icon are there, their classes survived R8, and the native code is for arm64 only (also the plugins' libraries, which `android/app/build.gradle.kts` limits to the ABIs of `--target-platform`). CI runs it after the release build; `make check-apk` builds and runs it. It catches the shrinker failure described under [Known pitfalls](#known-pitfalls), but not a session that's broken at runtime.
 
 `tool/emulator_check.sh` runs the checks below (session, notification, media keys, gapless move to the next track, playing again after Android stopped the idle service, playback resumption, app errors in logcat) against a booted emulator with the app logged in, and exits non-zero on a failure. It waits for screens and taps elements through `uiautomator` rather than fixed delays, stops early when the app, the login or the first playback fails, and saves a screenshot, the UI hierarchy and logcat to `build/emulator-check/diagnostics/`. `make check-emulator` builds the release APK first; the APK is arm64 only, so the script stops before installing on an emulator without arm64 (with `--build`, before the build); `--apk <file>` installs another build, e.g. a known-good one to compare. Run it after every change to playback, login, the native layer or the toolchain. `make check-emulator-fake` (`--fake-server --build`) needs no server or credentials: it builds a release APK that trusts the tests' fake Subsonic server, runs that server on the host, clears the app's data and logs in to it. CI doesn't run it (it failed at the login step in the runner's emulator), so run it locally. The trusting APK goes to `build/emulator-check/`; never install it anywhere else.
 
@@ -66,6 +66,26 @@ Media key events go through MediaSessionService to the active session, the same 
 When it's broken, check `$ADB logcat -d --pid=$($ADB shell pidof red.ochsenbein.voidweaver) | grep -E " [EW] |Exception"`.
 
 **Compare against a known-good build.** If behavior differs, build the previous commit too and install each in turn. Diff the merged manifests (`build/app/intermediates/merged_manifest/release/...`) and the resources (`aapt2 dump resources <apk>`).
+
+## Launcher shortcut
+
+Long-pressing the app icon offers **Play random songs** (short label "Random"; it can be dragged to the home screen). It starts random songs as the shuffle button in the app bar does, replacing what was playing, and opens the app.
+
+- **Static shortcut.** `res/xml/shortcuts.xml`, referenced by the `android.app.shortcuts` meta-data of `MainActivity`, so it exists from install without running any code. Its intent has the action `red.ochsenbein.voidweaver.action.PLAY_RANDOM` and names `MainActivity`. Keep the shortcut id (`random`) and the action: a shortcut pinned to the home screen refers to them. The icon is an adaptive icon in the launcher icon's colors (black on white), with a `monochrome` layer for themed icons, and a plain vector for Android 7.1.
+- **`MainActivity` notes the tap.** Launchers start a static shortcut with `NEW_TASK | CLEAR_TASK` (`flg=0x1000c000` in `dumpsys shortcut`), so a tap recreates the activity and arrives in `onCreate()`; `onNewIntent()` covers an intent without `CLEAR_TASK` while the activity is on top. Either sets a static flag, which outlives the activity like the engine does. The task keeps the shortcut's intent as its base intent, so reopening the app from Recents, also after the process died, hands it in again: a launch with `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY` or saved state is ignored, or the app would start random again on every return from Recents.
+- **Dart asks.** `MainActivity.configureFlutterEngine()` answers `takeRandomRequest` on the channel `voidweaver/shortcuts` with the flag, clearing it (`getAndSet(false)`), so a tap is taken once. `AppRouter` asks once the app is initialized and whenever it's resumed: the activity resumes after `onCreate()` and `onNewIntent()`, so a tap is never left waiting, also when the engine was already running without an activity. If nobody is logged in, the tap is dropped (`Random shortcut ignored: not logged in` in the log), not kept for after the login. The handler holds no activity; each activity that attaches to the cached engine sets it again. An engine started for playback resumption has none until an activity attaches; Dart takes the missing handler for "no tap".
+- **Any app can send the action.** `MainActivity` is exported (it's the launcher activity), so another app can start it with `PLAY_RANDOM` too. That's accepted: all it does is what the shuffle button does, starting random songs from the user's own server; it returns nothing and changes no setting.
+
+To check it by hand (the log tag is `VoidweaverShortcut`, Dart's lines are under `flutter`):
+
+```bash
+$ADB shell dumpsys shortcut | grep -A12 "id=random"   # registered, with its intent and flags
+# the path of a launcher tap (onCreate); without -f while the app is in front: onNewIntent
+$ADB shell am start -a red.ochsenbein.voidweaver.action.PLAY_RANDOM -f 0x1000c000 -n red.ochsenbein.voidweaver/.MainActivity
+$ADB logcat -d -s VoidweaverShortcut:I flutter:I | grep -iE "shortcut|random songs"
+```
+
+In the Pixel launcher, open the app drawer (`input swipe 540 2000 540 600 300`) and long-press the icon (`input swipe <x> <y> <x> <y> 1200`) for the popup. Check at least: a tap with the process gone, with the app in front, with an album playing in the background, and after Back; reopening from Recents afterwards must log `Redelivered shortcut ignored` and not start random.
 
 ## Known pitfalls
 

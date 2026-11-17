@@ -6,12 +6,14 @@ import 'package:provider/provider.dart';
 
 import 'services/app_state.dart';
 import 'services/error_handler.dart';
+import 'services/launcher_shortcuts.dart';
 import 'services/previous_run.dart';
 import 'services/session_log.dart';
 import 'services/settings_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'widgets/error_boundary.dart';
+import 'widgets/random_songs_button.dart';
 import 'utils/log.dart';
 import 'utils/test_ca.dart';
 
@@ -110,10 +112,17 @@ class _AppRouterState extends State<AppRouter> {
     // By state rather than onShow/onHide: with the cached engine the app can
     // return from detached straight to resumed, which calls no onShow
     _lifecycleListener = AppLifecycleListener(
-      onStateChange: (state) => context.read<AppState>().setVisible(
-        state == AppLifecycleState.resumed ||
-            state == AppLifecycleState.inactive,
-      ),
+      onStateChange: (state) {
+        context.read<AppState>().setVisible(
+          state == AppLifecycleState.resumed ||
+              state == AppLifecycleState.inactive,
+        );
+        // A shortcut tap brings the app to the front; before it's
+        // initialized, _initializeApp() asks
+        if (state == AppLifecycleState.resumed && _initialized) {
+          unawaited(_playRandomIfRequested());
+        }
+      },
     );
     unawaited(_initializeApp());
   }
@@ -138,7 +147,22 @@ class _AppRouterState extends State<AppRouter> {
         _initialized = !failed;
         _initFailed = failed;
       });
+      if (!failed) unawaited(_playRandomIfRequested());
     }
+  }
+
+  /// Plays random songs if the launcher shortcut was tapped. The tap is
+  /// taken either way: logged out, it's dropped rather than kept for after
+  /// the login.
+  Future<void> _playRandomIfRequested() async {
+    if (!await LauncherShortcuts.takeRandomRequest() || !mounted) return;
+    // No player while logged out, or logging out
+    if (context.read<AppState>().audioPlayerService == null) {
+      _log.info('Random shortcut ignored: not logged in');
+      return;
+    }
+    _log.info('Random shortcut: playing random songs');
+    await playRandomWithFeedback(context);
   }
 
   void _retryInitialization() {

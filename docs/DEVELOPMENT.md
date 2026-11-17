@@ -40,6 +40,7 @@ Endpoints used: `ping` (checks the credentials on login), `getAlbumList2` (`type
 | `lib/services/upcoming_downloads.dart`, `replaygain_resolver.dart`, `listening_tracker.dart`, `sleep_timer.dart` | Parts of the player service: downloads of the next tracks ([CACHING.md](CACHING.md)), where a song's ReplayGain comes from ([REPLAYGAIN.md](REPLAYGAIN.md)), the listening time per play, the sleep timer |
 | `packages/voidweaver_player/` | Local plugin: playlist player on Media3 ExoPlayer with a gain stage per item, the media session for notification, lock screen and Bluetooth controls, the audio cache, network events (Java on the Android side) |
 | `lib/services/api_cache.dart`, `audio_cache.dart`, `image_cache_manager.dart`, `cover_art_cache.dart` | Caching, see [CACHING.md](CACHING.md) |
+| `lib/services/launcher_shortcuts.dart` | The Random launcher shortcut: whether it was tapped, asked by `AppRouter` (`lib/main.dart`); the native side is `MainActivity`, see [ANDROID.md](ANDROID.md#launcher-shortcut) |
 | `lib/services/scrobble_queue.dart` | Persistent scrobble queue with retries, see [PLAYBACK.md](PLAYBACK.md#scrobbling) |
 | `lib/services/replaygain_reader.dart`, `lib/services/replaygain/` | ReplayGain tag reading, one parser per tag format, see [REPLAYGAIN.md](REPLAYGAIN.md) |
 | `lib/services/playback_persistence.dart` | Saves and restores queue and position, see [PLAYBACK.md](PLAYBACK.md#restoring-playback) |

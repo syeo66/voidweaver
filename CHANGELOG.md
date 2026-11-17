@@ -11,6 +11,8 @@ each release. A release with nothing a user would notice says so.
 
 ## Unreleased
 
+- New: a "Random" shortcut on the app icon. Long-press the icon (or drag the shortcut to the home screen) to start random songs in one step, for example at bedtime. It opens the app and plays a fresh random pick, replacing what was playing.
+
 ## 1.3.10 - 2026-11-17
 
 - Plays and skips aren't lost when the server fails for a moment (for example a busy database, or a proxy that can't reach Navidrome): they're sent again for up to an hour instead of being dropped at the first error.

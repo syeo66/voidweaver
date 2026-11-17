@@ -85,6 +85,13 @@ for res in \
   mipmap/launcher_icon; do
   if problem=$(check_resource "$res"); then pass "$res"; else fail "$res: $problem"; fi
 done
+# The Random launcher shortcut (long-press the app icon) and its icon
+for res in \
+  xml/shortcuts \
+  drawable/ic_shortcut_random \
+  drawable/ic_shortcut_random_foreground; do
+  if problem=$(check_resource "$res"); then pass "$res"; else fail "$res: $problem"; fi
+done
 
 echo
 echo "== Manifest"
@@ -127,6 +134,12 @@ else
   else
     fail "PlaybackService is a MediaLibraryService (system resumption controls)"
   fi
+fi
+
+if element red.ochsenbein.voidweaver.MainActivity | grep -q '"android.app.shortcuts"'; then
+  pass "MainActivity declares the launcher shortcuts"
+else
+  fail "MainActivity declares the launcher shortcuts"
 fi
 
 if element androidx.media3.session.MediaButtonReceiver | grep -q '"android.intent.action.MEDIA_BUTTON"'; then

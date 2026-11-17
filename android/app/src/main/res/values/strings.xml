@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The launcher shortcut, see xml/shortcuts.xml -->
+    <string name="shortcut_random_short">Random</string>
+    <string name="shortcut_random_long">Play random songs</string>
+</resources>

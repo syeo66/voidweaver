@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher shortcuts (long-press the app icon), see MainActivity and
+     docs/ANDROID.md. Keep the id and the action: a shortcut pinned to the
+     home screen refers to them. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="random"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_random"
+        android:shortcutShortLabel="@string/shortcut_random_short"
+        android:shortcutLongLabel="@string/shortcut_random_long">
+        <intent
+            android:action="red.ochsenbein.voidweaver.action.PLAY_RANDOM"
+            android:targetPackage="red.ochsenbein.voidweaver"
+            android:targetClass="red.ochsenbein.voidweaver.MainActivity" />
+    </shortcut>
+</shortcuts>

@@ -22,6 +22,7 @@ subsoxy answers `getRandomSongs` with weighted picks based on your listening his
 ## Features
 
 - Browse albums and artists, search, and play albums or random songs
+- A "Random" shortcut on the app icon (long-press it) starts random songs in one step
 - ReplayGain normalization (track or album mode, preamp, clipping prevention, fallback gain), see [docs/REPLAYGAIN.md](docs/REPLAYGAIN.md)
 - Lock screen, notification and Bluetooth media controls, with background playback
 - The next 3 tracks are downloaded while you listen, so playback survives network drops; library data and cover art stay browsable offline, see [docs/CACHING.md](docs/CACHING.md)
