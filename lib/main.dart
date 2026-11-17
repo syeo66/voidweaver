@@ -180,6 +180,25 @@ class _AppRouterState extends State<AppRouter> {
 
     return Consumer<AppState>(
       builder: (context, appState, child) {
+        // The home screen's services are gone while the logout cleans up
+        if (appState.isLoggingOut) {
+          return Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  // Announced by screen readers when it appears
+                  Semantics(
+                    liveRegion: true,
+                    child: const Text('Logging out…'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
         return appState.isConfigured ? const HomeScreen() : const LoginScreen();
       },
     );

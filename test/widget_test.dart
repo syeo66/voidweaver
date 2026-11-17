@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 import 'package:voidweaver/main.dart';
+import 'package:voidweaver/screens/home_screen.dart';
+import 'package:voidweaver/screens/login_screen.dart';
 import 'package:voidweaver/services/app_state.dart';
 
 import 'test_helpers/waiting.dart';
@@ -106,6 +108,24 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets('shows progress, not the home screen, while logging out', (
+    WidgetTester tester,
+  ) async {
+    final appState = _LoggingOutAppState();
+    addTearDown(appState.dispose);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AppState>.value(
+        value: appState,
+        child: const MaterialApp(home: AppRouter()),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Logging out…'), findsOneWidget);
+    expect(find.byType(HomeScreen), findsNothing);
+    expect(find.byType(LoginScreen), findsNothing);
+  });
 }
 
 /// A store that can't be read
@@ -127,4 +147,16 @@ class _FailingStore extends SharedPreferencesStorePlatform {
   @override
   Future<bool> setValue(String valueType, String key, Object value) =>
       _working.setValue(valueType, key, value);
+}
+
+/// Logged in, with the logout running: its services are gone
+class _LoggingOutAppState extends AppState {
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  bool get isConfigured => true;
+
+  @override
+  bool get isLoggingOut => true;
 }

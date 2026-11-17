@@ -56,6 +56,7 @@ class AppState extends ChangeNotifier {
   bool _isLoading = false;
   String? _albumError;
   bool _isConfigured = false;
+  bool _loggingOut = false;
   SyncStatus _syncStatus = SyncStatus.idle;
   Timer? _syncTimer;
   Timer? _syncStatusResetTimer;
@@ -114,6 +115,12 @@ class AppState extends ChangeNotifier {
   /// or background sync that succeeds
   String? get albumError => _albumError;
   bool get isConfigured => _isConfigured;
+
+  /// Whether [clearConfiguration] is running. The services are gone by
+  /// then, so the screens that use them must not be shown; the app shows a
+  /// progress indicator until the logout is done and the login screen
+  /// follows.
+  bool get isLoggingOut => _loggingOut;
   SyncStatus get syncStatus => _syncStatus;
   DateTime? get lastSyncTime => _lastSyncTime;
 
@@ -591,10 +598,18 @@ class AppState extends ChangeNotifier {
   /// data that belongs to the server (library cache, cover art, downloaded
   /// audio, pending scrobbles, saved queue). Settings are kept.
   Future<void> clearConfiguration() async {
+    // A second tap while the first is running
+    if (_loggingOut) return;
     final api = _api;
     final scrobbleQueue = _scrobbleQueue;
     final audioCache = _audioCache;
     final player = _audioPlayerService;
+    // Before the services go: the screens that use them are replaced by a
+    // progress indicator, and the login screen only follows once the
+    // clean-up below is done. A new login meanwhile would share the queue
+    // and the scrobbles this logout is about to clear.
+    _loggingOut = true;
+    notifyListeners();
     // Dispose first, so nothing writes the server's data again afterwards
     _disposeServices();
 
@@ -608,37 +623,41 @@ class AppState extends ChangeNotifier {
       }
     }
 
-    await Future.wait([
-      clear('the credentials', _secureStorage.deleteAll),
-      if (api != null) clear('the library cache', api.clearCache),
-      if (scrobbleQueue != null)
-        clear('the pending scrobbles', scrobbleQueue.clear),
-      if (_persistenceService != null)
-        clear('the saved queue', _persistenceService!.clearPlaybackState),
-      if (api != null)
-        clear('the cover art', () => ImageCacheManager.clearCache(api)),
-      if (audioCache != null)
-        clear('the downloaded audio', () async {
-          // Once the player no longer streams into the cache. Its downloads
-          // ahead were cancelled when it was disposed.
-          await player?.released;
-          await audioCache.clear();
-        }),
-    ]);
-
-    _albums = [];
-    // A load still running is dropped, see loadAlbums()
-    _isLoading = false;
-    _albumError = null;
-    _isConfigured = false;
-    _syncStatus = SyncStatus.idle;
-    _lastSyncTime = null;
-    _scrobblesSent = 0;
-    _scrobblesListed = 0;
-    _configurationLoadingState = LoadingState.idle;
-    _configurationError = null;
-
-    notifyListeners();
+    try {
+      await Future.wait([
+        clear('the credentials', _secureStorage.deleteAll),
+        if (api != null) clear('the library cache', api.clearCache),
+        if (scrobbleQueue != null)
+          clear('the pending scrobbles', scrobbleQueue.clear),
+        if (_persistenceService != null)
+          clear('the saved queue', _persistenceService!.clearPlaybackState),
+        if (api != null)
+          clear('the cover art', () => ImageCacheManager.clearCache(api)),
+        if (audioCache != null)
+          clear('the downloaded audio', () async {
+            // Once the player no longer streams into the cache. Its downloads
+            // ahead were cancelled when it was disposed.
+            await player?.released;
+            await audioCache.clear();
+          }),
+      ]);
+    } finally {
+      // Also if the clean-up failed: the services are gone, so the login
+      // screen must come up
+      _albums = [];
+      // A load still running is dropped, see loadAlbums()
+      _isLoading = false;
+      _albumError = null;
+      _isConfigured = false;
+      _loggingOut = false;
+      _syncStatus = SyncStatus.idle;
+      _lastSyncTime = null;
+      _scrobblesSent = 0;
+      _scrobblesListed = 0;
+      _configurationLoadingState = LoadingState.idle;
+      _configurationError = null;
+      notifyListeners();
+    }
   }
 
   @override

@@ -11,6 +11,8 @@ each release. A release with nothing a user would notice says so.
 
 ## Unreleased
 
+- Logging out shows a "Logging out…" screen while the app clears its saved data (downloaded audio can take a moment), instead of leaving the old screens up, where a tap on Play or an album could fail. A second tap on Logout is ignored.
+
 ## 1.3.9 - 2026-11-16
 
 - The artist list isn't downloaded again every 15 minutes: the app first asks the server whether the library changed, so the Artists tab opens faster on a slow connection.

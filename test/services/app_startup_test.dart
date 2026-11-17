@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -90,6 +91,47 @@ void main() {
     expect(pluginCalls.indexOf('cache.clear'), greaterThan(released));
   });
 
+  test('a logout shows as running until its clean-up is done', () async {
+    final temp = await Directory.systemTemp.createTemp();
+    addTearDown(() => temp.delete(recursive: true));
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (_) async => temp.path,
+        );
+    final storage = _SlowDeleteStorage();
+    FlutterSecureStoragePlatform.instance = storage;
+    var notifications = 0;
+    appState.addListener(() => notifications++);
+
+    final loggingOut = appState.clearConfiguration();
+    // Before anything is awaited: the screens that use the services are
+    // replaced at once, and they're gone
+    expect(appState.isLoggingOut, isTrue);
+    expect(notifications, 1);
+    expect(appState.api, isNull);
+    expect(appState.audioPlayerService, isNull);
+
+    // A second request while it runs does nothing
+    await appState.clearConfiguration();
+    expect(appState.isLoggingOut, isTrue);
+    expect(notifications, 1);
+
+    await pumpUntil(
+      () => storage.deleteStarted.isCompleted,
+      reason: 'the credentials to be removed',
+    );
+    expect(appState.isLoggingOut, isTrue);
+    expect(appState.isConfigured, isTrue);
+
+    storage.release.complete();
+    await loggingOut;
+    expect(appState.isLoggingOut, isFalse);
+    expect(appState.isConfigured, isFalse);
+    // The login screen replaces the progress screen only when told
+    expect(notifications, 2);
+  });
+
   test(
     'a logout that cannot remove the credentials still clears the rest',
     () async {
@@ -119,4 +161,18 @@ class _FailingDeleteStorage extends TestFlutterSecureStoragePlatform {
   @override
   Future<void> deleteAll({required Map<String, String> options}) async =>
       throw PlatformException(code: 'keystore', message: 'unavailable');
+}
+
+/// Secure storage whose deleteAll() waits until [release] completes
+class _SlowDeleteStorage extends TestFlutterSecureStoragePlatform {
+  _SlowDeleteStorage() : super({});
+
+  final deleteStarted = Completer<void>();
+  final release = Completer<void>();
+
+  @override
+  Future<void> deleteAll({required Map<String, String> options}) async {
+    deleteStarted.complete();
+    await release.future;
+  }
 }
