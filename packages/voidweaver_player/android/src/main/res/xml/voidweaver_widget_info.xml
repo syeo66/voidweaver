@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The home screen widget, see PlayerWidget. It's updated by the app, never
+     on a schedule. 250dp fit the compact layout (cover, title, Play, Next,
+     Random); from 120dp high, it shows the larger one. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:description="@string/voidweaver_widget_description"
+    android:initialLayout="@layout/voidweaver_widget"
+    android:previewLayout="@layout/voidweaver_widget"
+    android:minWidth="250dp"
+    android:minHeight="40dp"
+    android:minResizeWidth="250dp"
+    android:minResizeHeight="40dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    tools:targetApi="s" />

@@ -11,6 +11,8 @@ each release. A release with nothing a user would notice says so.
 
 ## Unreleased
 
+- New: a home screen widget. It shows the playing track with its cover and has Previous, Play/Pause and Next (Previous and Next are active while a track plays), plus a shuffle button that starts random songs like the app icon's "Random" shortcut. Make it taller for the album and the Previous button. After the app was closed, Play on the widget picks up the last track where you left off.
+
 ## 1.3.11 - 2026-11-17
 
 - New: a "Random" shortcut on the app icon. Long-press the icon (or drag the shortcut to the home screen) to start random songs in one step, for example at bedtime. It opens the app and plays a fresh random pick, replacing what was playing.

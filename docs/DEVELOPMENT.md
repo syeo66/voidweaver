@@ -11,7 +11,7 @@ make format          # dart format lib/ test/
 make build-release   # format + analyze + test + release APK
 make lint-android    # Android Lint on the player plugin (Gradle, needs JAVA_HOME)
 make test-integration  # user flows on a device/emulator against a fake server (see test/README.md)
-make check-apk       # release APK, then checks it for shrunk-away notification icons and media session entries (tool/check_release_apk.sh, no device)
+make check-apk       # release APK, then checks it for shrunk-away notification icons, media session and widget entries (tool/check_release_apk.sh, no device)
 make check-emulator  # release APK, then media session/keys/resumption checks in the running emulator (tool/emulator_check.sh, see docs/ANDROID.md)
 make check-emulator-fake  # the same against the fake Subsonic server, no login needed; clears the app's data (local only, not in CI)
 ```
@@ -38,7 +38,7 @@ Endpoints used: `ping` (checks the credentials on login), `getAlbumList2` (`type
 | `lib/services/subsonic_api.dart` | Subsonic client: token auth, response parsing, API cache. Re-exports the models from `lib/models/subsonic_models.dart` |
 | `lib/services/audio_player_service.dart`, `player_worker.dart` | The playlist and the player: skips, load errors, scrobbling, ReplayGain gains; the worker carries out every change of the player's track, sequence or position one call at a time. See [PLAYBACK.md](PLAYBACK.md) |
 | `lib/services/upcoming_downloads.dart`, `replaygain_resolver.dart`, `listening_tracker.dart`, `sleep_timer.dart` | Parts of the player service: downloads of the next tracks ([CACHING.md](CACHING.md)), where a song's ReplayGain comes from ([REPLAYGAIN.md](REPLAYGAIN.md)), the listening time per play, the sleep timer |
-| `packages/voidweaver_player/` | Local plugin: playlist player on Media3 ExoPlayer with a gain stage per item, the media session for notification, lock screen and Bluetooth controls, the audio cache, network events (Java on the Android side) |
+| `packages/voidweaver_player/` | Local plugin: playlist player on Media3 ExoPlayer with a gain stage per item, the media session for notification, lock screen and Bluetooth controls, the home screen widget (`PlayerWidget`, see [ANDROID.md](ANDROID.md#home-screen-widget)), the audio cache, network events (Java on the Android side) |
 | `lib/services/api_cache.dart`, `audio_cache.dart`, `image_cache_manager.dart`, `cover_art_cache.dart` | Caching, see [CACHING.md](CACHING.md) |
 | `lib/services/launcher_shortcuts.dart` | The Random launcher shortcut: whether it was tapped, asked by `AppRouter` (`lib/main.dart`); the native side is `MainActivity`, see [ANDROID.md](ANDROID.md#launcher-shortcut) |
 | `lib/services/scrobble_queue.dart` | Persistent scrobble queue with retries, see [PLAYBACK.md](PLAYBACK.md#scrobbling) |

@@ -25,5 +25,18 @@
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </receiver>
+        <!-- The home screen widget. Not exported: Android sends it the widget
+             updates, and its Previous/Next buttons are its own PendingIntents -->
+        <receiver
+            android:name=".PlayerWidget"
+            android:exported="false"
+            android:label="@string/voidweaver_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/voidweaver_widget_info" />
+        </receiver>
     </application>
 </manifest>

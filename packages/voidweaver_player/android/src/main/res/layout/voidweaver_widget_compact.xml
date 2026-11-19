@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The widget below 120dp high: cover, title and artist, Play, Next and
+     Random in one row. See voidweaver_widget.xml. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/voidweaver_widget_background"
+    android:clipToOutline="true"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="8dp"
+    android:paddingTop="4dp"
+    android:paddingEnd="4dp"
+    android:paddingBottom="4dp"
+    tools:targetApi="s">
+
+    <FrameLayout
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="@drawable/voidweaver_widget_cover_background"
+        android:clipToOutline="true">
+
+        <ImageView
+            android:id="@+id/voidweaver_widget_cover_placeholder"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:importantForAccessibility="no"
+            android:padding="12dp"
+            android:src="@drawable/media3_icon_album"
+            android:tint="@color/voidweaver_widget_text_secondary" />
+
+        <ImageView
+            android:id="@+id/voidweaver_widget_cover"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:importantForAccessibility="no"
+            android:scaleType="centerCrop"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/voidweaver_widget_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:maxLines="1"
+            android:text="@string/voidweaver_widget_nothing_playing"
+            android:textColor="@color/voidweaver_widget_text"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/voidweaver_widget_artist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/voidweaver_widget_text_secondary"
+            android:textSize="13sp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/voidweaver_widget_play_pause"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="4dp"
+        android:background="@drawable/voidweaver_widget_play_background"
+        android:contentDescription="@string/voidweaver_widget_play"
+        android:padding="12dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/media3_icon_play"
+        android:tint="@color/voidweaver_widget_play_icon" />
+
+    <ImageButton
+        android:id="@+id/voidweaver_widget_next"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/voidweaver_widget_next"
+        android:padding="12dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/media3_icon_next"
+        android:tint="@color/voidweaver_widget_icon" />
+
+    <ImageButton
+        android:id="@+id/voidweaver_widget_random"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/voidweaver_widget_random"
+        android:padding="12dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/media3_icon_shuffle_on"
+        android:tint="@color/voidweaver_widget_icon" />
+</LinearLayout>

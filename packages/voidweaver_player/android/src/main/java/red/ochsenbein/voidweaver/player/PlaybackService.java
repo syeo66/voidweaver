@@ -156,6 +156,9 @@ public final class PlaybackService extends MediaLibraryService {
     instance = this;
     // Before anything that could crash; the plugin installs it too, once the engine is attached
     ProcessHistory.installCrashRecorder(this);
+    // A new process (e.g. Android restarting the service after a crash) must not keep the last
+    // one's widget, which may show a playing track
+    PlayerWidget.refresh(this);
     // The session is only idle once playback was stopped (SessionPlayer shows a failed load as
     // paused), and a stop ends the notification and the foreground service
     setShowNotificationForIdlePlayer(SHOW_NOTIFICATION_FOR_IDLE_PLAYER_NEVER);
@@ -176,6 +179,8 @@ public final class PlaybackService extends MediaLibraryService {
     if (resumeSession == null) {
       resumePlayer = new ResumePlayer(Looper.getMainLooper(), appName(), this::onResumeRequested);
       resumeSession = PlayerSession.create(this, "resume", resumePlayer);
+      // The widget shows the recent track as playing once Play was pressed
+      resumePlayer.addListener(PlayerWidget.listener(this, resumeSession, resumePlayer));
     }
     return resumeSession.session;
   }
@@ -202,7 +207,10 @@ public final class PlaybackService extends MediaLibraryService {
     successor = null;
     if (next != null) {
       stoodIn.session.setPlayer(next);
+      // Its player only shows once it has the session, see PlayerWidget.listener()
+      PlayerWidget.show(this, stoodIn);
     } else {
+      PlayerWidget.forget(this, stoodIn);
       removeSession(stoodIn.session);
       stoodIn.session.release();
     }

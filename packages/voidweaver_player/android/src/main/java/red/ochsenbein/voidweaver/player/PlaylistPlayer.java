@@ -58,7 +58,10 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
   private final ArtworkLoader artwork;
   private final ExoPlayer player;
   private final SessionPlayer sessionPlayer;
+  private final PlayerSession playerSession;
   private final MediaLibrarySession session;
+  // Keeps the home screen widget up to date, see PlayerWidget
+  private final Player.Listener widgetListener;
   private final Context context;
   private final Handler handler = new Handler(Looper.getMainLooper());
   private final Runnable positionUpdate = this::onPositionUpdate;
@@ -109,13 +112,18 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
     sessionPlayer = new SessionPlayer(player, this::onSessionCommand);
     // After the app was started to resume playback, the stand-in's session (which gets the media
     // buttons) becomes this player's, see PlaybackService
-    PlayerSession playerSession = PlaybackService.claimResumeSession(sessionPlayer);
-    if (playerSession == null) {
+    PlayerSession claimed = PlaybackService.claimResumeSession(sessionPlayer);
+    if (claimed == null) {
       playerSession = PlayerSession.create(context, id, sessionPlayer);
       PlaybackService.register(context, playerSession.session);
+    } else {
+      playerSession = claimed;
     }
     session = playerSession.session;
     artwork = playerSession.artwork;
+    // The widget shows what the session shows, so it follows the session's player
+    widgetListener = PlayerWidget.listener(context, playerSession, sessionPlayer);
+    sessionPlayer.addListener(widgetListener);
 
     methodChannel = new MethodChannel(messenger, "voidweaver_player/" + id);
     methodChannel.setMethodCallHandler(this);
@@ -386,6 +394,8 @@ final class PlaylistPlayer implements MethodChannel.MethodCallHandler, Player.Li
     methodChannel.setMethodCallHandler(null);
     eventChannel.setStreamHandler(null);
     eventSink = null;
+    sessionPlayer.removeListener(widgetListener);
+    PlayerWidget.forget(context, playerSession);
     PlaybackService.unregister(session);
     session.release();
     player.removeListener(this);

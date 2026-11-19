@@ -4,7 +4,8 @@
 # screen player and Bluetooth controls die without them, see
 # docs/ANDROID.md), and the manifest entries and classes of the media
 # session. Needs no device and no Java, only aapt2 from the Android SDK's
-# build-tools, so CI runs it after the release build. It doesn't replace
+# build-tools, so CI runs it after the release build. Also the home screen
+# widget's provider and resources. It doesn't replace
 # tool/emulator_check.sh.
 #
 #   tool/check_release_apk.sh            # build/app/outputs/flutter-apk/app-release.apk
@@ -92,6 +93,18 @@ for res in \
   drawable/ic_shortcut_random_foreground; do
   if problem=$(check_resource "$res"); then pass "$res"; else fail "$res: $problem"; fi
 done
+# The home screen widget: its provider info, layouts, and the Media3 icons it
+# uses besides the notification's (PlayerWidget loads its layouts by R field,
+# but a shrinker placeholder would draw an empty widget)
+for res in \
+  xml/voidweaver_widget_info \
+  layout/voidweaver_widget \
+  layout/voidweaver_widget_compact \
+  drawable/voidweaver_widget_background \
+  drawable/media3_icon_shuffle_on \
+  drawable/media3_icon_album; do
+  if problem=$(check_resource "$res"); then pass "$res"; else fail "$res: $problem"; fi
+done
 
 echo
 echo "== Manifest"
@@ -148,6 +161,14 @@ else
   fail "MediaButtonReceiver handles MEDIA_BUTTON (playback resumption)"
 fi
 
+widget=$(element red.ochsenbein.voidweaver.player.PlayerWidget)
+if grep -q '"android.appwidget.action.APPWIDGET_UPDATE"' <<<"$widget" &&
+  grep -q '"android.appwidget.provider"' <<<"$widget"; then
+  pass "PlayerWidget is a home screen widget provider"
+else
+  fail "PlayerWidget is a home screen widget provider"
+fi
+
 for permission in FOREGROUND_SERVICE FOREGROUND_SERVICE_MEDIA_PLAYBACK; do
   if grep -q "=\"android.permission.$permission\"" <<<"$manifest"; then
     pass "permission $permission"
@@ -163,6 +184,7 @@ dex=$(unzip -p "$APK" 'classes*.dex' | LC_ALL=C tr -c '[:print:]' '\n')
 for class in \
   red/ochsenbein/voidweaver/MainActivity \
   red/ochsenbein/voidweaver/player/PlaybackService \
+  red/ochsenbein/voidweaver/player/PlayerWidget \
   androidx/media3/session/MediaButtonReceiver; do
   if LC_ALL=C grep -qF "L$class;" <<<"$dex"; then pass "$class"; else fail "$class"; fi
 done

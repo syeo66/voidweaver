@@ -13,6 +13,7 @@ import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.plugin.common.MethodChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
 import red.ochsenbein.voidweaver.player.AppEngine;
+import red.ochsenbein.voidweaver.player.PlayerWidget;
 
 // Audio focus is handled by the player's ExoPlayer (packages/voidweaver_player).
 // Requesting it here as well would register a second focus listener that
@@ -20,10 +21,14 @@ import red.ochsenbein.voidweaver.player.AppEngine;
 public class MainActivity extends FlutterActivity {
   private static final String TAG = "VoidweaverShortcut";
 
-  /** The launcher shortcut's action (res/xml/shortcuts.xml). Pinned shortcuts use it: keep it. */
-  static final String ACTION_PLAY_RANDOM = "red.ochsenbein.voidweaver.action.PLAY_RANDOM";
+  /**
+   * The launcher shortcut's action (res/xml/shortcuts.xml), also sent by the home screen widget's
+   * Random button. Pinned shortcuts use it: keep it.
+   */
+  static final String ACTION_PLAY_RANDOM = PlayerWidget.ACTION_PLAY_RANDOM;
 
-  // A tap on the Random shortcut that Dart hasn't taken yet. Static: the
+  // A tap on the Random shortcut (or the widget's Random button) that Dart
+  // hasn't taken yet. Static: the
   // engine (and Dart) outlives the activity that got the tap.
   private static final AtomicBoolean randomRequested = new AtomicBoolean();
 
@@ -71,11 +76,12 @@ public class MainActivity extends FlutterActivity {
     noteShortcut(intent, false);
   }
 
-  // Launchers start a static shortcut with NEW_TASK | CLEAR_TASK, so a tap
-  // usually recreates the activity (onCreate); onNewIntent covers a launcher
-  // that doesn't. An activity recreated from saved state, or reopened from
-  // the recents, gets the intent it was first started with again: that tap
-  // was handled back then and mustn't start random a second time.
+  // Launchers start a static shortcut with NEW_TASK | CLEAR_TASK, and the
+  // widget does the same, so a tap usually recreates the activity (onCreate);
+  // onNewIntent covers a launcher that doesn't. An activity recreated from
+  // saved state, or reopened from the recents, gets the intent it was first
+  // started with again: that tap was handled back then and mustn't start
+  // random a second time.
   private static void noteShortcut(@Nullable Intent intent, boolean restored) {
     if (intent == null || !ACTION_PLAY_RANDOM.equals(intent.getAction())) return;
     boolean fromHistory = (intent.getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0;

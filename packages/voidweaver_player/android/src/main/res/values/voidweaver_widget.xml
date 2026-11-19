@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The home screen widget, see PlayerWidget. Prefixed: the plugin's resources
+     are merged into the app's. -->
+<resources>
+    <string name="voidweaver_widget_label">Player</string>
+    <string name="voidweaver_widget_description">The playing track with its controls, and random songs in one tap</string>
+    <string name="voidweaver_widget_nothing_playing">Nothing playing</string>
+    <string name="voidweaver_widget_previous">Previous track</string>
+    <string name="voidweaver_widget_play">Play</string>
+    <string name="voidweaver_widget_pause">Pause</string>
+    <string name="voidweaver_widget_next">Next track</string>
+    <string name="voidweaver_widget_random">Play random songs</string>
+
+    <!-- Black and white like the launcher icon; Android 12+ uses the wallpaper's
+         colors (values-v31) -->
+    <color name="voidweaver_widget_background">#FFFFFFFF</color>
+    <color name="voidweaver_widget_cover_background">#FFE7E7E7</color>
+    <color name="voidweaver_widget_text">#FF1C1B1F</color>
+    <color name="voidweaver_widget_text_secondary">#FF49454F</color>
+    <color name="voidweaver_widget_icon">#FF1C1B1F</color>
+    <color name="voidweaver_widget_play_background">#FF1C1B1F</color>
+    <color name="voidweaver_widget_play_icon">#FFFFFFFF</color>
+
+    <dimen name="voidweaver_widget_radius">16dp</dimen>
+    <dimen name="voidweaver_widget_inner_radius">8dp</dimen>
+</resources>

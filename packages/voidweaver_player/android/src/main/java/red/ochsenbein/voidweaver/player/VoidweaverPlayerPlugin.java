@@ -38,6 +38,8 @@ public class VoidweaverPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
   public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
     context = binding.getApplicationContext();
     ProcessHistory.installCrashRecorder(context);
+    // The widget may still show what an earlier process drew
+    PlayerWidget.refresh(context);
     messenger = binding.getBinaryMessenger();
     downloads = Executors.newSingleThreadExecutor();
     reads = Executors.newSingleThreadExecutor();
@@ -62,10 +64,11 @@ public class VoidweaverPlayerPlugin implements FlutterPlugin, MethodChannel.Meth
         }
       case "dispose":
         {
+          // Disposed on logout: no track for the system's resumption controls. Cleared first, so
+          // the widget, which shows the recent track once the player is gone, shows nothing
+          RecentItem.clear(context);
           PlaylistPlayer player = players.remove((String) call.argument("id"));
           if (player != null) player.release();
-          // Disposed on logout: no track for the system's resumption controls
-          RecentItem.clear(context);
           result.success(null);
           break;
         }

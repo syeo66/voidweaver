@@ -86,6 +86,19 @@ final class ArtworkLoader implements BitmapLoader {
     return new Uri.Builder().scheme(SCHEME).authority(id).build();
   }
 
+  /**
+   * What tells the artwork of [uri] apart: the cache key it was registered with, or its real URL.
+   * The same for the tracks of an album, whose items each have their own URI. Null for one of our
+   * URIs that isn't registered (any more).
+   */
+  @Nullable
+  String key(Uri uri) {
+    if (!SCHEME.equals(uri.getScheme())) return uri.toString();
+    Target target = targets.get(uri.getAuthority());
+    if (target == null) return null;
+    return target.cacheKey != null ? target.cacheKey : target.uri.toString();
+  }
+
   /** Forgets the URIs registered so far, when the playlist is replaced. */
   void clear() {
     targets.clear();

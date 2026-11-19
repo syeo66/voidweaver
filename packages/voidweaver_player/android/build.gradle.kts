@@ -43,6 +43,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // Robolectric inflates the widget's layouts (PlayerWidgetTest). The SDK the
+    // tests run on is set in src/test/resources/robolectric.properties.
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     lint {
         // Media3 marks much of what the plugin builds on @UnstableApi; the
         // check reports every use of it (193 of them), which would bury the

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="voidweaver_widget_background">#FF1C1B1F</color>
+    <color name="voidweaver_widget_cover_background">#FF2E2D31</color>
+    <color name="voidweaver_widget_text">#FFE6E1E5</color>
+    <color name="voidweaver_widget_text_secondary">#FFCAC4D0</color>
+    <color name="voidweaver_widget_icon">#FFE6E1E5</color>
+    <color name="voidweaver_widget_play_background">#FFE6E1E5</color>
+    <color name="voidweaver_widget_play_icon">#FF1C1B1F</color>
+</resources>
