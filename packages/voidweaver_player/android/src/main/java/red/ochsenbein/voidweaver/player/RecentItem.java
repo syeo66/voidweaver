@@ -46,7 +46,11 @@ final class RecentItem {
   /** The track the cover file is for: the cover shows while it's the saved track. */
   private static final String COVER_ID = "cover_id";
 
+  /** Named .png from when it always was one; now a JPEG for most covers, see {@link #formatFor}. */
   @VisibleForTesting static final String COVER_FILE = "voidweaver_recent_cover.png";
+
+  /** JPEG quality of the saved cover; PNG ignores it. */
+  private static final int COVER_QUALITY = 90;
 
   private static final ExecutorService io =
       Executors.newSingleThreadExecutor(
@@ -233,7 +237,7 @@ final class RecentItem {
   private static boolean write(File file, Bitmap bitmap) {
     File temporary = temporaryFile(file);
     try (OutputStream out = new FileOutputStream(temporary)) {
-      if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)) {
+      if (!bitmap.compress(formatFor(bitmap), COVER_QUALITY, out)) {
         throw new IOException("Could not compress the cover");
       }
     } catch (IOException | RuntimeException e) {
@@ -247,6 +251,16 @@ final class RecentItem {
       return false;
     }
     return true;
+  }
+
+  /**
+   * JPEG for a cover without transparency (nearly all: decoded from a JPEG), a fraction of a PNG's
+   * size for a photo; PNG keeps the transparency of the others. WebP would do both, but its lossy
+   * format needs Android 11. The file is read whatever its format.
+   */
+  @VisibleForTesting
+  static Bitmap.CompressFormat formatFor(Bitmap bitmap) {
+    return bitmap.hasAlpha() ? Bitmap.CompressFormat.PNG : Bitmap.CompressFormat.JPEG;
   }
 
   private static File temporaryFile(File file) {

@@ -3,8 +3,7 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 
 import '../../services/settings_service.dart';
-import '../../utils/validators.dart';
-import 'settings_snackbars.dart';
+import 'setting_slider.dart';
 
 /// Scrobble threshold: minimum play time and percentage.
 class ScrobblingSection extends StatelessWidget {
@@ -34,30 +33,16 @@ class ScrobblingSection extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            // Minimum play time
-            Text(
-              'Minimum Play Time: ${settingsService.scrobbleMinPlayTimeMinutes.toStringAsFixed(1)} min',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Slider(
+            SettingSlider(
+              title: 'Minimum Play Time',
               value: settingsService.scrobbleMinPlayTimeMinutes,
               min: 0.5,
               max: 10.0,
               divisions: 19,
-              label:
-                  '${settingsService.scrobbleMinPlayTimeMinutes.toStringAsFixed(1)} min',
-              onChanged: (value) {
-                final validationError =
-                    Validators.validateScrobbleMinPlayTimeMinutes(value);
-                if (validationError == null) {
-                  unawaited(
-                    settingsService.setScrobbleMinPlayTimeMinutes(value),
-                  );
-                } else {
-                  showSettingsError(context, validationError);
-                }
-              },
+              format: (value) => '${value.toStringAsFixed(1)} min',
+              onChanged: (value) => unawaited(
+                settingsService.setScrobbleMinPlayTimeMinutes(value),
+              ),
             ),
             Text(
               'Scrobble once a song has played for this long',
@@ -68,27 +53,15 @@ class ScrobblingSection extends StatelessWidget {
 
             const SizedBox(height: 16),
 
-            // Threshold percent
-            Text(
-              'Threshold: ${settingsService.scrobbleThresholdPercent.round()}%',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Slider(
+            SettingSlider(
+              title: 'Threshold',
               value: settingsService.scrobbleThresholdPercent,
               min: 10.0,
               max: 100.0,
               divisions: 90,
-              label: '${settingsService.scrobbleThresholdPercent.round()}%',
-              onChanged: (value) {
-                final validationError =
-                    Validators.validateScrobbleThresholdPercent(value);
-                if (validationError == null) {
-                  unawaited(settingsService.setScrobbleThresholdPercent(value));
-                } else {
-                  showSettingsError(context, validationError);
-                }
-              },
+              format: (value) => '${value.round()}%',
+              onChanged: (value) =>
+                  unawaited(settingsService.setScrobbleThresholdPercent(value)),
             ),
             Text(
               'Scrobble once this percentage of a song has played',

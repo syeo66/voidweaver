@@ -7,9 +7,6 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
-import android.net.ConnectivityManager;
-import android.net.Network;
-import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -25,18 +22,13 @@ import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.Util;
-import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.session.PlaybackPendingIntentBuilder;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
-import java.net.SocketException;
-import java.net.SocketTimeoutException;
-import java.net.UnknownHostException;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Predicate;
 
 /**
  * The home screen widget: the current track with its cover, Play/Pause and Next, and a
@@ -54,7 +46,7 @@ import java.util.function.Predicate;
  * button opens the app with the launcher shortcut's intent ({@link #ACTION_PLAY_RANDOM}).
  *
  * <p>A cover that couldn't be loaded for the network is loaded again when a network is back, a few
- * times at most, see {@link #coverFailed}.
+ * times at most, see {@link CoverRetry}.
  *
  * <p>Everything here runs on the main thread: the static fields are only touched there. Covers are
  * loaded on the session's bitmap loader or {@link RecentItem}'s thread, and posted back; network
@@ -96,22 +88,26 @@ public final class PlayerWidget extends AppWidgetProvider {
   /** The cover of {@link #shown}, once loaded. */
   @Nullable private static Cover cover;
 
-  /** How often a cover is loaded again after a network failure, see {@link #coverFailed}. */
-  @VisibleForTesting static final int MAX_RETRIES = 3;
+  /** Loads the cover again when the network is back, if it failed for the network. */
+  @VisibleForTesting
+  static final CoverRetry coverRetry =
+      new CoverRetry(
+          handler,
+          new CoverRetry.Loader() {
+            @Override
+            public boolean isMissing(String key) {
+              return shown != null
+                  && shownSession != null
+                  && cover == null
+                  && shown.artworkUri != null
+                  && key.equals(shown.artworkKey);
+            }
 
-  /** The cover that failed for the network last, and how often it was loaded again since. */
-  @Nullable private static String retryKey;
-
-  private static int retries;
-
-  /** Registered while {@link #retryKey} waits for a network, see {@link #waitForNetwork}. */
-  @Nullable private static ConnectivityManager.NetworkCallback retryCallback;
-
-  /** The next network event is the network that was there on registering: none came back. */
-  private static boolean skipCurrentNetwork;
-
-  /** Which load failures are retried; the tests replace it. */
-  @VisibleForTesting static Predicate<Throwable> retryable = PlayerWidget::isNetworkFailure;
+            @Override
+            public void load(Context context, String key) {
+              loadCover(context, shownSession, shown.artworkUri, key, true);
+            }
+          });
 
   /** What a widget shows. */
   @VisibleForTesting
@@ -321,7 +317,7 @@ public final class PlayerWidget extends AppWidgetProvider {
     if (state.equals(shown)) return;
     shown = state;
     if (cover != null && !cover.key.equals(state.artworkKey)) cover = null;
-    if (!Objects.equals(retryKey, state.artworkKey)) stopWaiting(context);
+    coverRetry.showing(context, state.artworkKey);
     render(context, widgetIds(context));
     if (cover != null) {
       // Kept from the track before (an album)
@@ -337,7 +333,7 @@ public final class PlayerWidget extends AppWidgetProvider {
   private static void showCover(Context context, String key, Bitmap bitmap) {
     if (shown == null || !key.equals(shown.artworkKey)) return;
     cover = new Cover(key, bitmap);
-    stopWaiting(context);
+    coverRetry.stop(context);
     render(context, widgetIds(context));
     saveCover(context, shown);
   }
@@ -398,126 +394,10 @@ public final class PlayerWidget extends AppWidgetProvider {
         MoreExecutors.directExecutor());
   }
 
-  /**
-   * The cover [key] of the app's player couldn't be loaded ([failure]): if that was the network,
-   * it's loaded again when a network is back, up to {@link #MAX_RETRIES} times per cover. Not after
-   * the server answered (an error status or document): the same request would fail the same way,
-   * and failed logins add up (see "Rejected credentials" in docs/DEVELOPMENT.md). On the main
-   * thread.
-   */
+  /** The cover [key] of the app's player couldn't be loaded ([failure]). On the main thread. */
   private static void coverFailed(Context context, String key, Throwable failure) {
     if (shown == null || !key.equals(shown.artworkKey) || cover != null) return;
-    if (!retryable.test(failure)) {
-      if (key.equals(retryKey)) stopWaiting(context);
-      return;
-    }
-    if (!key.equals(retryKey)) {
-      stopWaiting(context);
-      retryKey = key;
-      retries = 0;
-    }
-    if (retries >= MAX_RETRIES) {
-      // Once, not on every redraw of the same cover after
-      if (retryCallback != null) Log.i(TAG, "Cover not loaded again: tried " + retries + " times");
-      stopWaiting(context);
-      return;
-    }
-    waitForNetwork(context);
-  }
-
-  /** Whether [failure] means the server wasn't reached: no network, no route, a timeout. */
-  @VisibleForTesting
-  static boolean isNetworkFailure(Throwable failure) {
-    boolean network = false;
-    // The loaders wrap the IOException; a few levels are enough
-    Throwable cause = failure;
-    for (int depth = 0; cause != null && depth < 8; depth++, cause = cause.getCause()) {
-      if (cause instanceof HttpDataSource.InvalidResponseCodeException
-          || cause instanceof MediaCache.ErrorDocumentException) {
-        // The server answered
-        return false;
-      }
-      if (cause instanceof UnknownHostException
-          || cause instanceof SocketException // ConnectException, NoRouteToHostException, ...
-          || cause instanceof SocketTimeoutException) {
-        network = true;
-      }
-    }
-    return network;
-  }
-
-  /** Registers {@link #retryCallback}, unless it is already. */
-  private static void waitForNetwork(Context context) {
-    if (retryCallback != null) return;
-    Context app = context.getApplicationContext();
-    ConnectivityManager connectivity = app.getSystemService(ConnectivityManager.class);
-    // Registering reports the network there is now, if any: it didn't come back, a load just
-    // failed on it. A later one did.
-    skipCurrentNetwork = isOnline(connectivity);
-    ConnectivityManager.NetworkCallback[] callback = new ConnectivityManager.NetworkCallback[1];
-    callback[0] =
-        new NetworkMonitor.Callback(
-            // On a thread of ConnectivityManager's
-            () -> handler.post(() -> networkAvailable(app, callback[0])));
-    retryCallback = callback[0];
-    try {
-      connectivity.registerDefaultNetworkCallback(retryCallback);
-    } catch (RuntimeException e) {
-      // E.g. too many callbacks registered by the app: no retry then
-      Log.w(TAG, "Could not wait for the network", e);
-      retryCallback = null;
-    }
-  }
-
-  private static boolean isOnline(ConnectivityManager connectivity) {
-    Network network = connectivity.getActiveNetwork();
-    NetworkCapabilities capabilities =
-        network != null ? connectivity.getNetworkCapabilities(network) : null;
-    return capabilities != null
-        && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
-  }
-
-  /** A network is there: loads {@link #retryKey} again if it's still the cover missing. */
-  private static void networkAvailable(Context context, ConnectivityManager.NetworkCallback from) {
-    if (from != retryCallback) return;
-    if (skipCurrentNetwork) {
-      skipCurrentNetwork = false;
-      return;
-    }
-    State state = shown;
-    PlayerSession session = shownSession;
-    if (state == null
-        || session == null
-        || cover != null
-        || state.artworkUri == null
-        || !Objects.equals(retryKey, state.artworkKey)) {
-      stopWaiting(context);
-      return;
-    }
-    retries++;
-    Log.i(TAG, "Network back: loading the cover again (" + retries + ")");
-    loadCover(context, session, state.artworkUri, retryKey, true);
-  }
-
-  /** Unregisters {@link #retryCallback}. The tries made for {@link #retryKey} still count. */
-  private static void stopWaiting(Context context) {
-    if (retryCallback == null) return;
-    ConnectivityManager.NetworkCallback callback = retryCallback;
-    retryCallback = null;
-    skipCurrentNetwork = false;
-    try {
-      context
-          .getApplicationContext()
-          .getSystemService(ConnectivityManager.class)
-          .unregisterNetworkCallback(callback);
-    } catch (RuntimeException e) {
-      Log.w(TAG, "Could not stop waiting for the network", e);
-    }
-  }
-
-  @VisibleForTesting
-  static boolean waitsForNetwork() {
-    return retryCallback != null;
+    coverRetry.failed(context, key, failure);
   }
 
   private static Bitmap scale(Bitmap bitmap) {
@@ -730,10 +610,7 @@ public final class PlayerWidget extends AppWidgetProvider {
 
   @VisibleForTesting
   static void reset(Context context) {
-    stopWaiting(context);
-    retryKey = null;
-    retries = 0;
-    retryable = PlayerWidget::isNetworkFailure;
+    coverRetry.reset(context);
     shownSession = null;
     shown = null;
     cover = null;

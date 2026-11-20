@@ -101,6 +101,41 @@ public final class RecentItemTest {
   }
 
   @Test
+  public void savesAnOpaqueCoverAsJpeg() throws Exception {
+    RecentItem.save(context, item("1", "Dawn"));
+    String key = RecentItem.coverKey(ART_URL);
+    Bitmap opaque = bitmap(Color.RED);
+    opaque.setHasAlpha(false);
+    RecentItem.saveCover(context, "1", key, opaque);
+    RecentItem.awaitIo();
+
+    byte[] bytes = Files.readAllBytes(coverFile().toPath());
+    assertEquals((byte) 0xFF, bytes[0]);
+    assertEquals((byte) 0xD8, bytes[1]);
+    Bitmap loaded = loadCover(key);
+    assertNotNull(loaded);
+    assertEquals(4, loaded.getWidth());
+    // Lossy: about red
+    int pixel = loaded.getPixel(1, 1);
+    assertTrue(Color.red(pixel) > 230 && Color.green(pixel) < 25 && Color.blue(pixel) < 25);
+  }
+
+  @Test
+  public void keepsTheTransparencyOfACoverAsPng() throws Exception {
+    RecentItem.save(context, item("1", "Dawn"));
+    String key = RecentItem.coverKey(ART_URL);
+    RecentItem.saveCover(context, "1", key, bitmap(Color.TRANSPARENT));
+    RecentItem.awaitIo();
+
+    byte[] bytes = Files.readAllBytes(coverFile().toPath());
+    assertEquals((byte) 0x89, bytes[0]);
+    assertEquals((byte) 'P', bytes[1]);
+    Bitmap loaded = loadCover(key);
+    assertNotNull(loaded);
+    assertEquals(0, Color.alpha(loaded.getPixel(0, 0)));
+  }
+
+  @Test
   public void hasNoCoverForAnotherTrack() {
     RecentItem.save(context, item("1", "Dawn"));
     String key = RecentItem.coverKey("art-al-1");

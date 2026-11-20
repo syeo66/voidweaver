@@ -5,11 +5,10 @@ import 'package:provider/provider.dart';
 
 import '../../services/app_state.dart';
 import '../../services/settings_service.dart';
-import '../../utils/validators.dart';
-import 'settings_snackbars.dart';
+import 'setting_slider.dart';
 
 /// ReplayGain mode, preamp, clipping prevention and fallback gain. Changes
-/// apply to the queue right away.
+/// apply to the queue right away (a slider's once it's released).
 class ReplayGainSection extends StatelessWidget {
   final SettingsService settingsService;
 
@@ -94,29 +93,16 @@ class ReplayGainSection extends StatelessWidget {
               const Divider(),
               const SizedBox(height: 16),
 
-              // Preamp
-              Text(
-                'Preamp: ${settingsService.replayGainPreamp.toStringAsFixed(1)} dB',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              Slider(
+              SettingSlider(
+                title: 'Preamp',
                 value: settingsService.replayGainPreamp,
                 min: -15.0,
                 max: 15.0,
                 divisions: 300,
-                label:
-                    '${settingsService.replayGainPreamp.toStringAsFixed(1)} dB',
+                format: _formatDb,
                 onChanged: (value) {
-                  final validationError = Validators.validateReplayGainPreamp(
-                    value,
-                  );
-                  if (validationError == null) {
-                    unawaited(settingsService.setReplayGainPreamp(value));
-                    _refreshAudioVolume(context);
-                  } else {
-                    showSettingsError(context, validationError);
-                  }
+                  unawaited(settingsService.setReplayGainPreamp(value));
+                  _refreshAudioVolume(context);
                 },
               ),
               Text(
@@ -145,28 +131,16 @@ class ReplayGainSection extends StatelessWidget {
 
               const SizedBox(height: 16),
 
-              // Fallback Gain
-              Text(
-                'Fallback Gain: ${settingsService.replayGainFallbackGain.toStringAsFixed(1)} dB',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              Slider(
+              SettingSlider(
+                title: 'Fallback Gain',
                 value: settingsService.replayGainFallbackGain,
                 min: -15.0,
                 max: 15.0,
                 divisions: 300,
-                label:
-                    '${settingsService.replayGainFallbackGain.toStringAsFixed(1)} dB',
+                format: _formatDb,
                 onChanged: (value) {
-                  final validationError =
-                      Validators.validateReplayGainFallbackGain(value);
-                  if (validationError == null) {
-                    unawaited(settingsService.setReplayGainFallbackGain(value));
-                    _refreshAudioVolume(context);
-                  } else {
-                    showSettingsError(context, validationError);
-                  }
+                  unawaited(settingsService.setReplayGainFallbackGain(value));
+                  _refreshAudioVolume(context);
                 },
               ),
               Text(
@@ -181,6 +155,8 @@ class ReplayGainSection extends StatelessWidget {
       ),
     );
   }
+
+  static String _formatDb(double value) => '${value.toStringAsFixed(1)} dB';
 
   String _getReplayGainModeTitle(ReplayGainMode mode) {
     switch (mode) {

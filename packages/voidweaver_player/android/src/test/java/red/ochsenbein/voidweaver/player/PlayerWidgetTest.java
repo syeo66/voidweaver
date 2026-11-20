@@ -27,24 +27,15 @@ import android.widget.TextView;
 import androidx.annotation.Nullable;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
-import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.SimpleBasePlayer;
-import androidx.media3.datasource.DataSpec;
-import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.session.PlaybackPendingIntentBuilder;
 import com.google.common.collect.ImmutableList;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
-import java.net.ConnectException;
-import java.net.NoRouteToHostException;
-import java.net.SocketTimeoutException;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.concurrent.ExecutionException;
 import java.util.function.BooleanSupplier;
 import java.util.List;
 import org.junit.After;
@@ -678,6 +669,34 @@ public final class PlayerWidgetTest {
     assertTrue(awaitCover(id));
   }
 
+  @Test
+  public void savesAJpegCoverAsJpeg() throws Exception {
+    // As most servers deliver covers: a JPEG, larger than the widget's size, so it's scaled
+    File art = new File(context.getCacheDir(), "art.jpg");
+    Bitmap source = Bitmap.createBitmap(640, 480, Bitmap.Config.ARGB_8888);
+    source.eraseColor(Color.BLUE);
+    try (OutputStream out = new FileOutputStream(art)) {
+      source.compress(Bitmap.CompressFormat.JPEG, 90, out);
+    }
+    FakePlayer player = tracks(1, true);
+    PlayerSession session = appSession(player);
+    Uri artworkUri = session.artwork.register("b", Uri.fromFile(art), null);
+    player.setState(tracks(1, true, artworkUri).state());
+    RecentItem.save(context, new MediaItem.Builder().setMediaId("b").build());
+    int id = addWidget();
+
+    PlayerWidget.show(context, session);
+    assertTrue(awaitCover(id));
+    RecentItem.awaitIo();
+
+    // Decoded through the session's loader and scaled, it has no alpha: saved as a JPEG
+    byte[] saved =
+        java.nio.file.Files.readAllBytes(
+            new File(context.getNoBackupFilesDir(), RecentItem.COVER_FILE).toPath());
+    assertEquals((byte) 0xFF, saved[0]);
+    assertEquals((byte) 0xD8, saved[1]);
+  }
+
   // Retrying a cover that failed for the network
 
   private static final Network WIFI = ShadowNetwork.newInstance(1);
@@ -741,7 +760,7 @@ public final class PlayerWidgetTest {
    */
   private PlayerSession playerWithMissingArt(File art) {
     failures = 0;
-    PlayerWidget.retryable =
+    PlayerWidget.coverRetry.retryable =
         failure -> {
           failures++;
           return failure instanceof FileNotFoundException
@@ -768,53 +787,13 @@ public final class PlayerWidgetTest {
   }
 
   @Test
-  public void retriesOnlyFailuresOfTheNetwork() {
-    DataSpec spec = new DataSpec(Uri.parse("https://music.example/rest/getCoverArt"));
-    assertTrue(PlayerWidget.isNetworkFailure(new UnknownHostException("music.example")));
-    assertTrue(PlayerWidget.isNetworkFailure(new ConnectException("refused")));
-    assertTrue(PlayerWidget.isNetworkFailure(new NoRouteToHostException("no route")));
-    assertTrue(PlayerWidget.isNetworkFailure(new SocketTimeoutException("timeout")));
-    // As Media3's data sources and the loaders' futures wrap them
-    assertTrue(
-        PlayerWidget.isNetworkFailure(
-            new ExecutionException(
-                new HttpDataSource.HttpDataSourceException(
-                    new UnknownHostException("music.example"),
-                    spec,
-                    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
-                    HttpDataSource.HttpDataSourceException.TYPE_OPEN))));
-
-    // The server answered: a proxy's 401/403, a Subsonic error document
-    assertFalse(
-        PlayerWidget.isNetworkFailure(
-            new HttpDataSource.InvalidResponseCodeException(
-                401, "Unauthorized", null, Collections.emptyMap(), spec, new byte[0])));
-    assertFalse(
-        PlayerWidget.isNetworkFailure(new MediaCache.ErrorDocumentException("text/xml")));
-    // Even if something about the network went wrong after the answer: the answer decides
-    assertFalse(
-        PlayerWidget.isNetworkFailure(
-            new HttpDataSource.InvalidResponseCodeException(
-                403,
-                "Forbidden",
-                new SocketTimeoutException("reading the error body"),
-                Collections.emptyMap(),
-                spec,
-                new byte[0])));
-    // Neither, or not known
-    assertFalse(PlayerWidget.isNetworkFailure(new FileNotFoundException("art.png")));
-    assertFalse(PlayerWidget.isNetworkFailure(new IllegalArgumentException("Unknown artwork")));
-    assertFalse(PlayerWidget.isNetworkFailure(new RuntimeException("decoding failed")));
-  }
-
-  @Test
   public void loadsTheCoverAgainWhenANetworkComesBack() throws Exception {
     setOnline(false);
     File art = missingArt();
     int id = addWidget();
     playerWithMissingArt(art);
     assertTrue(await(() -> failures == 1));
-    assertTrue(PlayerWidget.waitsForNetwork());
+    assertTrue(PlayerWidget.coverRetry.isWaiting());
     assertFalse(showsCover(id));
 
     writeArt(art);
@@ -822,7 +801,7 @@ public final class PlayerWidgetTest {
 
     assertTrue(awaitCover(id));
     // Done waiting
-    assertFalse(PlayerWidget.waitsForNetwork());
+    assertFalse(PlayerWidget.coverRetry.isWaiting());
     assertTrue(networkCallbacks().isEmpty());
   }
 
@@ -853,21 +832,21 @@ public final class PlayerWidgetTest {
     playerWithMissingArt(missingArt());
     assertTrue(await(() -> failures == 1));
 
-    for (int i = 1; i <= PlayerWidget.MAX_RETRIES; i++) {
+    for (int i = 1; i <= CoverRetry.MAX_RETRIES; i++) {
       // Waits for one network at a time, through one callback
       assertEquals(1, networkCallbacks().size());
       networkAvailable(i % 2 == 0 ? WIFI : MOBILE);
       int failed = i + 1;
       assertTrue(await(() -> failures == failed));
     }
-    assertFalse(PlayerWidget.waitsForNetwork());
+    assertFalse(PlayerWidget.coverRetry.isWaiting());
     assertTrue(networkCallbacks().isEmpty());
 
     // Drawn again for the same cover (a pause): its tries still count
     Uri artworkUri = artPlayer.getMediaMetadata().artworkUri;
     artPlayer.setState(tracks(1, false, artworkUri).state());
     ShadowLooper.idleMainLooper();
-    assertFalse(PlayerWidget.waitsForNetwork());
+    assertFalse(PlayerWidget.coverRetry.isWaiting());
     assertFalse(showsCover(id));
   }
 
@@ -877,14 +856,14 @@ public final class PlayerWidgetTest {
     File art = missingArt();
     playerWithMissingArt(art);
     // The real check: the missing file is no network failure
-    PlayerWidget.retryable =
+    PlayerWidget.coverRetry.retryable =
         failure -> {
           failures++;
-          return PlayerWidget.isNetworkFailure(failure);
+          return CoverRetry.isNetworkFailure(failure);
         };
     assertTrue(await(() -> failures == 1));
 
-    assertFalse(PlayerWidget.waitsForNetwork());
+    assertFalse(PlayerWidget.coverRetry.isWaiting());
     assertTrue(networkCallbacks().isEmpty());
   }
 
@@ -893,13 +872,13 @@ public final class PlayerWidgetTest {
     setOnline(false);
     playerWithMissingArt(missingArt());
     assertTrue(await(() -> failures == 1));
-    assertTrue(PlayerWidget.waitsForNetwork());
+    assertTrue(PlayerWidget.coverRetry.isWaiting());
 
     // The next track has no cover
     artPlayer.setState(tracks(2, true, null).state());
     ShadowLooper.idleMainLooper();
 
-    assertFalse(PlayerWidget.waitsForNetwork());
+    assertFalse(PlayerWidget.coverRetry.isWaiting());
     assertTrue(networkCallbacks().isEmpty());
   }
 
@@ -911,7 +890,7 @@ public final class PlayerWidgetTest {
 
     PlayerWidget.forget(context, session);
 
-    assertFalse(PlayerWidget.waitsForNetwork());
+    assertFalse(PlayerWidget.coverRetry.isWaiting());
     assertTrue(networkCallbacks().isEmpty());
   }
 }
