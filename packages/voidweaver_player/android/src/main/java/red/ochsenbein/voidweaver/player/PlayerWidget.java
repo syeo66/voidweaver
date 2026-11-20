@@ -7,6 +7,9 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -22,13 +25,18 @@ import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.Util;
+import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.session.PlaybackPendingIntentBuilder;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 /**
  * The home screen widget: the current track with its cover, Play/Pause and Next, and a
@@ -36,7 +44,8 @@ import java.util.Objects;
  *
  * <p>It shows the player of the session that played last ({@link #listener}): the app's player
  * while there is one, the track saved for playback resumption ({@link RecentItem}) after the app
- * was closed, or nothing after a logout. The launcher keeps the last views after the process died.
+ * was closed, with the cover the widget saved for it, or nothing after a logout. The launcher keeps
+ * the last views after the process died.
  *
  * <p>Play/Pause sends a media button intent to {@link PlaybackService}, built by Media3 for
  * widgets ({@link PlaybackPendingIntentBuilder}): the path the notification's buttons take, so Play
@@ -44,7 +53,12 @@ import java.util.Objects;
  * ResumePlayer}. Next comes back to this receiver ({@link #skipIntent}). The random
  * button opens the app with the launcher shortcut's intent ({@link #ACTION_PLAY_RANDOM}).
  *
- * <p>Everything runs on the main thread.
+ * <p>A cover that couldn't be loaded for the network is loaded again when a network is back, a few
+ * times at most, see {@link #coverFailed}.
+ *
+ * <p>Everything here runs on the main thread: the static fields are only touched there. Covers are
+ * loaded on the session's bitmap loader or {@link RecentItem}'s thread, and posted back; network
+ * events are posted too.
  */
 public final class PlayerWidget extends AppWidgetProvider {
   private static final String TAG = "VoidweaverWidget";
@@ -82,6 +96,23 @@ public final class PlayerWidget extends AppWidgetProvider {
   /** The cover of {@link #shown}, once loaded. */
   @Nullable private static Cover cover;
 
+  /** How often a cover is loaded again after a network failure, see {@link #coverFailed}. */
+  @VisibleForTesting static final int MAX_RETRIES = 3;
+
+  /** The cover that failed for the network last, and how often it was loaded again since. */
+  @Nullable private static String retryKey;
+
+  private static int retries;
+
+  /** Registered while {@link #retryKey} waits for a network, see {@link #waitForNetwork}. */
+  @Nullable private static ConnectivityManager.NetworkCallback retryCallback;
+
+  /** The next network event is the network that was there on registering: none came back. */
+  private static boolean skipCurrentNetwork;
+
+  /** Which load failures are retried; the tests replace it. */
+  @VisibleForTesting static Predicate<Throwable> retryable = PlayerWidget::isNetworkFailure;
+
   /** What a widget shows. */
   @VisibleForTesting
   static final class State {
@@ -100,7 +131,13 @@ public final class PlayerWidget extends AppWidgetProvider {
     @Nullable final String album;
     @Nullable final Uri artworkUri;
 
-    /** Tells covers apart, see {@link ArtworkLoader#key}. Null: no cover. */
+    /** The track's id, null for {@link Kind#EMPTY}. */
+    @Nullable final String mediaId;
+
+    /**
+     * Tells covers apart: {@link RecentItem#coverKey} of the {@link ArtworkLoader#key}. Null: no
+     * cover.
+     */
     @Nullable final String artworkKey;
 
     /** Shows Pause rather than Play. */
@@ -113,6 +150,7 @@ public final class PlayerWidget extends AppWidgetProvider {
 
     State(
         Kind kind,
+        @Nullable String mediaId,
         @Nullable String title,
         @Nullable String artist,
         @Nullable String album,
@@ -122,6 +160,7 @@ public final class PlayerWidget extends AppWidgetProvider {
         boolean canSkip,
         @Nullable String sessionId) {
       this.kind = kind;
+      this.mediaId = mediaId;
       this.title = title;
       this.artist = artist;
       this.album = album;
@@ -133,20 +172,24 @@ public final class PlayerWidget extends AppWidgetProvider {
     }
 
     static final State EMPTY =
-        new State(Kind.EMPTY, null, null, null, null, null, false, false, null);
+        new State(Kind.EMPTY, null, null, null, null, null, null, false, false, null);
 
-    /** The recent track; [playing] while the stand-in waits for the app to resume it. */
+    /**
+     * The recent track, with the cover saved for it; [playing] while the stand-in waits for the app
+     * to resume it.
+     */
     static State recent(Context context, boolean playing, @Nullable String sessionId) {
       MediaItem item = RecentItem.load(context);
       if (item == null) return EMPTY;
       MediaMetadata metadata = item.mediaMetadata;
       return new State(
           Kind.RECENT,
+          item.mediaId,
           string(metadata.title),
           string(metadata.artist),
           string(metadata.albumTitle),
           null,
-          null,
+          RecentItem.savedCoverKey(context),
           playing,
           false,
           sessionId);
@@ -165,13 +208,16 @@ public final class PlayerWidget extends AppWidgetProvider {
         // Nothing loaded yet, e.g. while the app restores its queue
         return recent(context, false, sessionId);
       }
+      MediaItem item = player.getCurrentMediaItem();
       MediaMetadata metadata = player.getMediaMetadata();
       Uri artworkUri = metadata.artworkUri;
-      String artworkKey = artworkUri != null ? session.artwork.key(artworkUri) : null;
+      String artworkKey =
+          artworkUri != null ? RecentItem.coverKey(session.artwork.key(artworkUri)) : null;
       // Also while buffering after Play (playWhenReady): the service is in the foreground then
       boolean playing = !Util.shouldShowPlayButton(player);
       return new State(
           Kind.PLAYER,
+          item.mediaId,
           string(metadata.title),
           string(metadata.artist),
           string(metadata.albumTitle),
@@ -188,6 +234,7 @@ public final class PlayerWidget extends AppWidgetProvider {
       if (!(o instanceof State)) return false;
       State other = (State) o;
       return kind == other.kind
+          && Objects.equals(mediaId, other.mediaId)
           && Objects.equals(title, other.title)
           && Objects.equals(artist, other.artist)
           && Objects.equals(album, other.album)
@@ -201,11 +248,20 @@ public final class PlayerWidget extends AppWidgetProvider {
     @Override
     public int hashCode() {
       return Objects.hash(
-          kind, title, artist, album, artworkUri, artworkKey, playing, canSkip, sessionId);
+          kind,
+          mediaId,
+          title,
+          artist,
+          album,
+          artworkUri,
+          artworkKey,
+          playing,
+          canSkip,
+          sessionId);
     }
   }
 
-  /** A loaded cover, scaled down, and the {@link ArtworkLoader#key} it was loaded for. */
+  /** A loaded cover, scaled down, and the {@link State#artworkKey} it was loaded for. */
   private static final class Cover {
     final String key;
     final Bitmap bitmap;
@@ -265,20 +321,59 @@ public final class PlayerWidget extends AppWidgetProvider {
     if (state.equals(shown)) return;
     shown = state;
     if (cover != null && !cover.key.equals(state.artworkKey)) cover = null;
+    if (!Objects.equals(retryKey, state.artworkKey)) stopWaiting(context);
     render(context, widgetIds(context));
-    if (cover == null && state.artworkUri != null && shownSession != null) {
-      loadCover(context, shownSession, state.artworkUri, state.artworkKey);
+    if (cover != null) {
+      // Kept from the track before (an album)
+      saveCover(context, state);
+    } else if (state.kind == State.Kind.RECENT && state.artworkKey != null) {
+      loadSavedCover(context, state.artworkKey);
+    } else if (state.artworkUri != null && shownSession != null) {
+      loadCover(context, shownSession, state.artworkUri, state.artworkKey, false);
     }
+  }
+
+  /** Shows [bitmap], loaded for [key], if that's still the cover shown. On the main thread. */
+  private static void showCover(Context context, String key, Bitmap bitmap) {
+    if (shown == null || !key.equals(shown.artworkKey)) return;
+    cover = new Cover(key, bitmap);
+    stopWaiting(context);
+    render(context, widgetIds(context));
+    saveCover(context, shown);
+  }
+
+  /** Keeps the cover of a track of the app's player for when it's the recent track. */
+  private static void saveCover(Context context, State state) {
+    if (state.kind != State.Kind.PLAYER || cover == null || state.mediaId == null) return;
+    if (!cover.key.equals(state.artworkKey)) return;
+    RecentItem.saveCover(context, state.mediaId, cover.key, cover.bitmap);
+  }
+
+  /** Loads the cover saved for the recent track, see {@link RecentItem#saveCover}. */
+  private static void loadSavedCover(Context context, String key) {
+    RecentItem.loadCover(
+        context,
+        key,
+        bitmap -> {
+          // The placeholder stays if it can't be read
+          if (bitmap != null) handler.post(() -> showCover(context, key, bitmap));
+        });
   }
 
   /**
    * Loads the cover through the session's bitmap loader, which caches the last one: the
-   * notification usually loaded it already. Also offline, see {@link ArtworkLoader}.
+   * notification usually loaded it already. Also offline, see {@link ArtworkLoader}. [retry]
+   * loads it through the {@link ArtworkLoader} itself: the session's loader keeps a failed load
+   * too, and would hand it out again.
    */
-  private static void loadCover(Context context, PlayerSession session, Uri uri, String key) {
+  private static void loadCover(
+      Context context, PlayerSession session, Uri uri, String key, boolean retry) {
     ListenableFuture<Bitmap> future;
     try {
-      future = session.session.getBitmapLoader().loadBitmap(uri);
+      future =
+          retry
+              ? session.artwork.loadBitmap(uri)
+              : session.session.getBitmapLoader().loadBitmap(uri);
     } catch (RuntimeException e) {
       Log.w(TAG, "Could not load the cover", e);
       return;
@@ -290,21 +385,139 @@ public final class PlayerWidget extends AppWidgetProvider {
           public void onSuccess(Bitmap bitmap) {
             // On the loader's thread, or here if it was cached
             Bitmap scaled = scale(bitmap);
-            handler.post(
-                () -> {
-                  if (shown == null || !key.equals(shown.artworkKey)) return;
-                  cover = new Cover(key, scaled);
-                  render(context, widgetIds(context));
-                });
+            handler.post(() -> showCover(context, key, scaled));
           }
 
           @Override
           public void onFailure(Throwable t) {
             // The placeholder stays
             Log.w(TAG, "Could not load the cover: " + t);
+            handler.post(() -> coverFailed(context, key, t));
           }
         },
         MoreExecutors.directExecutor());
+  }
+
+  /**
+   * The cover [key] of the app's player couldn't be loaded ([failure]): if that was the network,
+   * it's loaded again when a network is back, up to {@link #MAX_RETRIES} times per cover. Not after
+   * the server answered (an error status or document): the same request would fail the same way,
+   * and failed logins add up (see "Rejected credentials" in docs/DEVELOPMENT.md). On the main
+   * thread.
+   */
+  private static void coverFailed(Context context, String key, Throwable failure) {
+    if (shown == null || !key.equals(shown.artworkKey) || cover != null) return;
+    if (!retryable.test(failure)) {
+      if (key.equals(retryKey)) stopWaiting(context);
+      return;
+    }
+    if (!key.equals(retryKey)) {
+      stopWaiting(context);
+      retryKey = key;
+      retries = 0;
+    }
+    if (retries >= MAX_RETRIES) {
+      // Once, not on every redraw of the same cover after
+      if (retryCallback != null) Log.i(TAG, "Cover not loaded again: tried " + retries + " times");
+      stopWaiting(context);
+      return;
+    }
+    waitForNetwork(context);
+  }
+
+  /** Whether [failure] means the server wasn't reached: no network, no route, a timeout. */
+  @VisibleForTesting
+  static boolean isNetworkFailure(Throwable failure) {
+    boolean network = false;
+    // The loaders wrap the IOException; a few levels are enough
+    Throwable cause = failure;
+    for (int depth = 0; cause != null && depth < 8; depth++, cause = cause.getCause()) {
+      if (cause instanceof HttpDataSource.InvalidResponseCodeException
+          || cause instanceof MediaCache.ErrorDocumentException) {
+        // The server answered
+        return false;
+      }
+      if (cause instanceof UnknownHostException
+          || cause instanceof SocketException // ConnectException, NoRouteToHostException, ...
+          || cause instanceof SocketTimeoutException) {
+        network = true;
+      }
+    }
+    return network;
+  }
+
+  /** Registers {@link #retryCallback}, unless it is already. */
+  private static void waitForNetwork(Context context) {
+    if (retryCallback != null) return;
+    Context app = context.getApplicationContext();
+    ConnectivityManager connectivity = app.getSystemService(ConnectivityManager.class);
+    // Registering reports the network there is now, if any: it didn't come back, a load just
+    // failed on it. A later one did.
+    skipCurrentNetwork = isOnline(connectivity);
+    ConnectivityManager.NetworkCallback[] callback = new ConnectivityManager.NetworkCallback[1];
+    callback[0] =
+        new NetworkMonitor.Callback(
+            // On a thread of ConnectivityManager's
+            () -> handler.post(() -> networkAvailable(app, callback[0])));
+    retryCallback = callback[0];
+    try {
+      connectivity.registerDefaultNetworkCallback(retryCallback);
+    } catch (RuntimeException e) {
+      // E.g. too many callbacks registered by the app: no retry then
+      Log.w(TAG, "Could not wait for the network", e);
+      retryCallback = null;
+    }
+  }
+
+  private static boolean isOnline(ConnectivityManager connectivity) {
+    Network network = connectivity.getActiveNetwork();
+    NetworkCapabilities capabilities =
+        network != null ? connectivity.getNetworkCapabilities(network) : null;
+    return capabilities != null
+        && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+  }
+
+  /** A network is there: loads {@link #retryKey} again if it's still the cover missing. */
+  private static void networkAvailable(Context context, ConnectivityManager.NetworkCallback from) {
+    if (from != retryCallback) return;
+    if (skipCurrentNetwork) {
+      skipCurrentNetwork = false;
+      return;
+    }
+    State state = shown;
+    PlayerSession session = shownSession;
+    if (state == null
+        || session == null
+        || cover != null
+        || state.artworkUri == null
+        || !Objects.equals(retryKey, state.artworkKey)) {
+      stopWaiting(context);
+      return;
+    }
+    retries++;
+    Log.i(TAG, "Network back: loading the cover again (" + retries + ")");
+    loadCover(context, session, state.artworkUri, retryKey, true);
+  }
+
+  /** Unregisters {@link #retryCallback}. The tries made for {@link #retryKey} still count. */
+  private static void stopWaiting(Context context) {
+    if (retryCallback == null) return;
+    ConnectivityManager.NetworkCallback callback = retryCallback;
+    retryCallback = null;
+    skipCurrentNetwork = false;
+    try {
+      context
+          .getApplicationContext()
+          .getSystemService(ConnectivityManager.class)
+          .unregisterNetworkCallback(callback);
+    } catch (RuntimeException e) {
+      Log.w(TAG, "Could not stop waiting for the network", e);
+    }
+  }
+
+  @VisibleForTesting
+  static boolean waitsForNetwork() {
+    return retryCallback != null;
   }
 
   private static Bitmap scale(Bitmap bitmap) {
@@ -503,7 +716,9 @@ public final class PlayerWidget extends AppWidgetProvider {
   /** A widget was added, the device started, or the app was updated. */
   @Override
   public void onUpdate(Context context, AppWidgetManager manager, int[] ids) {
-    render(context, ids);
+    // The first time in this process: draws every widget, and loads the cover
+    if (shown == null) update(context.getApplicationContext());
+    else render(context, ids);
   }
 
   /** Resized: before Android 12, the layout is picked here. */
@@ -514,7 +729,11 @@ public final class PlayerWidget extends AppWidgetProvider {
   }
 
   @VisibleForTesting
-  static void reset() {
+  static void reset(Context context) {
+    stopWaiting(context);
+    retryKey = null;
+    retries = 0;
+    retryable = PlayerWidget::isNetworkFailure;
     shownSession = null;
     shown = null;
     cover = null;

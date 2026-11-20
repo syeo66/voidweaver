@@ -3,6 +3,7 @@ import 'package:logging/logging.dart';
 import 'package:mockito/mockito.dart';
 import 'package:voidweaver/services/replaygain_reader.dart';
 import 'package:voidweaver/services/replaygain_resolver.dart';
+import 'package:voidweaver/services/settings_service.dart';
 import 'package:voidweaver/services/subsonic_api.dart';
 
 import '../test_helpers/fake_audio_cache.dart';
@@ -174,6 +175,108 @@ void main() {
       await resolver.readMissing(song());
 
       verifyNever(api.readReplayGain(any));
+    });
+  });
+
+  // The lines users send in a session log. They're only built while the
+  // `replaygain` logger is at FINE, so the other tests never run them.
+  group('with ReplayGain diagnostics on', () {
+    final logger = Logger('replaygain');
+    late List<String> lines;
+
+    setUp(() {
+      hierarchicalLoggingEnabled = true;
+      logger.level = Level.FINE;
+      lines = [];
+      final sub = logger.onRecord
+          .where((r) => r.level == Level.FINE)
+          .listen((r) => lines.add(r.message));
+      addTearDown(() async {
+        await sub.cancel();
+        logger.level = null;
+      });
+    });
+
+    test('logs the values read from the file', () async {
+      when(api.readReplayGain('s1')).thenAnswer(
+        (_) async => const ReplayGainData(trackGain: -7.5, trackPeak: 0.98765),
+      );
+
+      await resolver.readMissing(song());
+
+      expect(
+        lines,
+        contains(
+          '[ReplayGain] File reading complete: TrackGain=-7.50, '
+          'AlbumGain=null, TrackPeak=0.9877, AlbumPeak=null',
+        ),
+      );
+    });
+
+    test('says when the file could not be read', () async {
+      when(api.readReplayGain('s1'))
+          .thenAnswer((_) async => const ReplayGainData.unavailable());
+
+      await resolver.readMissing(song());
+
+      expect(lines.last, endsWith('(could not be read)'));
+    });
+
+    test('says when a file without tags is skipped', () async {
+      when(api.readReplayGain('s1'))
+          .thenAnswer((_) async => const ReplayGainData());
+
+      await resolver.readMissing(song());
+      await resolver.readMissing(song());
+
+      expect(lines.last, contains('(read before)'));
+    });
+
+    test('logTrack reports the gain the track plays at', () {
+      when(settings.replayGainMode).thenReturn(ReplayGainMode.smart);
+      when(settings.replayGainPreamp).thenReturn(2);
+      when(settings.replayGainFallbackGain).thenReturn(-6);
+      when(settings.replayGainPreventClipping).thenReturn(true);
+      when(
+        settings.calculateVolumeAdjustment(
+          trackGain: anyNamed('trackGain'),
+          albumGain: anyNamed('albumGain'),
+          trackPeak: anyNamed('trackPeak'),
+          albumPeak: anyNamed('albumPeak'),
+          fromAlbum: anyNamed('fromAlbum'),
+        ),
+      ).thenReturn(0.5);
+
+      resolver.logTrack(
+        song(trackGain: -6, albumGain: -5),
+        fromAlbum: true,
+        queue: 'album',
+      );
+
+      expect(lines, contains('[ReplayGain] Mode: smart (queue: album)'));
+      expect(lines, contains('[ReplayGain] Source: METADATA'));
+      expect(
+        lines,
+        contains('[ReplayGain] Final Gain Multiplier: 0.500000 (50.00%)'),
+      );
+      verify(
+        settings.calculateVolumeAdjustment(
+          trackGain: -6,
+          albumGain: -5,
+          trackPeak: 0.9,
+          albumPeak: 0.95,
+          fromAlbum: true,
+        ),
+      ).called(1);
+    });
+
+    test('logTrack logs nothing while diagnostics are off', () {
+      logger.level = Level.INFO;
+
+      resolver.logTrack(song(trackGain: -6), fromAlbum: false, queue: 'song');
+
+      expect(lines, isEmpty);
+      verifyZeroInteractions(settings);
     });
   });
 }

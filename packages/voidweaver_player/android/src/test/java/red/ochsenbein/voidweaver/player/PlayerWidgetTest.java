@@ -13,6 +13,11 @@ import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Looper;
@@ -22,11 +27,25 @@ import android.widget.TextView;
 import androidx.annotation.Nullable;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
+import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.SimpleBasePlayer;
+import androidx.media3.datasource.DataSpec;
+import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.session.PlaybackPendingIntentBuilder;
 import com.google.common.collect.ImmutableList;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
+import java.net.ConnectException;
+import java.net.NoRouteToHostException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.concurrent.ExecutionException;
+import java.util.function.BooleanSupplier;
 import java.util.List;
 import org.junit.After;
 import org.junit.Before;
@@ -35,11 +54,16 @@ import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
+import org.robolectric.annotation.GraphicsMode;
 import org.robolectric.shadows.ShadowAppWidgetManager;
 import org.robolectric.shadows.ShadowLooper;
+import org.robolectric.shadows.ShadowNetwork;
+import org.robolectric.shadows.ShadowNetworkCapabilities;
 
 // Before Android 12 the widget picks its layout itself; from 12 on, the launcher
 @Config(sdk = {Build.VERSION_CODES.P, Build.VERSION_CODES.VANILLA_ICE_CREAM})
+// Real bitmaps, for the covers
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 @RunWith(RobolectricTestRunner.class)
 public final class PlayerWidgetTest {
   private static final String APP_ACTIVITY = "red.ochsenbein.voidweaver.MainActivity";
@@ -51,7 +75,7 @@ public final class PlayerWidgetTest {
 
   @Before
   public void setUp() {
-    PlayerWidget.reset();
+    PlayerWidget.reset(context);
     RecentItem.clear(context);
     widgets = shadowOf(AppWidgetManager.getInstance(context));
     // The app's launcher activity, which the widget opens
@@ -68,13 +92,52 @@ public final class PlayerWidgetTest {
       PlayerWidget.forget(context, session);
       session.session.release();
     }
-    PlayerWidget.reset();
+    PlayerWidget.reset(context);
     RecentItem.clear(context);
+    RecentItem.awaitIo();
     ShadowLooper.idleMainLooper();
+  }
+
+  private static Bitmap bitmap(int color) {
+    Bitmap bitmap = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888);
+    bitmap.eraseColor(color);
+    return bitmap;
+  }
+
+  /** Whether the widget [id] shows a cover rather than the placeholder. */
+  private boolean showsCover(int id) {
+    View view = widgetView(id);
+    return view.findViewById(R.id.voidweaver_widget_cover).getVisibility() == View.VISIBLE
+        && view.findViewById(R.id.voidweaver_widget_cover_placeholder).getVisibility()
+            == View.GONE;
+  }
+
+  /** Runs the main looper until the widget [id] shows a cover, or 5 seconds passed. */
+  private boolean awaitCover(int id) throws InterruptedException {
+    for (int i = 0; i < 500; i++) {
+      RecentItem.awaitIo();
+      if (showsCover(id)) return true;
+      Thread.sleep(10);
+    }
+    return false;
+  }
+
+  /** Saves the recent track "r" with [color] as the cover the widget saved for it. */
+  private String saveRecentWithCover(int color) {
+    saveRecent("Recent");
+    String key = RecentItem.coverKey("art-al-1");
+    RecentItem.saveCover(context, "r", key, bitmap(color));
+    RecentItem.awaitIo();
+    return key;
   }
 
   /** Items "a", "b", "c" with titles, artists and albums, at [index]. */
   private static FakePlayer tracks(int index, boolean playing) {
+    return tracks(index, playing, null);
+  }
+
+  /** {@link #tracks(int, boolean)} with [artworkUri] as the artwork of every item. */
+  private static FakePlayer tracks(int index, boolean playing, @Nullable Uri artworkUri) {
     FakePlayer player = new FakePlayer(3);
     ImmutableList.Builder<SimpleBasePlayer.MediaItemData> playlist = ImmutableList.builder();
     for (int i = 0; i < 3; i++) {
@@ -89,6 +152,7 @@ public final class PlayerWidgetTest {
                               .setTitle("Title " + id)
                               .setArtist("Artist " + id)
                               .setAlbumTitle("Album")
+                              .setArtworkUri(artworkUri)
                               .build())
                       .build())
               .setDurationUs(180_000_000)
@@ -441,7 +505,7 @@ public final class PlayerWidgetTest {
     assertEquals("Pause", playPauseLabel(widgetView(id)));
 
     // The process died; the launcher keeps its views. The next one starts the service or the app.
-    PlayerWidget.reset();
+    PlayerWidget.reset(context);
     PlayerWidget.refresh(context);
 
     View view = widgetView(id);
@@ -456,7 +520,7 @@ public final class PlayerWidgetTest {
     PlayerWidget.show(context, appSession(tracks(1, true)));
     commands.clear();
 
-    PlayerWidget.reset();
+    PlayerWidget.reset(context);
     new PlayerWidget().onReceive(context, new Intent(PlayerWidget.ACTION_NEXT));
 
     View view = widgetView(id);
@@ -540,5 +604,314 @@ public final class PlayerWidgetTest {
 
     assertTrue(state.playing);
     assertTrue(state.canSkip);
+  }
+
+  @Test
+  public void showsTheCoverSavedForTheRecentTrack() throws Exception {
+    saveRecentWithCover(Color.RED);
+    int id = addWidget();
+
+    new PlayerWidget()
+        .onUpdate(context, AppWidgetManager.getInstance(context), new int[] {id});
+
+    assertTrue(awaitCover(id));
+    assertEquals("Recent", text(widgetView(id), R.id.voidweaver_widget_title));
+  }
+
+  @Test
+  public void showsThePlaceholderWithoutASavedCover() throws Exception {
+    saveRecent("Recent");
+    int id = addWidget();
+
+    new PlayerWidget()
+        .onUpdate(context, AppWidgetManager.getInstance(context), new int[] {id});
+    RecentItem.awaitIo();
+
+    assertFalse(showsCover(id));
+  }
+
+  @Test
+  public void aSavedCoverReadBeforeALogoutIsntShownAfterIt() throws Exception {
+    saveRecentWithCover(Color.RED);
+    int id = addWidget();
+    PlayerSession session = appSession(tracks(1, true));
+    PlayerWidget.show(context, session);
+    // The recent track shows once the player is released: its cover is read ...
+    PlayerWidget.forget(context, session);
+    RecentItem.awaitIo();
+    // ... and posted, but the logout comes first (the main looper hasn't run the post yet)
+    PlayerWidget.show(context, session);
+    RecentItem.clear(context);
+    PlayerWidget.forget(context, session);
+
+    assertFalse(showsCover(id));
+    assertEquals("Nothing playing", text(widgetView(id), R.id.voidweaver_widget_title));
+  }
+
+  @Test
+  public void savesTheCoverOfThePlayersTrackForLater() throws Exception {
+    // Artwork without a cache key, read from a file here, keyed by its URL
+    File art = new File(context.getCacheDir(), "art.png");
+    try (OutputStream out = new FileOutputStream(art)) {
+      bitmap(Color.BLUE).compress(Bitmap.CompressFormat.PNG, 100, out);
+    }
+    FakePlayer player = tracks(1, true);
+    PlayerSession session = appSession(player);
+    // As PlaylistPlayer registers it, before the items have it
+    Uri artworkUri = session.artwork.register("b", Uri.fromFile(art), null);
+    player.setState(tracks(1, true, artworkUri).state());
+    // As PlaylistPlayer saves the current track
+    RecentItem.save(context, new MediaItem.Builder().setMediaId("b").build());
+    int id = addWidget();
+
+    PlayerWidget.show(context, session);
+    assertTrue(awaitCover(id));
+    RecentItem.awaitIo();
+
+    String key = RecentItem.coverKey(Uri.fromFile(art).toString());
+    assertEquals(key, RecentItem.savedCoverKey(context));
+
+    // Once the app's player is gone, the recent track keeps it, read from the saved file
+    PlayerWidget.reset(context);
+    new PlayerWidget()
+        .onUpdate(context, AppWidgetManager.getInstance(context), new int[] {id});
+    assertTrue(awaitCover(id));
+  }
+
+  // Retrying a cover that failed for the network
+
+  private static final Network WIFI = ShadowNetwork.newInstance(1);
+  private static final Network MOBILE = ShadowNetwork.newInstance(2);
+
+  private ConnectivityManager connectivity() {
+    return context.getSystemService(ConnectivityManager.class);
+  }
+
+  private static NetworkCapabilities validated() {
+    NetworkCapabilities capabilities = ShadowNetworkCapabilities.newInstance();
+    shadowOf(capabilities).addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+    shadowOf(capabilities).addCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+    return capabilities;
+  }
+
+  /** Whether the device has a validated network when the widget starts waiting for one. */
+  private void setOnline(boolean online) {
+    shadowOf(connectivity()).setDefaultNetworkActive(true);
+    Network active = connectivity().getActiveNetwork();
+    if (active == null) {
+      assertFalse(online);
+      return;
+    }
+    NetworkCapabilities capabilities =
+        online ? validated() : ShadowNetworkCapabilities.newInstance();
+    shadowOf(connectivity()).setNetworkCapabilities(active, capabilities);
+  }
+
+  /** The callbacks registered with ConnectivityManager. */
+  private List<ConnectivityManager.NetworkCallback> networkCallbacks() {
+    return new ArrayList<>(shadowOf(connectivity()).getNetworkCallbacks());
+  }
+
+  /** Reports [network] as the validated default network to the widget's callback. */
+  private void networkAvailable(Network network) {
+    List<ConnectivityManager.NetworkCallback> callbacks = networkCallbacks();
+    assertEquals(1, callbacks.size());
+    callbacks.get(0).onCapabilitiesChanged(network, validated());
+    ShadowLooper.idleMainLooper();
+  }
+
+  /** Runs the main looper until [condition] holds, or 5 seconds passed. */
+  private static boolean await(BooleanSupplier condition) throws InterruptedException {
+    for (int i = 0; i < 500; i++) {
+      ShadowLooper.idleMainLooper();
+      if (condition.getAsBoolean()) return true;
+      Thread.sleep(10);
+    }
+    return false;
+  }
+
+  private int failures;
+
+  /** The player of {@link #playerWithMissingArt}. */
+  private FakePlayer artPlayer;
+
+  /**
+   * Shows the app's player with item "b", whose artwork is the file [art] (missing for now), and
+   * counts the failed loads; they're retried as if the network had failed.
+   */
+  private PlayerSession playerWithMissingArt(File art) {
+    failures = 0;
+    PlayerWidget.retryable =
+        failure -> {
+          failures++;
+          return failure instanceof FileNotFoundException
+              || failure.getCause() instanceof FileNotFoundException;
+        };
+    artPlayer = tracks(1, true);
+    PlayerSession session = appSession(artPlayer);
+    Uri artworkUri = session.artwork.register("b", Uri.fromFile(art), null);
+    artPlayer.setState(tracks(1, true, artworkUri).state());
+    PlayerWidget.show(context, session);
+    return session;
+  }
+
+  private File missingArt() {
+    File art = new File(context.getCacheDir(), "missing-art.png");
+    assertTrue(!art.exists() || art.delete());
+    return art;
+  }
+
+  private static void writeArt(File art) throws Exception {
+    try (OutputStream out = new FileOutputStream(art)) {
+      bitmap(Color.GREEN).compress(Bitmap.CompressFormat.PNG, 100, out);
+    }
+  }
+
+  @Test
+  public void retriesOnlyFailuresOfTheNetwork() {
+    DataSpec spec = new DataSpec(Uri.parse("https://music.example/rest/getCoverArt"));
+    assertTrue(PlayerWidget.isNetworkFailure(new UnknownHostException("music.example")));
+    assertTrue(PlayerWidget.isNetworkFailure(new ConnectException("refused")));
+    assertTrue(PlayerWidget.isNetworkFailure(new NoRouteToHostException("no route")));
+    assertTrue(PlayerWidget.isNetworkFailure(new SocketTimeoutException("timeout")));
+    // As Media3's data sources and the loaders' futures wrap them
+    assertTrue(
+        PlayerWidget.isNetworkFailure(
+            new ExecutionException(
+                new HttpDataSource.HttpDataSourceException(
+                    new UnknownHostException("music.example"),
+                    spec,
+                    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+                    HttpDataSource.HttpDataSourceException.TYPE_OPEN))));
+
+    // The server answered: a proxy's 401/403, a Subsonic error document
+    assertFalse(
+        PlayerWidget.isNetworkFailure(
+            new HttpDataSource.InvalidResponseCodeException(
+                401, "Unauthorized", null, Collections.emptyMap(), spec, new byte[0])));
+    assertFalse(
+        PlayerWidget.isNetworkFailure(new MediaCache.ErrorDocumentException("text/xml")));
+    // Even if something about the network went wrong after the answer: the answer decides
+    assertFalse(
+        PlayerWidget.isNetworkFailure(
+            new HttpDataSource.InvalidResponseCodeException(
+                403,
+                "Forbidden",
+                new SocketTimeoutException("reading the error body"),
+                Collections.emptyMap(),
+                spec,
+                new byte[0])));
+    // Neither, or not known
+    assertFalse(PlayerWidget.isNetworkFailure(new FileNotFoundException("art.png")));
+    assertFalse(PlayerWidget.isNetworkFailure(new IllegalArgumentException("Unknown artwork")));
+    assertFalse(PlayerWidget.isNetworkFailure(new RuntimeException("decoding failed")));
+  }
+
+  @Test
+  public void loadsTheCoverAgainWhenANetworkComesBack() throws Exception {
+    setOnline(false);
+    File art = missingArt();
+    int id = addWidget();
+    playerWithMissingArt(art);
+    assertTrue(await(() -> failures == 1));
+    assertTrue(PlayerWidget.waitsForNetwork());
+    assertFalse(showsCover(id));
+
+    writeArt(art);
+    networkAvailable(WIFI);
+
+    assertTrue(awaitCover(id));
+    // Done waiting
+    assertFalse(PlayerWidget.waitsForNetwork());
+    assertTrue(networkCallbacks().isEmpty());
+  }
+
+  @Test
+  public void ignoresTheNetworkThatWasThereWhenTheLoadFailed() throws Exception {
+    setOnline(true);
+    File art = missingArt();
+    int id = addWidget();
+    playerWithMissingArt(art);
+    assertTrue(await(() -> failures == 1));
+    writeArt(art);
+
+    // Registering reports the network the load just failed on
+    networkAvailable(WIFI);
+    Thread.sleep(200);
+    ShadowLooper.idleMainLooper();
+    assertFalse(showsCover(id));
+
+    // Another one
+    networkAvailable(MOBILE);
+    assertTrue(awaitCover(id));
+  }
+
+  @Test
+  public void triesAFewTimesAtMost() throws Exception {
+    setOnline(false);
+    int id = addWidget();
+    playerWithMissingArt(missingArt());
+    assertTrue(await(() -> failures == 1));
+
+    for (int i = 1; i <= PlayerWidget.MAX_RETRIES; i++) {
+      // Waits for one network at a time, through one callback
+      assertEquals(1, networkCallbacks().size());
+      networkAvailable(i % 2 == 0 ? WIFI : MOBILE);
+      int failed = i + 1;
+      assertTrue(await(() -> failures == failed));
+    }
+    assertFalse(PlayerWidget.waitsForNetwork());
+    assertTrue(networkCallbacks().isEmpty());
+
+    // Drawn again for the same cover (a pause): its tries still count
+    Uri artworkUri = artPlayer.getMediaMetadata().artworkUri;
+    artPlayer.setState(tracks(1, false, artworkUri).state());
+    ShadowLooper.idleMainLooper();
+    assertFalse(PlayerWidget.waitsForNetwork());
+    assertFalse(showsCover(id));
+  }
+
+  @Test
+  public void doesNotRetryWhenTheServerAnswered() throws Exception {
+    setOnline(false);
+    File art = missingArt();
+    playerWithMissingArt(art);
+    // The real check: the missing file is no network failure
+    PlayerWidget.retryable =
+        failure -> {
+          failures++;
+          return PlayerWidget.isNetworkFailure(failure);
+        };
+    assertTrue(await(() -> failures == 1));
+
+    assertFalse(PlayerWidget.waitsForNetwork());
+    assertTrue(networkCallbacks().isEmpty());
+  }
+
+  @Test
+  public void stopsWaitingForAnotherCover() throws Exception {
+    setOnline(false);
+    playerWithMissingArt(missingArt());
+    assertTrue(await(() -> failures == 1));
+    assertTrue(PlayerWidget.waitsForNetwork());
+
+    // The next track has no cover
+    artPlayer.setState(tracks(2, true, null).state());
+    ShadowLooper.idleMainLooper();
+
+    assertFalse(PlayerWidget.waitsForNetwork());
+    assertTrue(networkCallbacks().isEmpty());
+  }
+
+  @Test
+  public void stopsWaitingWhenThePlayerIsGone() throws Exception {
+    setOnline(false);
+    PlayerSession session = playerWithMissingArt(missingArt());
+    assertTrue(await(() -> failures == 1));
+
+    PlayerWidget.forget(context, session);
+
+    assertFalse(PlayerWidget.waitsForNetwork());
+    assertTrue(networkCallbacks().isEmpty());
   }
 }

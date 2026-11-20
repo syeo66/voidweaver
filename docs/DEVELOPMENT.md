@@ -107,7 +107,7 @@ When the server rejects the saved credentials (an auth error from any request, a
 - The scrobble queue holds its requests (submissions and "now playing"), which keep their times, see [PLAYBACK.md](PLAYBACK.md#scrobbling).
 - Background sync skips, and downloads of upcoming tracks stop.
 - ReplayGain tags aren't read from the server (`SubsonicApi.readReplayGain()`, also for a track the user starts: it plays at the fallback gain, its stream still goes out).
-- Cover art that isn't cached isn't fetched (`CoverArtFileService`, see [CACHING.md](CACHING.md#cover-art-imagecachemanager)); a cover refused for the credentials sets the flag too. The media session still loads the artwork of a track that plays, unless it's cached: one request per track, like its stream.
+- Cover art that isn't cached isn't fetched (`CoverArtFileService`, see [CACHING.md](CACHING.md#cover-art-imagecachemanager)); a cover refused for the credentials sets the flag too. The media session still loads the artwork of a track that plays, unless it's cached: one request per track, like its stream. The home screen widget loads it again after a load that didn't reach the server (no connection, a timeout), at most 3 times per cover, and stops at the server's first error answer, see [ANDROID.md](ANDROID.md#home-screen-widget).
 
 Each request would fail the same way, and a steady stream of failed logins can get the device banned (fail2ban in front of the server), which would then refuse the new password too. Requests the user starts (a refresh, an album) still go out, so a password changed back on the server clears the flag.
 
