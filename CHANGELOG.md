@@ -11,6 +11,8 @@ each release. A release with nothing a user would notice says so.
 
 ## Unreleased
 
+## 1.3.14 - 2026-11-20
+
 - Settings: the ReplayGain and scrobbling sliders save their value once you let go, instead of at every step of the drag. The ReplayGain change is heard as you release the slider.
 - The cover the home screen widget keeps for the last track takes less storage (a JPEG instead of a PNG).
 
