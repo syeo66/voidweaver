@@ -11,6 +11,8 @@ each release. A release with nothing a user would notice says so.
 
 ## Unreleased
 
+## 1.3.13 - 2026-11-20
+
 - Changed: the home screen widget no longer has a Previous button, so Next and the others get more room.
 - The home screen widget keeps the cover of the last track after the app was closed or the phone restarted, instead of showing the placeholder.
 - A cover the widget couldn't load without a connection appears once the connection is back, instead of only with the next track.
