@@ -152,17 +152,8 @@ public final class PlayerWidgetTest {
     assertEquals("Artist b", state.artist);
     assertEquals("Album", state.album);
     assertTrue(state.playing);
-    assertTrue(state.canGoBack);
     assertTrue(state.canSkip);
     assertEquals("app", state.sessionId);
-  }
-
-  @Test
-  public void offersNoPreviousOnTheFirstTrack() {
-    PlayerWidget.State state = PlayerWidget.State.of(context, appSession(tracks(0, false)));
-
-    assertFalse(state.canGoBack);
-    assertFalse(state.playing);
   }
 
   @Test
@@ -175,7 +166,6 @@ public final class PlayerWidgetTest {
     assertEquals("Recent", state.title);
     assertFalse(state.playing);
     // Only Play can start the app to resume it
-    assertFalse(state.canGoBack);
     assertFalse(state.canSkip);
   }
 
@@ -289,17 +279,6 @@ public final class PlayerWidgetTest {
     View button = widgetView(id).findViewById(R.id.voidweaver_widget_play_pause);
 
     assertEquals("Pause", button.getContentDescription().toString());
-  }
-
-  @Test
-  public void disablesPreviousOnTheFirstTrack() {
-    PlayerWidget.State state = PlayerWidget.State.of(context, appSession(tracks(0, true)));
-
-    // The larger layout, which has Previous; Robolectric applies the smallest one
-    View view = PlayerWidget.views(context, true, state, null).apply(context, null);
-
-    assertFalse(view.findViewById(R.id.voidweaver_widget_previous).isEnabled());
-    assertTrue(view.findViewById(R.id.voidweaver_widget_next).isEnabled());
   }
 
   @Test
@@ -428,22 +407,17 @@ public final class PlayerWidgetTest {
   }
 
   @Test
-  public void nextAndPreviousGoToTheAppsPlayer() {
+  public void nextGoesToTheAppsPlayer() {
     int id = addWidget();
     PlayerSession session = appSession(tracks(1, true));
     PlayerWidget.show(context, session);
 
     widgetView(id).findViewById(R.id.voidweaver_widget_next).performClick();
     ShadowLooper.idleMainLooper();
-    PlayerWidget.views(context, true, PlayerWidget.State.of(context, session), null)
-        .apply(context, null)
-        .findViewById(R.id.voidweaver_widget_previous)
-        .performClick();
-    ShadowLooper.idleMainLooper();
 
     // Not through PlaybackService, which Android may have stopped
     assertNull(shadowOf(context).getNextStartedService());
-    assertEquals(List.of("next", "previous"), commands);
+    assertEquals(List.of("next"), commands);
   }
 
   @Test
@@ -508,11 +482,10 @@ public final class PlayerWidgetTest {
   }
 
   @Test
-  public void offersNoSkipsWhilePaused() {
+  public void offersNoSkipWhilePaused() {
     PlayerWidget.State state = PlayerWidget.State.of(context, appSession(tracks(1, false)));
 
     // A skip starts playback, which needs the service in the foreground, as it is while playing
-    assertFalse(state.canGoBack);
     assertFalse(state.canSkip);
   }
 
@@ -535,7 +508,7 @@ public final class PlayerWidgetTest {
   }
 
   @Test
-  public void pausingDimsPreviousAndNextAndTheyDoNothing() {
+  public void pausingDimsNextAndItDoesNothing() {
     int id = addWidget();
     FakePlayer player = tracks(1, true);
     PlayerSession session = appSession(player);
@@ -549,16 +522,10 @@ public final class PlayerWidgetTest {
             .setPlayWhenReady(false, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
             .build());
     View next = widgetView(id).findViewById(R.id.voidweaver_widget_next);
-    View previous =
-        PlayerWidget.views(context, true, PlayerWidget.State.of(context, session), null)
-            .apply(context, null)
-            .findViewById(R.id.voidweaver_widget_previous);
 
     assertFalse(next.isEnabled());
-    assertFalse(previous.isEnabled());
-    // No PendingIntent behind them either
+    // No PendingIntent behind it either
     next.performClick();
-    previous.performClick();
     ShadowLooper.idleMainLooper();
     assertTrue(shadowOf(context).getBroadcastIntents().isEmpty());
     assertTrue(commands.isEmpty());

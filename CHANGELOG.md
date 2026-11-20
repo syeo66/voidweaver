@@ -11,6 +11,8 @@ each release. A release with nothing a user would notice says so.
 
 ## Unreleased
 
+- Changed: the home screen widget no longer has a Previous button, so Next and the others get more room.
+
 ## 1.3.12 - 2026-11-19
 
 - New: a home screen widget. It shows the playing track with its cover and has Previous, Play/Pause and Next (Previous and Next are active while a track plays), plus a shuffle button that starts random songs like the app icon's "Random" shortcut. Make it taller for the album and the Previous button. After the app was closed, Play on the widget picks up the last track where you left off.

@@ -31,7 +31,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * The home screen widget: the current track with its cover, Previous, Play/Pause and Next, and a
+ * The home screen widget: the current track with its cover, Play/Pause and Next, and a
  * button that starts random songs.
  *
  * <p>It shows the player of the session that played last ({@link #listener}): the app's player
@@ -41,7 +41,7 @@ import java.util.Objects;
  * <p>Play/Pause sends a media button intent to {@link PlaybackService}, built by Media3 for
  * widgets ({@link PlaybackPendingIntentBuilder}): the path the notification's buttons take, so Play
  * also starts the service again after Android stopped it, or the app to resume playback, see {@link
- * ResumePlayer}. Previous and Next come back to this receiver ({@link #skipIntent}). The random
+ * ResumePlayer}. Next comes back to this receiver ({@link #skipIntent}). The random
  * button opens the app with the launcher shortcut's intent ({@link #ACTION_PLAY_RANDOM}).
  *
  * <p>Everything runs on the main thread.
@@ -58,15 +58,12 @@ public final class PlayerWidget extends AppWidgetProvider {
   /** The largest side of the cover handed to the launcher; views with bitmaps go through IPC. */
   private static final int COVER_SIZE_PX = 320;
 
-  /** From this height on (dp), the widget shows the larger layout, with Previous and the album. */
+  /** From this height on (dp), the widget shows the larger layout, with the album. */
   private static final float TALL_MIN_HEIGHT_DP = 120;
 
   private static final float MIN_WIDTH_DP = 250;
 
-  // Previous and Next, handled in onReceive(), see skipIntent()
-  @VisibleForTesting
-  static final String ACTION_PREVIOUS = "red.ochsenbein.voidweaver.player.widget.PREVIOUS";
-
+  // Next, handled in onReceive(), see skipIntent()
   @VisibleForTesting
   static final String ACTION_NEXT = "red.ochsenbein.voidweaver.player.widget.NEXT";
 
@@ -109,7 +106,6 @@ public final class PlayerWidget extends AppWidgetProvider {
     /** Shows Pause rather than Play. */
     final boolean playing;
 
-    final boolean canGoBack;
     final boolean canSkip;
 
     /** The session the buttons go to, null for the one PlaybackService picks. */
@@ -123,7 +119,6 @@ public final class PlayerWidget extends AppWidgetProvider {
         @Nullable Uri artworkUri,
         @Nullable String artworkKey,
         boolean playing,
-        boolean canGoBack,
         boolean canSkip,
         @Nullable String sessionId) {
       this.kind = kind;
@@ -133,13 +128,12 @@ public final class PlayerWidget extends AppWidgetProvider {
       this.artworkUri = artworkUri;
       this.artworkKey = artworkKey;
       this.playing = playing;
-      this.canGoBack = canGoBack;
       this.canSkip = canSkip;
       this.sessionId = sessionId;
     }
 
     static final State EMPTY =
-        new State(Kind.EMPTY, null, null, null, null, null, false, false, false, null);
+        new State(Kind.EMPTY, null, null, null, null, null, false, false, null);
 
     /** The recent track; [playing] while the stand-in waits for the app to resume it. */
     static State recent(Context context, boolean playing, @Nullable String sessionId) {
@@ -154,7 +148,6 @@ public final class PlayerWidget extends AppWidgetProvider {
           null,
           null,
           playing,
-          false,
           false,
           sessionId);
     }
@@ -186,7 +179,6 @@ public final class PlayerWidget extends AppWidgetProvider {
           artworkKey,
           playing,
           // Only while playing, see skip()
-          playing && player.isCommandAvailable(Player.COMMAND_SEEK_TO_PREVIOUS),
           playing && player.isCommandAvailable(Player.COMMAND_SEEK_TO_NEXT),
           sessionId);
     }
@@ -202,7 +194,6 @@ public final class PlayerWidget extends AppWidgetProvider {
           && Objects.equals(artworkUri, other.artworkUri)
           && Objects.equals(artworkKey, other.artworkKey)
           && playing == other.playing
-          && canGoBack == other.canGoBack
           && canSkip == other.canSkip
           && Objects.equals(sessionId, other.sessionId);
     }
@@ -210,8 +201,7 @@ public final class PlayerWidget extends AppWidgetProvider {
     @Override
     public int hashCode() {
       return Objects.hash(
-          kind, title, artist, album, artworkUri, artworkKey, playing, canGoBack, canSkip,
-          sessionId);
+          kind, title, artist, album, artworkUri, artworkKey, playing, canSkip, sessionId);
     }
   }
 
@@ -396,7 +386,6 @@ public final class PlayerWidget extends AppWidgetProvider {
     int transport = empty ? View.GONE : View.VISIBLE;
     views.setViewVisibility(R.id.voidweaver_widget_play_pause, transport);
     views.setViewVisibility(R.id.voidweaver_widget_next, transport);
-    if (tall) views.setViewVisibility(R.id.voidweaver_widget_previous, transport);
     if (!empty) {
       views.setImageViewResource(
           R.id.voidweaver_widget_play_pause,
@@ -417,10 +406,6 @@ public final class PlayerWidget extends AppWidgetProvider {
               .setSessionId(state.sessionId)
               .build());
       setSkipButton(context, views, R.id.voidweaver_widget_next, ACTION_NEXT, state.canSkip);
-      if (tall) {
-        setSkipButton(
-            context, views, R.id.voidweaver_widget_previous, ACTION_PREVIOUS, state.canGoBack);
-      }
     }
     views.setOnClickPendingIntent(R.id.voidweaver_widget_random, playRandom(context));
     return views;
@@ -434,10 +419,10 @@ public final class PlayerWidget extends AppWidgetProvider {
   }
 
   /**
-   * Previous and Next go to this receiver, which passes them to the player (and on to Dart), rather
+   * Next goes to this receiver, which passes it to the player (and on to Dart), rather
    * than to {@link PlaybackService} as media buttons. Only Play may start the service from the
    * background, as a foreground service; a plain start is refused while it's stopped (after a stop,
-   * or about 10 minutes after a pause), and Media3 only puts it in the foreground for Play. They're
+   * or about 10 minutes after a pause), and Media3 only puts it in the foreground for Play. It's
    * only enabled while playing, see {@link #skip}.
    */
   private static PendingIntent skipIntent(Context context, String action) {
@@ -447,8 +432,8 @@ public final class PlayerWidget extends AppWidgetProvider {
   }
 
   /**
-   * Previous or Next on a widget: moves the app's player (through {@link SessionPlayer}, to Dart,
-   * as any controller would), if it's the one shown and can move that way.
+   * Next on a widget: moves the app's player (through {@link SessionPlayer}, to Dart,
+   * as any controller would), if it's the one shown and can skip.
    *
    * <p>Only while it plays. A skip starts playback (in Dart), which needs the service in the
    * foreground; it is while playing. Paused, the service may be stopped or out of the foreground,
@@ -456,7 +441,7 @@ public final class PlayerWidget extends AppWidgetProvider {
    * Android freezes. Bluetooth buttons don't have that problem, as Android lets the app start it for
    * a media button.
    */
-  private static void skip(boolean forward) {
+  private static void skip() {
     PlayerSession session = shownSession;
     Player player = session != null ? session.session.getPlayer() : null;
     if (!(player instanceof SessionPlayer)) {
@@ -469,11 +454,7 @@ public final class PlayerWidget extends AppWidgetProvider {
       Log.i(TAG, "Skip ignored: not playing");
       return;
     }
-    if (forward) {
-      if (player.isCommandAvailable(Player.COMMAND_SEEK_TO_NEXT)) player.seekToNext();
-    } else if (player.isCommandAvailable(Player.COMMAND_SEEK_TO_PREVIOUS)) {
-      player.seekToPrevious();
-    }
+    if (player.isCommandAvailable(Player.COMMAND_SEEK_TO_NEXT)) player.seekToNext();
   }
 
   private static void setOptionalText(RemoteViews views, int id, @Nullable String text) {
@@ -510,10 +491,10 @@ public final class PlayerWidget extends AppWidgetProvider {
   @Override
   public void onReceive(Context context, Intent intent) {
     String action = intent.getAction();
-    if (ACTION_NEXT.equals(action) || ACTION_PREVIOUS.equals(action)) {
+    if (ACTION_NEXT.equals(action)) {
       // A tap on a widget drawn by an earlier process starts a new one: draw it as it is now
       refresh(context);
-      skip(ACTION_NEXT.equals(action));
+      skip();
       return;
     }
     super.onReceive(context, intent);

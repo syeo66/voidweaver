@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The widget from 120dp high: cover, title, artist and album, Previous, Play,
-     Next and Random. PlayerWidget fills it in; the texts here show in the
+<!-- The widget from 120dp high: cover, title, artist and album, Play, Next and
+     Random. PlayerWidget fills it in; the texts here show in the
      widget picker's preview. Only views RemoteViews supports. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
@@ -91,17 +91,6 @@
                 android:layout_weight="1"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
-
-                <ImageButton
-                    android:id="@+id/voidweaver_widget_previous"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="@string/voidweaver_widget_previous"
-                    android:padding="12dp"
-                    android:scaleType="fitCenter"
-                    android:src="@drawable/media3_icon_previous"
-                    android:tint="@color/voidweaver_widget_icon" />
 
                 <ImageButton
                     android:id="@+id/voidweaver_widget_play_pause"

@@ -5,7 +5,6 @@
     <string name="voidweaver_widget_label">Player</string>
     <string name="voidweaver_widget_description">The playing track with its controls, and random songs in one tap</string>
     <string name="voidweaver_widget_nothing_playing">Nothing playing</string>
-    <string name="voidweaver_widget_previous">Previous track</string>
     <string name="voidweaver_widget_play">Play</string>
     <string name="voidweaver_widget_pause">Pause</string>
     <string name="voidweaver_widget_next">Next track</string>
