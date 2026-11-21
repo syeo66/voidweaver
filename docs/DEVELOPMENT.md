@@ -13,7 +13,7 @@ make lint-android    # Android Lint on the player plugin (Gradle, needs JAVA_HOM
 make test-integration  # user flows on a device/emulator against a fake server (see test/README.md)
 make check-apk       # release APK, then checks it for shrunk-away notification icons, media session and widget entries (tool/check_release_apk.sh, no device)
 make check-emulator  # release APK, then media session/keys/resumption checks in the running emulator (tool/emulator_check.sh, see docs/ANDROID.md)
-make check-emulator-fake  # the same against the fake Subsonic server, no login needed; clears the app's data (local only, not in CI)
+make check-emulator-fake  # the same against the fake Subsonic server, no login needed; clears the app's data (also nightly in CI)
 ```
 
 Regenerate mocks after changing a `@GenerateMocks` annotation:
@@ -125,7 +125,7 @@ Testing the native layer (media session, notification, media keys, R8) in the em
 - Versioning: the version name comes from `pubspec.yaml`, where `tool/release.sh` bumps it (`make deploy-patch`, see [RELEASING.md](RELEASING.md)). The build number (`versionCode`) is the git commit count (`android/app/build.gradle.kts`), so CI checks out the full history. Settings shows both at the bottom.
 - The release APK is arm64 only: build it through `tool/build_release_apk.sh` (CI, the Makefile and `tool/emulator_check.sh` do), never a plain `flutter build apk`, which makes it nearly three times as large. `tool/check_release_apk.sh` fails on such an APK.
 - Flutter version: CI installs the SDK version in `.flutter-version`, one line for every job of both workflows (`.github/actions/setup-flutter`). Dependabot can't bump it; change it by hand. `pubspec.yaml` deliberately has no exact `environment: flutter:` pin, which would stop `flutter pub get` on any other local version.
-- CI: its actions are pinned to commit SHAs, also inside the composite action, see the comments in `.github/workflows/flutter.yml`; pin new ones the same way. The player plugin's JVM tests and Android Lint run in their own job (`android-unit-tests`). Pull requests that change Media3, AGP or Kotlin need the emulator checks above. `.github/workflows/nightly.yml` runs the randomized playback test and the integration tests every night, see [test/README.md](../test/README.md#nightly-checks).
+- CI: its actions are pinned to commit SHAs, also inside the composite action, see the comments in `.github/workflows/flutter.yml`; pin new ones the same way. The player plugin's JVM tests and Android Lint run in their own job (`android-unit-tests`). Pull requests that change Media3, AGP or Kotlin need the emulator checks above. `.github/workflows/nightly.yml` runs the randomized playback test, the integration tests and the release-build checks every night, see [test/README.md](../test/README.md#nightly-checks).
 
 ## Tests
 

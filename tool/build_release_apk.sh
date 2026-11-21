@@ -11,8 +11,14 @@
 #   tool/build_release_apk.sh -PtrustFakeServer=true --dart-define=...
 #
 # The APK lands at build/app/outputs/flutter-apk/app-release.apk.
+#
+# RELEASE_TARGET_PLATFORM=android-x64 builds for x86_64 instead, only for
+# tool/emulator_check.sh on an x86_64 emulator (the nightly workflow's): R8,
+# the manifest and the resources are the same for every ABI, so that build
+# checks what the arm64 one ships. Never release it.
 
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-flutter build apk --release --target-platform android-arm64 "$@"
+flutter build apk --release \
+  --target-platform "${RELEASE_TARGET_PLATFORM:-android-arm64}" "$@"

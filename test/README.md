@@ -31,7 +31,7 @@ It doesn't use `fakeAsync`, and neither should a test of the player service: awa
 flutter test integration_test -d emulator-5554   # or: make test-integration
 ```
 
-Each test starts from a fresh install (credentials and SharedPreferences cleared), so run them on an emulator, not on a phone with the app logged in. Run them after changes to playback, login or the screens they touch. `tool/release.sh` runs them before a release when an emulator is running, and otherwise looks for a nightly run that passed them on the commit (see [docs/RELEASING.md](../docs/RELEASING.md)), and the nightly workflow runs them in CI, see below; the workflow for pushes doesn't. They use a debug build, so they don't replace `tool/emulator_check.sh` (release build, R8, media keys, resumption), which also runs locally only, and before a release when an emulator is running (see below and [docs/ANDROID.md](../docs/ANDROID.md)).
+Each test starts from a fresh install (credentials and SharedPreferences cleared), so run them on an emulator, not on a phone with the app logged in. Run them after changes to playback, login or the screens they touch. `tool/release.sh` runs them before a release when an emulator is running, and otherwise looks for a nightly run that passed them on the commit (see [docs/RELEASING.md](../docs/RELEASING.md)), and the nightly workflow runs them in CI, see below; the workflow for pushes doesn't. They use a debug build, so they don't replace `tool/emulator_check.sh` (release build, R8, media keys, resumption), which runs nightly in CI too, and before a release (see below and [docs/ANDROID.md](../docs/ANDROID.md)).
 
 ## Nightly checks
 
@@ -39,6 +39,7 @@ Each test starts from a fresh install (credentials and SharedPreferences cleared
 
 - The randomized playback test with new seeds: run N of the workflow checks seeds from `N * 100000` on, 25,000 runs of 40 steps, then 10,000 of 120 steps from `N * 100000 + 25000`. The log prints the range; replay a failure locally with the seed (and steps) it prints.
 - The integration tests in an emulator in the runner, only if `main` has a commit from the last 25 hours (by its commit date) or the run was started by hand. The emulator sometimes fails to start there (adb can't connect, the system image doesn't unpack), and the test tool sometimes fails to start the Dart Development Service (`--no-dds` doesn't help: the tests then fail to load). So a failed attempt gets a second one in a fresh emulator, and a warning on the run shows that the first one failed, also when the second passes: look at its log for whether a test failed.
+- The release-build checks (`tool/emulator_check.sh --fake-server --build`, job `release-build-check`) under the same condition, in an emulator of their own, with a second attempt in the same way. The runner's emulator is x86_64 (Android 15), so the script builds the APK that trusts the fake server for x86_64 there, rather than running the arm64 one through the emulator's slower ARM translation. A failed attempt uploads the script's diagnostics (screenshot, UI hierarchy, logcat) as an artifact of the run.
 
 GitHub emails a failed scheduled run to whoever last changed the workflow's `cron` line, and turns the schedule off after 60 days without activity in the repository.
 

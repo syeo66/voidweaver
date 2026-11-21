@@ -22,7 +22,8 @@
 # to trust that server: --build makes a release build that does
 # (-PtrustFakeServer=true and the VOIDWEAVER_TEST_CA define, otherwise like
 # the release build, R8 included) and moves it to build/emulator-check/, so it's
-# never mistaken for the real one.
+# never mistaken for the real one. On an emulator whose own ABI is x86_64 (the
+# nightly workflow's), that build is for x86_64; the release APK is arm64 only.
 #
 # Exits non-zero if a check fails, and saves a screenshot, the UI hierarchy
 # and logcat to build/emulator-check/diagnostics/. It stops at the first
@@ -45,7 +46,7 @@ while [ $# -gt 0 ]; do
     --no-install) install=false ;;
     --login) login=true ;;
     --fake-server) fake_server=true login=true ;;
-    -h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -163,14 +164,29 @@ type_text() {
 "$ADB" get-state >/dev/null 2>&1 || { echo "No device. Start the emulator first (see docs/ANDROID.md)." >&2; exit 2; }
 
 # The release APK is arm64 only (tool/build_release_apk.sh), so an x86_64
-# emulator can't install it. Checked before --build builds it, which takes
-# minutes (make check-emulator builds before it runs this script).
+# emulator can't install it, unless it translates ARM code (the nightly
+# workflow's lists arm64-v8a after x86_64), which is slower. The APK
+# --fake-server --build makes is only for this check, so on an emulator whose
+# own ABI is x86_64 it's built for x86_64: R8 and the manifest are the same for
+# every ABI. Checked before --build builds it, which takes minutes (make
+# check-emulator builds before it runs this script).
+target_platform=android-arm64
 if $install && ! $apk_given; then
+  abi="$("$ADB" shell getprop ro.product.cpu.abi | tr -d '\r')"
   abis="$("$ADB" shell getprop ro.product.cpu.abilist | tr -d '\r')"
-  case ",$abis," in
-    *,arm64-v8a,*) ;;
-    *) echo "The release APK is arm64 only; this device supports $abis. Use an arm64 emulator (see docs/ANDROID.md)." >&2; exit 2 ;;
-  esac
+  if [ "$abi" = x86_64 ] && $fake_server && $build; then
+    target_platform=android-x64
+  else
+    case ",$abis," in
+      *,arm64-v8a,*) ;;
+      *)
+        remedy=
+        [ "$abi" = x86_64 ] && remedy=", or --fake-server --build, which builds for x86_64"
+        echo "The release APK is arm64 only; this device supports $abis. Use an arm64 emulator (see docs/ANDROID.md)$remedy." >&2
+        exit 2
+        ;;
+    esac
+  fi
 fi
 
 if $fake_server; then
@@ -180,10 +196,10 @@ if $fake_server; then
 fi
 
 if $build && $fake_server; then
-  step "Building the release APK that trusts the fake server"
+  step "Building the release APK that trusts the fake server ($target_platform)"
   ca="$(base64 < android/app/src/fakeServer/res/raw/fake_subsonic_server.pem | tr -d '\n')"
-  tool/build_release_apk.sh -PtrustFakeServer=true \
-    --dart-define=VOIDWEAVER_TEST_CA="$ca" || exit 1
+  RELEASE_TARGET_PLATFORM="$target_platform" tool/build_release_apk.sh \
+    -PtrustFakeServer=true --dart-define=VOIDWEAVER_TEST_CA="$ca" || exit 1
   mkdir -p "$(dirname "$FAKE_SERVER_APK")"
   # Out of the place of the real release APK
   mv build/app/outputs/flutter-apk/app-release.apk "$FAKE_SERVER_APK"
@@ -259,8 +275,10 @@ if $login; then
   : "${VOIDWEAVER_URL:?set VOIDWEAVER_URL}" "${VOIDWEAVER_USER:?set VOIDWEAVER_USER}"
   : "${VOIDWEAVER_PASSWORD:?set VOIDWEAVER_PASSWORD}"
   step "Logging in"
-  # Key sequence from docs/ANDROID.md: tab between the fields
-  tap_ui 'hint="Server URL' || fatal "no server URL field" login
+  # Key sequence from docs/ANDROID.md: tab between the fields. The first text
+  # field is the server URL; not found by its hint, which uiautomator's dump
+  # leaves out before Android 16 (API 35, the nightly workflow's emulator)
+  tap_ui 'class="android.widget.EditText"' || fatal "no server URL field" login
   type_text "$VOIDWEAVER_URL"
   key 61
   type_text "$VOIDWEAVER_USER"
@@ -321,7 +339,23 @@ expect_state PLAYING "after MEDIA_PREVIOUS"
 
 step "Gapless move to the next track"
 title="$(session_title)"
-"$ADB" shell input tap 1035 1903   # end of the seek bar: the last seconds
+# Near the end of the seek bar: the last seconds. Its node in the dump is only
+# the thumb, but its vertical center is the track's, whatever the system bars
+# take; the track spans the screen's width (to about x=1048 at 1080 pixels).
+# Read while paused: the moving bar keeps the screen from settling, and
+# uiautomator dumps nothing then.
+key KEYCODE_MEDIA_PAUSE
+wait_state PAUSED
+wait_ui 'class="android.widget.SeekBar"' 10
+seek_y="$(ui_nodes | grep -m1 'class="android.widget.SeekBar"' |
+  grep -o 'bounds="[^"]*"' | tr -c '0-9' ' ' | awk '{print int(($2 + $4) / 2)}')"
+key KEYCODE_MEDIA_PLAY
+expect_state PLAYING "before seeking to the end"
+if [ -n "$seek_y" ]; then
+  "$ADB" shell input tap 1035 "$seek_y"
+else
+  fail "no seek bar on the screen"
+fi
 if wait_title_change "$title" 30; then
   pass "moved on to: $(session_title)"
 else

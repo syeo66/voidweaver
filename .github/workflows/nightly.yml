@@ -1,13 +1,15 @@
 name: Nightly
 
 # Checks that are too slow or too flaky for every push, so they don't block a
-# release (tool/release.sh runs the integration tests before tagging when an
-# emulator is running, and otherwise requires a passed integration-test job of
-# this workflow on the commit or a confirmation, see docs/RELEASING.md):
+# release (tool/release.sh runs the emulator checks before tagging when an
+# emulator is running, and otherwise looks for passed integration-test and
+# release-build-check jobs of this workflow on the commit, see
+# docs/RELEASING.md):
 #
 # - the randomized playback test with seeds no run checked before: the push
 #   workflow's run always checks seeds 0 to 999
 # - the integration tests in an emulator, which sometimes fails to start
+# - the release-build checks (tool/emulator_check.sh) in an emulator
 #
 # Actions are pinned to commit SHAs like in flutter.yml; Dependabot updates
 # them.
@@ -179,3 +181,107 @@ jobs:
         profile: pixel_6
         disable-animations: true
         script: flutter test integration_test
+
+  # The release-build checks (tool/emulator_check.sh, see docs/ANDROID.md):
+  # media session, notification, media keys, the service after Android
+  # stopped it, playback resumption, on an R8-shrunk release build that
+  # trusts the fake Subsonic server, which runs on the runner. The emulator
+  # is x86_64, so the script builds that APK for x86_64 rather than run the
+  # arm64 one through ARM translation (slower): R8 and the manifest are the
+  # same for every ABI. Its taps assume a 1080x2400 screen, which the
+  # pixel_6 profile has (the runner's avdmanager has no pixel_8).
+  # tool/release.sh looks this job up by its name (release-build-check):
+  # keep it, or update the script.
+  release-build-check:
+    needs: changes
+    if: needs.changes.outputs.recent == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+    # The same setup as integration-test, see the comments there
+    - name: Set up Flutter
+      uses: ./.github/actions/setup-flutter
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
+      with:
+        cache-provider: basic
+
+    - name: Read the NDK version
+      id: ndk
+      run: |
+        version=$(sed -n 's/^ *ndkVersion *= *"\([^"]*\)".*/\1/p' android/app/build.gradle.kts)
+        test -n "$version"
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+
+    - name: Cache the NDK
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: /usr/local/lib/android/sdk/ndk/${{ steps.ndk.outputs.version }}
+        key: android-ndk-${{ runner.os }}-${{ steps.ndk.outputs.version }}
+
+    - name: Enable KVM
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+
+    # Like the integration tests, a failed attempt gets a second one in a
+    # fresh emulator: the emulator sometimes fails to start
+    - name: Run the release-build checks in an emulator
+      id: first
+      continue-on-error: true
+      timeout-minutes: 35
+      uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+      with:
+        api-level: 35
+        arch: x86_64
+        target: google_apis
+        profile: pixel_6
+        disable-animations: true
+        script: tool/emulator_check.sh --fake-server --build
+
+    - name: Note the failed first attempt
+      if: steps.first.outcome != 'success'
+      run: echo "::warning::The first attempt failed; see its log and diagnostics for whether the emulator or a check failed"
+
+    # Screenshot, UI hierarchy and logcat; the second attempt replaces them
+    - name: Upload the first attempt's diagnostics
+      if: steps.first.outcome != 'success'
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+      with:
+        name: emulator-check-diagnostics-first-attempt
+        path: build/emulator-check/diagnostics/
+        if-no-files-found: ignore
+
+    - name: Stop what's left of the first attempt's emulator
+      if: steps.first.outcome != 'success'
+      continue-on-error: true
+      run: |
+        "$ANDROID_HOME/platform-tools/adb" devices | awk '/^emulator-/ {print $1}' |
+          while read -r serial; do "$ANDROID_HOME/platform-tools/adb" -s "$serial" emu kill || true; done
+        pkill -f qemu-system || true
+
+    # Installs the APK the first attempt built, if it got that far
+    - name: Run the release-build checks in an emulator, second attempt
+      if: steps.first.outcome != 'success'
+      timeout-minutes: 35
+      uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+      with:
+        api-level: 35
+        arch: x86_64
+        target: google_apis
+        profile: pixel_6
+        disable-animations: true
+        script: apk=build/emulator-check/app-release-trusts-fake-server.apk; if [ -f "$apk" ]; then tool/emulator_check.sh --fake-server --apk "$apk"; else tool/emulator_check.sh --fake-server --build; fi
+
+    - name: Upload the diagnostics
+      if: failure()
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+      with:
+        name: emulator-check-diagnostics
+        path: build/emulator-check/diagnostics/
+        if-no-files-found: ignore
