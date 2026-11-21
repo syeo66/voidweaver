@@ -11,6 +11,8 @@ each release. A release with nothing a user would notice says so.
 
 ## Unreleased
 
+## 1.3.15 - 2026-11-21
+
 - The artist list is loaded when you first open the Artists tab, not every time the app starts, which saves a request and some work at startup when you don't use the tab.
 - The Artists tab skips the articles your server is set to ignore (such as "The", "El" or "La"), so "The Beatles" is under B, and names with accents sit with their plain letters, so "Élodie" comes next to "Elton John" instead of after Z.
 
