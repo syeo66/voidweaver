@@ -82,7 +82,6 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     mockApi = newMockApi();
-    when(mockApi.getArtists()).thenAnswer((_) async => []);
     when(mockApi.getStreamUrl(any)).thenAnswer(
       (invocation) =>
           'https://music.test/rest/stream?id=${invocation.positionalArguments.first}',
@@ -220,6 +219,27 @@ void main() {
 
     expect(find.text('Playlist: 1 of 2'), findsOneWidget);
     expect(find.byKey(const ValueKey('playlist-item-1')), findsOneWidget);
+  });
+
+  testWidgets('loads the artists only once the Artists tab is opened', (
+    tester,
+  ) async {
+    when(mockApi.getArtists())
+        .thenAnswer((_) async => [Artist(id: 'a', name: 'Some Artist')]);
+    await pumpHome(tester);
+    verifyNever(mockApi.getArtists());
+
+    await tester.tap(find.text('Artists'));
+    await tester.pumpAndSettle();
+    expect(find.text('Some Artist'), findsOneWidget);
+
+    // Kept while another tab is shown, not loaded again
+    await tester.tap(find.text('Albums'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Artists'));
+    await tester.pumpAndSettle();
+    expect(find.text('Some Artist'), findsOneWidget);
+    verify(mockApi.getArtists()).called(1);
   });
 
   testWidgets('the sleep timer can be started and cancelled', (tester) async {

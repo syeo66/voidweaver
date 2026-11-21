@@ -11,6 +11,8 @@ each release. A release with nothing a user would notice says so.
 
 ## Unreleased
 
+- The artist list is loaded when you first open the Artists tab, not every time the app starts, which saves a request and some work at startup when you don't use the tab.
+
 ## 1.3.14 - 2026-11-20
 
 - Settings: the ReplayGain and scrobbling sliders save their value once you let go, instead of at every step of the drag. The ReplayGain change is heard as you release the slider.

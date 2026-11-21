@@ -26,9 +26,15 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const int _artistsTabIndex = 1;
   static const int _nowPlayingTabIndex = 2;
 
   int _currentIndex = 0;
+
+  // Artists is built on its first visit (it loads the whole artist list),
+  // then kept. Now Playing is built at once: its playlist must already be
+  // listening when the first tap asks it to scroll.
+  bool _artistsOpened = false;
 
   // Incremented whenever the 'Now Playing' tab is tapped so the playlist
   // scrolls to the current track, even if the tab is already selected.
@@ -117,10 +123,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 const AlbumList().withErrorBoundary(
                   errorMessage: 'Failed to load albums. Please try refreshing.',
                 ),
-                const ArtistScreen().withErrorBoundary(
-                  errorMessage:
-                      'Failed to load artists. Please try refreshing.',
-                ),
+                if (_artistsOpened)
+                  const ArtistScreen().withErrorBoundary(
+                    errorMessage:
+                        'Failed to load artists. Please try refreshing.',
+                  )
+                else
+                  const SizedBox.shrink(),
                 ErrorBoundary(
                   errorMessage: 'Failed to load now playing screen.',
                   child: _buildNowPlayingScreen(),
@@ -149,6 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
         onTap: (index) {
           setState(() {
             _currentIndex = index;
+            if (index == _artistsTabIndex) _artistsOpened = true;
           });
           if (index == _nowPlayingTabIndex) {
             _scrollToCurrentTrackRequest.value++;
