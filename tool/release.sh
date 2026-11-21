@@ -113,10 +113,65 @@ else
     [ "$answer" = y ] || { echo "Not released." >&2; exit 1; }
   fi
 fi
+
+# The release-build checks (tool/emulator_check.sh: the R8-shrunk APK's media
+# session, notification, media keys, resumption, see docs/ANDROID.md). Neither
+# CI nor the nightly workflow runs them, and the integration tests use a debug
+# build, so this is the only place a release gets them. Against the fake
+# server, so no login is needed; like the integration tests, they clear the
+# app's data, so only on the emulator found above (ANDROID_SERIAL, as the
+# script's adb calls name no device).
+if [ -n "$emulator" ]; then
+  echo "Running the release-build checks on $emulator (builds a release APK, takes a few minutes)..."
+  status=0
+  ANDROID_SERIAL="$emulator" tool/emulator_check.sh --fake-server --build || status=$?
+  case "$status" in
+    0) ;;
+    # The script couldn't run here (an emulator without arm64, the fake server
+    # didn't start), which says nothing about the build
+    2)
+      echo "The release-build checks couldn't run on $emulator (see above)." >&2
+      answer=
+      read -r -p "Release without them? [y/N] " answer || true
+      [ "$answer" = y ] || { echo "Not released." >&2; exit 1; }
+      ;;
+    # The build, the install or a check failed; a failed check leaves its
+    # diagnostics in build/emulator-check/diagnostics/
+    *) echo "Release-build checks failed (see above), not releasing" >&2; exit 1 ;;
+  esac
+else
+  # Nothing can stand in for them, so they're asked for when something they
+  # cover changed since the last release: the native layer, the plugins
+  # (pubspec.lock), the Flutter version or the release build itself
+  last_tag=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null) || last_tag=
+  stop_unless_yes() {
+    echo "Start an arm64 emulator (see docs/ANDROID.md) and run this again."
+    answer=
+    read -r -p "Release without them? [y/N] " answer || true
+    [ "$answer" = y ] || { echo "Not released." >&2; exit 1; }
+  }
+  if [ -z "$last_tag" ]; then
+    echo "No Android emulator running, so the release-build checks (tool/emulator_check.sh) can't run, and with no earlier release tag there's no telling what they'd cover."
+    stop_unless_yes
+  else
+    changed=$(git diff --name-only "$last_tag" HEAD -- \
+      android packages/voidweaver_player pubspec.lock .flutter-version tool/build_release_apk.sh)
+    if [ -n "$changed" ]; then
+      echo "No Android emulator running, so the release-build checks (tool/emulator_check.sh) can't run, and nothing else runs them. Changed since $last_tag:"
+      head -10 <<<"$changed" | sed 's/^/  /'
+      count=$(wc -l <<<"$changed")
+      [ "$count" -le 10 ] || echo "  ... and $((count - 10)) more"
+      stop_unless_yes
+    else
+      echo "No Android emulator running; skipping the release-build checks (no native, plugin or toolchain change since $last_tag)."
+    fi
+  fi
+fi
+
 # The commit below takes every changed file; flutter's implicit pub get can
 # rewrite a pubspec.lock
 [ -z "$(git status --porcelain)" ] ||
-  { echo "The integration tests changed files, not releasing:" >&2; git status --short >&2; exit 1; }
+  { echo "The checks changed files, not releasing:" >&2; git status --short >&2; exit 1; }
 
 sed -i.bak "s/^version: *[^+ ]*/version: $new/" pubspec.yaml && rm pubspec.yaml.bak
 # The notes move under the new version, in the release commit
