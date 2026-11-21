@@ -15,6 +15,7 @@ import 'package:logging/logging.dart';
 
 import '../models/album_list_type.dart';
 import '../models/subsonic_models.dart';
+import '../utils/sort_key.dart';
 import 'api_cache.dart';
 import 'cover_art_cache.dart';
 import 'network_config.dart';
@@ -588,12 +589,14 @@ class SubsonicApi implements CoverArtLogin {
   Future<List<Artist>> getArtists() async {
     return await _cache.getOrFetch<List<Artist>>(
       'getArtists',
-      null,
+      // Not the key of the cached lists sorted by plain name (articles and
+      // accents included), which would otherwise stay until the next scan
+      const {'order': 'sortKey'},
       () => _makeLargeRequest(
         'getArtists',
         null,
         NetworkRequestType.metadata,
-        _sortedArtistsFromXml,
+        sortedArtistsFromXml,
       ),
       cacheDuration: const Duration(minutes: 15),
       usePersistentCache: true,
@@ -606,10 +609,28 @@ class SubsonicApi implements CoverArtLogin {
     );
   }
 
-  static List<Artist> _sortedArtistsFromXml(XmlDocument doc) => [
-    for (final element in doc.findAllElements('artist'))
-      Artist.fromXml(element),
-  ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  /// The artists of a `getArtists` response, sorted by name the way the
+  /// server's index is: ignoring the articles it names (`ignoredArticles`,
+  /// so "The Beatles" sorts under B), case and accents. One list rather than
+  /// the server's index groups, whose order differs between servers.
+  @visibleForTesting
+  static List<Artist> sortedArtistsFromXml(XmlDocument doc) {
+    final articles = parseIgnoredArticles(
+      doc
+          .findAllElements('artists')
+          .firstOrNull
+          ?.getAttribute('ignoredArticles'),
+    );
+    final keyed = [
+      for (final element in doc.findAllElements('artist'))
+        Artist.fromXml(element),
+    ].map((artist) => (artist, artistSortKey(artist.name, articles))).toList();
+    keyed.sort((a, b) {
+      final byKey = a.$2.compareTo(b.$2);
+      return byKey != 0 ? byKey : a.$1.name.compareTo(b.$1.name);
+    });
+    return [for (final (artist, _) in keyed) artist];
+  }
 
   /// Gets all albums for a specific artist.
   /// Returns a list of Album objects for the given artist ID.

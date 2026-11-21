@@ -315,6 +315,45 @@ void main() {
     });
   });
 
+  group('SubsonicApi.sortedArtistsFromXml', () {
+    List<String> namesOf(String artists) => [
+      for (final artist in SubsonicApi.sortedArtistsFromXml(
+        SubsonicApi.parseResponse(
+          '<subsonic-response xmlns="http://subsonic.org/restapi" '
+          'status="ok" version="1.16.1">$artists</subsonic-response>',
+        ),
+      ))
+        artist.name,
+    ];
+
+    test('ignores the articles the server names, case and accents', () {
+      expect(
+        namesOf(
+          '<artists ignoredArticles="The El La">'
+          '<index name="A"><artist id="1" name="ABBA"/></index>'
+          '<index name="B"><artist id="2" name="The Beatles"/>'
+          '<artist id="3" name="beck"/></index>'
+          '<index name="E"><artist id="4" name="Élodie"/>'
+          '<artist id="5" name="Elton John"/></index>'
+          '<index name="Z"><artist id="6" name="Zappa"/></index>'
+          '</artists>',
+        ),
+        ['ABBA', 'The Beatles', 'beck', 'Élodie', 'Elton John', 'Zappa'],
+      );
+    });
+
+    test('keeps articles the server doesn\'t name', () {
+      expect(
+        namesOf(
+          '<artists><index name="T"><artist id="1" name="The Beatles"/>'
+          '</index><index name="C"><artist id="2" name="Cream"/></index>'
+          '</artists>',
+        ),
+        ['Cream', 'The Beatles'],
+      );
+    });
+  });
+
   group('SubsonicApi.libraryVersionFrom', () {
     String? versionOf(String scanStatus) => SubsonicApi.libraryVersionFrom(
       SubsonicApi.parseResponse(
