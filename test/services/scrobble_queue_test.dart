@@ -762,6 +762,14 @@ void main() {
       // What a kill while offline leaves: a skipped song, then a play
       final skippedAt = DateTime(2026, 11, 14, 22);
       final playedAt = skippedAt.add(const Duration(seconds: 20));
+      // Restarted a little later: with the real clock, the requests would
+      // pass their maximum age once the dates above are a week old
+      final restartedAt = playedAt.add(const Duration(minutes: 10));
+      scrobbleQueue.dispose();
+      scrobbleQueue = ScrobbleQueue(
+        mockApi,
+        clock: () => restartedAt.add(async.elapsed),
+      );
       SharedPreferences.setMockInitialValues({
         'scrobble_queue': jsonEncode([
           ScrobbleRequest(
