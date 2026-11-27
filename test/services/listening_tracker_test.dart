@@ -46,6 +46,27 @@ void main() {
     expect(tracker.takeScrobble(song), isNull);
   });
 
+  test('a seek to the end leaves nothing for the end to count', () {
+    tracker.startPlay(Duration.zero, song, playing: true);
+    play(10);
+    tracker.seeked(song);
+    tracker.listenedToEnd(song);
+    expect(tracker.listened, const Duration(seconds: 10));
+    expect(tracker.takeScrobble(song), isNull);
+  });
+
+  test('listening goes on from a seek', () {
+    tracker.startPlay(Duration.zero, song, playing: true);
+    play(10);
+    now = now.add(const Duration(milliseconds: 300));
+    tracker.seeked(const Duration(minutes: 3, seconds: 50));
+    now = now.add(const Duration(seconds: 1));
+    tracker.onPosition(const Duration(minutes: 3, seconds: 51), playing: true);
+    expect(tracker.listened, const Duration(seconds: 11));
+    tracker.listenedToEnd(song);
+    expect(tracker.listened, const Duration(seconds: 20));
+  });
+
   test('counts nothing while not playing', () {
     tracker.startPlay(Duration.zero, song, playing: true);
     play(30, playing: false);

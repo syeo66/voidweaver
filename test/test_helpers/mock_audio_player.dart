@@ -85,6 +85,20 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
     );
   }
 
+  /// Waits at [seekGate], buffering, if it's set. False if a later seek,
+  /// load, stop() or error completed the seek meanwhile.
+  Future<bool> _waitAtSeekGate() async {
+    final gate = seekGate;
+    if (gate == null) return true;
+    final seek = _pendingSeek = Completer<void>();
+    _setState(playing, ProcessingState.buffering);
+    await Future.any([gate.future, seek.future]);
+    // Completed by a later seek, load, stop() or error
+    if (seek.isCompleted) return false;
+    _pendingSeek = null;
+    return true;
+  }
+
   void _completeSeek() {
     final seek = _pendingSeek;
     _pendingSeek = null;
@@ -158,6 +172,12 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
 
   /// Called with each seek within the current item, before it's carried out
   void Function(Duration position)? onSeekWithinItem;
+
+  /// If set, a seek to the end of the current item (its duration or later)
+  /// moves on to the next item, like Media3 does: the seek completes with
+  /// the next item current, at its start, with this duration (reported once,
+  /// unlike [simulateTrackTransition]), buffering at [seekGate] if set
+  Duration? seekToEndAdvancesTo;
 
   void _setState(bool playing, ProcessingState processingState) {
     if (processingState != ProcessingState.idle) idleCause = null;
@@ -281,6 +301,23 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
     if (index == null || index == _currentIndex) {
       onSeekWithinItem?.call(position ?? Duration.zero);
       seeks.add(position ?? Duration.zero);
+      final nextDuration = seekToEndAdvancesTo;
+      if (nextDuration != null &&
+          _duration != null &&
+          (position ?? Duration.zero) >= _duration! &&
+          _currentIndex! + 1 < _sequence.length) {
+        // One snapshot, as the plugin reports it: index, duration, position
+        _currentIndex = _currentIndex! + 1;
+        _indexController.add(_currentIndex);
+        _duration = nextDuration;
+        _durationController.add(_duration);
+        _position = Duration.zero;
+        _positionController.add(_position);
+        if (seekGate != null && await _waitAtSeekGate()) {
+          _setState(playing, ProcessingState.ready);
+        }
+        return;
+      }
       _position = position ?? Duration.zero;
       _positionController.add(_position);
       // A completed player seeks back into the item
@@ -300,15 +337,8 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
     }
     loadedSources.add(_describe(_sequence[index]));
     _moveTo(index, position ?? Duration.zero);
-    final gate = seekGate;
-    if (gate != null) {
-      final seek = _pendingSeek = Completer<void>();
-      _setState(playing, ProcessingState.buffering);
-      await Future.any([gate.future, seek.future]);
-      // Completed by a later seek, load, stop() or error
-      if (seek.isCompleted) return;
-      _pendingSeek = null;
-    }
+    final gated = seekGate != null;
+    if (!await _waitAtSeekGate()) return;
     if (_fails(index)) {
       // Like the real player, the seek completes once the item has failed
       // and the error was reported
@@ -316,7 +346,7 @@ class MockAudioPlayer extends Mock implements VoidweaverPlayer {
       return;
     }
     // A seek takes a completed player back into the sequence
-    if (gate != null || processingState == ProcessingState.completed) {
+    if (gated || processingState == ProcessingState.completed) {
       _setState(playing, ProcessingState.ready);
     }
   }

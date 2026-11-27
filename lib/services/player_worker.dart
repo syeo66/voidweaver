@@ -716,6 +716,17 @@ class PlayerWorker {
     _host.advanced(entry.index);
   }
 
+  /// Whether the player has moved on to the track after the service's
+  /// current one and [_followPlayer] hasn't followed it yet: its index event
+  /// waits while the worker runs (a seek), but the new track's position and
+  /// duration arrive anyway. They aren't the current track's. Derived from
+  /// the player's state each time, so it never stays set: it ends with the
+  /// advance being followed, a move, or a new queue.
+  bool get advancePending {
+    if (_disposed || _move != null || _awaitedIndex != null) return false;
+    return _entryAt(_player.currentIndex)?.index == _host.currentIndex + 1;
+  }
+
   /// The playlist entry behind the player's item at [sequenceIndex], if it
   /// belongs to the current sequence.
   _QueueEntry? _entryAt(int? sequenceIndex) {

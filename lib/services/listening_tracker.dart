@@ -71,6 +71,13 @@ class ListeningTracker {
     _lastPositionTime = now;
   }
 
+  /// The player seeked to [position]: it's where listening goes on from,
+  /// without counting the part seeked over.
+  void seeked(Duration position) {
+    _lastPosition = position;
+    _lastPositionTime = _clock();
+  }
+
   /// The song played to its end at [songDuration]: counts the rest after the
   /// last position update as heard.
   void listenedToEnd(Duration songDuration) {

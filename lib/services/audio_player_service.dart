@@ -262,21 +262,15 @@ class AudioPlayerService extends ChangeNotifier {
   Duration? get sleepTimerRemaining => _sleepTimer.remaining;
 
   void _initializePlayer() {
+    // Not while the player is already on the next track and the service
+    // hasn't followed it yet: they're that track's, and would be counted for
+    // the current one. _onAdvanced() takes them over.
     _positionSubscription = _audioPlayer.positionStream.listen((position) {
-      _currentPosition = position;
-      _listening.onPosition(
-        position,
-        playing: _playbackState == PlaybackState.playing,
-      );
-      if (_playbackState == PlaybackState.playing) {
-        _scrobbleCurrentSongIfEligible();
-        _stateKeeper.schedulePositionSave();
-      }
+      if (!_worker.advancePending) _onPosition(position);
     });
 
     _durationSubscription = _audioPlayer.durationStream.listen((duration) {
-      _totalDuration = duration ?? Duration.zero;
-      notifyListeners();
+      if (!_worker.advancePending) _onDuration(duration);
     });
 
     _commandSubscription = _audioPlayer.commandStream.listen(_onSystemCommand);
@@ -305,6 +299,23 @@ class AudioPlayerService extends ChangeNotifier {
       }
       notifyListeners();
     });
+  }
+
+  void _onPosition(Duration position) {
+    _currentPosition = position;
+    _listening.onPosition(
+      position,
+      playing: _playbackState == PlaybackState.playing,
+    );
+    if (_playbackState == PlaybackState.playing) {
+      _scrobbleCurrentSongIfEligible();
+      _stateKeeper.schedulePositionSave();
+    }
+  }
+
+  void _onDuration(Duration? duration) {
+    _totalDuration = duration ?? Duration.zero;
+    notifyListeners();
   }
 
   /// A command from the notification, lock screen, Bluetooth or media
@@ -599,6 +610,9 @@ class AudioPlayerService extends ChangeNotifier {
     _listening.listenedToEnd(_currentSongDuration);
     _scrobbleCurrentSongIfEligible();
     _setCurrentTrack(index, playing: true);
+    // The new track's duration, which may have arrived before this
+    // (see _initializePlayer()); its position follows with the next update
+    _onDuration(_audioPlayer.duration);
     unawaited(_loadReplayGain(index));
     _onTrackStarted();
   }
@@ -863,6 +877,12 @@ class AudioPlayerService extends ChangeNotifier {
       // was meant for the track before
       if (generation != _worker.generation || index != _currentIndex) return;
       await _audioPlayer.seek(position);
+      // The part seeked over isn't heard: the track's end credits only the
+      // rest after the seek target, nothing after a seek to the end
+      // (ListeningTracker.listenedToEnd())
+      if (generation == _worker.generation && index == _currentIndex) {
+        _listening.seeked(position);
+      }
       // A seek while paused gets no position update to save it with
       if (_playbackState != PlaybackState.playing) _currentPosition = position;
       _stateKeeper.schedulePositionSave();

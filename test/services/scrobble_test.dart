@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -332,6 +334,196 @@ void main() {
       verifyNever(
         mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
       );
+    });
+
+    test('should NOT scrobble a song seeked to exactly its end', () async {
+      // Like Media3: the seek completes on the next track. Its index event
+      // waits until the seek is done; its position and duration don't. The
+      // next track is long enough that its length, credited to this one,
+      // would pass the threshold.
+      mockAudioPlayer.seekToEndAdvancesTo = const Duration(minutes: 10);
+      mockAudioPlayer.simulateDurationChange(const Duration(seconds: 180));
+      await audioPlayerService.playAlbum(threeMinuteAlbum());
+      await settle();
+      clearInteractions(mockApi);
+
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 10));
+      await settle();
+      await audioPlayerService.seekTo(const Duration(seconds: 180));
+      await settle();
+
+      expect(audioPlayerService.currentSong?.id, 'song2');
+      expect(audioPlayerService.totalDuration, const Duration(minutes: 10));
+      verifyNever(
+        mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
+      );
+      expect(scrobbleQueue.queueSize, 0);
+    });
+
+    test('should NOT scrobble the last song seeked to its end', () async {
+      mockAudioPlayer.simulateDurationChange(const Duration(seconds: 180));
+      await audioPlayerService.playSong(
+        Song(
+          id: 'song1',
+          title: 'Test Song',
+          artist: 'Test Artist',
+          album: 'Test Album',
+          duration: 180,
+        ),
+      );
+      await settle();
+      clearInteractions(mockApi);
+
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 10));
+      await settle();
+      await audioPlayerService.seekTo(const Duration(seconds: 180));
+      mockAudioPlayer.simulateCompletion();
+      await settle();
+
+      verifyNever(
+        mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
+      );
+    });
+
+    test('should scrobble the next song once it has been heard', () async {
+      mockAudioPlayer.seekToEndAdvancesTo = const Duration(minutes: 4);
+      mockAudioPlayer.simulateDurationChange(const Duration(seconds: 180));
+      await audioPlayerService.playAlbum(threeMinuteAlbum());
+      await settle();
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 10));
+      await audioPlayerService.seekTo(const Duration(seconds: 180));
+      await settle();
+      clearInteractions(mockApi);
+
+      // song2's position updates count again once it's followed
+      mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 125));
+      await settle();
+
+      verifyNever(
+        mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
+      );
+      verify(
+        mockApi.scrobbleSubmission('song2', playedAt: anyNamed('playedAt')),
+      ).called(1);
+    });
+
+    group('while the player is on the next track before the service', () {
+      Album album() => Album(
+        id: 'album1',
+        name: 'Test Album',
+        artist: 'Test Artist',
+        songs: [
+          for (final id in ['song1', 'song2', 'song3'])
+            Song(
+              id: id,
+              title: id,
+              artist: 'Test Artist',
+              album: 'Test Album',
+              duration: 180,
+            ),
+        ],
+      );
+
+      late Completer<void> gate;
+      late Future<void> seek;
+
+      /// Plays song1 for 10 s, then seeks to its end: the player is on
+      /// song2 and buffers there, and the seek waits at the gate.
+      setUp(() async {
+        mockAudioPlayer.seekToEndAdvancesTo = const Duration(minutes: 10);
+        mockAudioPlayer.simulateDurationChange(const Duration(seconds: 180));
+        await audioPlayerService.playAlbum(album());
+        await settle();
+        mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 10));
+        await settle();
+        clearInteractions(mockApi);
+        gate = mockAudioPlayer.seekGate = Completer<void>();
+        seek = audioPlayerService.seekTo(const Duration(seconds: 180));
+        await pumpUntil(() => mockAudioPlayer.currentIndex == 1);
+      });
+
+      test('its updates are not the current track\'s', () async {
+        mockAudioPlayer.simulatePositionChange(const Duration(seconds: 5));
+        await pumpEventQueue();
+        expect(audioPlayerService.currentSong?.id, 'song1');
+        expect(audioPlayerService.currentPosition, const Duration(seconds: 10));
+        expect(audioPlayerService.totalDuration, const Duration(seconds: 180));
+
+        gate.complete();
+        await seek;
+        await settle();
+        expect(audioPlayerService.currentSong?.id, 'song2');
+        expect(audioPlayerService.totalDuration, const Duration(minutes: 10));
+        mockAudioPlayer.simulatePositionChange(const Duration(seconds: 6));
+        await pumpEventQueue();
+        expect(audioPlayerService.currentPosition, const Duration(seconds: 6));
+        verifyNever(
+          mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
+        );
+      });
+
+      test('a skip meanwhile takes over', () async {
+        final skip = audioPlayerService.next();
+        await pumpEventQueue();
+        gate.complete();
+        await seek;
+        await skip;
+        await settle();
+
+        expect(audioPlayerService.currentSong?.id, 'song2');
+        mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 125));
+        await settle();
+        expect(
+          audioPlayerService.currentPosition,
+          const Duration(seconds: 125),
+        );
+        verifyNever(
+          mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
+        );
+        verify(
+          mockApi.scrobbleSubmission('song2', playedAt: anyNamed('playedAt')),
+        ).called(1);
+      });
+
+      test('a new queue meanwhile takes over', () async {
+        final play = audioPlayerService.playSong(
+          Song(id: 'other', title: 'Other', artist: 'A', album: 'B'),
+        );
+        await pumpEventQueue();
+        gate.complete();
+        await seek;
+        await play;
+        await settle();
+
+        expect(audioPlayerService.currentSong?.id, 'other');
+        mockAudioPlayer.simulatePlayingTo(const Duration(seconds: 125));
+        await settle();
+        expect(
+          audioPlayerService.currentPosition,
+          const Duration(seconds: 125),
+        );
+        verifyNever(
+          mockApi.scrobbleSubmission('song1', playedAt: anyNamed('playedAt')),
+        );
+        verify(
+          mockApi.scrobbleSubmission('other', playedAt: anyNamed('playedAt')),
+        ).called(1);
+      });
+
+      test('a jump past the next track is not followed, and updates apply '
+          'again', () async {
+        mockAudioPlayer.simulateTrackTransition();
+        await pumpEventQueue();
+        gate.complete();
+        await seek;
+        await settle();
+
+        // Not an advance by one: the service stays where it was, as before
+        expect(audioPlayerService.currentSong?.id, 'song1');
+        mockAudioPlayer.simulatePositionChange(const Duration(seconds: 7));
+        await pumpEventQueue();
+        expect(audioPlayerService.currentPosition, const Duration(seconds: 7));
+      });
     });
 
     test(
