@@ -11,6 +11,8 @@ each release. A release with nothing a user would notice says so.
 
 ## Unreleased
 
+## 1.3.16 - 2026-11-27
+
 - Fixed: dragging the seek bar to the very end of a track to skip it could count the track as played, so subsoxy took the skip for a play. It now counts as a skip.
 
 ## 1.3.15 - 2026-11-21
