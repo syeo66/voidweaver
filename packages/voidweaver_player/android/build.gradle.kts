@@ -67,5 +67,5 @@ dependencies {
 
     // JVM tests (`./gradlew :voidweaver_player:testDebugUnitTest` in android/)
     testImplementation("junit:junit:4.13.2")
-    testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation("org.robolectric:robolectric:4.18.1")
 }
