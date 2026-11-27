@@ -11,21 +11,22 @@ import 'settings_service.dart';
 import 'replaygain_reader.dart';
 import 'replaygain_resolver.dart';
 import 'playback_persistence.dart';
+import 'playback_state_keeper.dart';
 import 'scrobble_queue.dart';
 import 'audio_cache.dart';
 import 'network_errors.dart';
+import 'network_resume.dart';
 import 'listening_tracker.dart';
 import 'player_worker.dart';
 import 'sleep_timer.dart';
 import 'upcoming_downloads.dart';
 
+export 'playback_state_keeper.dart' show QueueSource;
+
 final _log = Logger('audio_player');
 final _rgLogger = Logger('replaygain');
 
 enum PlaybackState { stopped, playing, paused, loading }
-
-/// What the queue was started from. Saved with the queue by its [name].
-enum QueueSource { album, random, song }
 
 /// Plays a playlist through [VoidweaverPlayer]. The whole playlist is handed
 /// to the player as its sequence, so the player moves from track to track by
@@ -52,7 +53,6 @@ class AudioPlayerService extends ChangeNotifier {
   final VoidweaverPlayer _audioPlayer;
   final SubsonicApi _api;
   final SettingsService _settingsService;
-  final PlaybackPersistenceService? _persistence;
   final ScrobbleQueue _scrobbleQueue;
   final AudioCache _audioCache;
   final DateTime Function() _clock;
@@ -74,9 +74,9 @@ class AudioPlayerService extends ChangeNotifier {
   Duration _totalDuration = Duration.zero;
   Song? _currentSong;
 
-  // Playlist source tracking for persistence
-  QueueSource? _playlistSource;
-  String? _sourceId;
+  // Saves and restores the queue and the position, and knows what the queue
+  // was started from
+  late final PlaybackStateKeeper _stateKeeper;
 
   // Incremented whenever a new queue is requested (an album, random songs,
   // a song); a start whose songs arrive after a newer request is dropped,
@@ -91,18 +91,17 @@ class AudioPlayerService extends ChangeNotifier {
   // play (after stop(), an error, or a restore that couldn't load)
   Duration _pendingResumePosition = Duration.zero;
 
-  // Playback stopped on a track because the network failed while it was
-  // meant to play: it's played again when the network is back, see
-  // _onNetworkAvailable(). Cleared by every move, pause() and stop(). (A
-  // move after the failure loads the queue, as the player is idle, which
-  // takes a new generation: _onNetworkAvailable() checks that as well.)
-  ({int generation, int index, DateTime failedAt})? _networkResume;
+  // Plays a track again once the network is back, if it stopped because
+  // the network failed while it was meant to play. Cleared by every move,
+  // pause() and stop().
+  late final NetworkResume _networkResume = NetworkResume(
+    _NetworkResumeHost(this),
+    clock: _clock,
+  );
 
   /// How long after a network failure the network coming back still resumes
-  /// playback. Media3 keeps the service in the foreground for 10 minutes
-  /// after playback stops, so the app can still start playing from the
-  /// background; later the user may have long moved on.
-  static const networkResumeWindow = Duration(minutes: 10);
+  /// playback, see [NetworkResume.window].
+  static const networkResumeWindow = NetworkResume.window;
 
   // The current play of the current song: how long it has been heard, and
   // whether it has been scrobbled
@@ -144,7 +143,7 @@ class AudioPlayerService extends ChangeNotifier {
     this._api,
     this._settingsService, {
     VoidweaverPlayer? audioPlayer,
-    this._persistence,
+    PlaybackPersistenceService? persistence,
     ScrobbleQueue? scrobbleQueue,
     AudioCache? audioCache,
     @visibleForTesting Duration downloadRetryDelay = const Duration(seconds: 5),
@@ -158,13 +157,14 @@ class AudioPlayerService extends ChangeNotifier {
       retryDelay: downloadRetryDelay,
       onReplayGain: _storeReplayGain,
     );
+    _stateKeeper = PlaybackStateKeeper(_PlaybackStateHost(this), persistence);
     // Downloads that failed while offline start again, and scrobbles that
     // couldn't be sent go out
     _networkSubscription = _audioCache.networkAvailable.listen(
       (_) {
         _downloads.networkAvailable();
         _scrobbleQueue.networkAvailable();
-        _onNetworkAvailable();
+        _networkResume.onNetworkAvailable();
       },
       onError: (Object e) {
         _log.warning('[audio_cache] Network events failed', e);
@@ -270,7 +270,7 @@ class AudioPlayerService extends ChangeNotifier {
       );
       if (_playbackState == PlaybackState.playing) {
         _scrobbleCurrentSongIfEligible();
-        _schedulePositionSave();
+        _stateKeeper.schedulePositionSave();
       }
     });
 
@@ -326,64 +326,9 @@ class AudioPlayerService extends ChangeNotifier {
     );
   }
 
-  // Persistence methods
-  Future<bool> restorePlaybackState() async {
-    if (_persistence == null) {
-      _log.fine('Persistence service not available, skipping restoration');
-      return false;
-    }
-
-    try {
-      final savedState = await _persistence.loadPlaybackState();
-      if (savedState == null || savedState.isEmpty) {
-        _log.fine('No saved playback state to restore');
-        return false;
-      }
-      if (!savedState.hasValidIndex) return false;
-      // The user started playback while the saved state was loading
-      if (_playlist.isNotEmpty) return false;
-
-      _log.fine(
-        'Attempting to restore playlist with ${savedState.playlist.length} songs',
-      );
-
-      _worker.setPlaylist(savedState.playlist);
-      _playlistSource = QueueSource.values
-          .asNameMap()[savedState.playlistSource];
-      _sourceId = savedState.sourceId;
-      final resumeAt = savedState.currentPosition;
-
-      // Load the queue but don't auto-play. If that fails (e.g. the server
-      // is unreachable) keep the restored queue: play() loads it again at
-      // the restored position.
-      final result = await _requestMove(
-        savedState.currentIndex,
-        position: resumeAt,
-        play: false,
-        onFailure: OnFailure.quiet,
-        description: 'restored song',
-      );
-      // Playback the user started meanwhile (an album, a skip) took over
-      if (result == MoveResult.superseded || result == MoveResult.stopped) {
-        return false;
-      }
-      _currentPosition = resumeAt;
-      // User must manually resume, unless Play was pressed while it loaded
-      if (!_audioPlayer.playing) _playbackState = PlaybackState.paused;
-
-      _log.info(
-        'Successfully restored playback state: ${_currentSong?.title} at $resumeAt',
-      );
-      notifyListeners();
-      return true;
-    } catch (e, stack) {
-      _log.warning('Failed to restore playback state', e, stack);
-      // Clear invalid saved state
-      await _persistence.clearPlaybackState();
-    }
-
-    return false;
-  }
+  /// Loads the saved queue paused, at the saved position, see
+  /// [PlaybackStateKeeper.restore].
+  Future<bool> restorePlaybackState() => _stateKeeper.restore();
 
   /// Plays if the app was started for a Play media button while it wasn't
   /// running, see [VoidweaverPlayer.takeResumeRequest]. Call after
@@ -393,24 +338,6 @@ class AudioPlayerService extends ChangeNotifier {
       _log.info('Resuming playback for a media button');
       await play();
     }
-  }
-
-  PersistedPlaybackState _persistedState() => PersistedPlaybackState(
-    playlist: _playlist,
-    currentIndex: _currentIndex,
-    currentPosition: _currentPosition,
-    playlistSource: _playlistSource?.name,
-    sourceId: _sourceId,
-  );
-
-  Future<void> _saveCurrentState() async {
-    if (_persistence == null || _playlist.isEmpty) return;
-    await _persistence.savePlaybackState(_persistedState());
-  }
-
-  void _schedulePositionSave() {
-    if (_persistence == null || _playlist.isEmpty) return;
-    _persistence.schedulePositionSave(_persistedState());
   }
 
   Future<void> playAlbum(Album album) =>
@@ -475,8 +402,7 @@ class AudioPlayerService extends ChangeNotifier {
 
     _log.info('Playing $description: ${songs.length} songs');
     _worker.setPlaylist(List.of(songs));
-    _playlistSource = source;
-    _sourceId = sourceId;
+    _stateKeeper.startedFrom(source, sourceId);
     await _startPlaylist(description);
   }
 
@@ -484,8 +410,7 @@ class AudioPlayerService extends ChangeNotifier {
     // An album or random still being fetched doesn't replace this one
     ++_queueRequests;
     _worker.setPlaylist([song]);
-    _playlistSource = QueueSource.song;
-    _sourceId = song.id;
+    _stateKeeper.startedFrom(QueueSource.song, song.id);
     await _startPlaylist('song');
   }
 
@@ -557,7 +482,7 @@ class AudioPlayerService extends ChangeNotifier {
   /// shows it while it loads. Not for error recovery ([Move.failure]), which
   /// stays on the failed track until it finds one to go on at.
   void _onMoveRequested(Move move) {
-    _networkResume = null;
+    _networkResume.clear();
     if (move.failure == null) {
       if (_worker.needsLoad) _playbackState = PlaybackState.loading;
       _setCurrentTrack(
@@ -593,14 +518,10 @@ class AudioPlayerService extends ChangeNotifier {
       case OnFailure.report:
         // After a network failure, play() goes on where the track broke off,
         // and so does the network coming back if it was meant to play
-        final network = _isNetworkFailure(failure);
+        final network = NetworkResume.isNetworkFailure(failure);
         _pendingResumePosition = network ? move.position : Duration.zero;
         if (network && _worker.playPending) {
-          _networkResume = (
-            generation: _worker.generation,
-            index: move.index,
-            failedAt: _clock(),
-          );
+          _networkResume.arm(generation: _worker.generation, index: move.index);
         }
         _onLoadFailed('Failed to play ${move.description}', failure);
         move.complete(MoveResult.failed);
@@ -703,7 +624,7 @@ class AudioPlayerService extends ChangeNotifier {
   void _onTrackStarted() {
     unawaited(_scrobbleQueue.queueNowPlaying(_currentSong!.id));
     unawaited(_preloadUpcomingSongs());
-    unawaited(_saveCurrentState());
+    unawaited(_stateKeeper.save());
     notifyListeners();
   }
 
@@ -774,36 +695,6 @@ class AudioPlayerService extends ChangeNotifier {
     );
   }
 
-  /// Whether [failure] is the player failing to reach the server (the
-  /// connection failed, broke off or timed out), as opposed to the server
-  /// answering with an error (Media3 code 2004), or with a document instead
-  /// of audio (2000, see `LoadErrorPolicy`), which it would answer again.
-  static bool _isNetworkFailure(Object failure) =>
-      failure is PlayerException &&
-      (failure.code == 2001 || // ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
-          failure.code == 2002); // ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
-
-  /// The network is back: plays the track that stopped because the network
-  /// failed (see _onMoveFailed()), where it broke off, unless the user did
-  /// anything with playback since, or it's been too long.
-  void _onNetworkAvailable() {
-    final resume = _networkResume;
-    if (resume == null || _disposed) return;
-    _networkResume = null;
-    if (_clock().difference(resume.failedAt) > networkResumeWindow) {
-      _log.info('Network is back, too long after playback stopped to resume');
-      return;
-    }
-    if (resume.generation != _worker.generation ||
-        resume.index != _currentIndex ||
-        _worker.hasMove ||
-        !_worker.needsLoad) {
-      return;
-    }
-    _log.info('Network is back, resuming index $_currentIndex');
-    unawaited(play());
-  }
-
   /// The API's password changed (see [SubsonicApi.usePassword]). Playback
   /// goes on: the player plays cached tracks from the cache whatever their
   /// URL. Downloads of the upcoming tracks start again with the new
@@ -868,7 +759,7 @@ class AudioPlayerService extends ChangeNotifier {
   /// Pauses, also while a track loads or buffers: a load or skip in progress
   /// then doesn't start playback.
   Future<void> pause() async {
-    _networkResume = null;
+    _networkResume.clear();
     if (_worker.hasMove && _worker.playPending) {
       _worker.playPending = false;
       notifyListeners();
@@ -876,8 +767,8 @@ class AudioPlayerService extends ChangeNotifier {
     await _audioPlayer.pause();
     // The position stream saves only while playing, so the position the
     // pause stopped at is written now, not with the next timed save
-    _schedulePositionSave();
-    _persistence?.flushPendingPositionSave();
+    _stateKeeper.schedulePositionSave();
+    _stateKeeper.flushPositionSave();
   }
 
   /// Stops and releases the loaded track. A load in progress ends without
@@ -885,7 +776,7 @@ class AudioPlayerService extends ChangeNotifier {
   /// after the stop, while the move hasn't noticed it yet, loads and starts
   /// its target. See PlayerWorker._stopEnds().
   Future<void> stop() async {
-    _networkResume = null;
+    _networkResume.clear();
     _worker.stopRequested();
     _pendingResumePosition = Duration.zero;
     await _audioPlayer.stop();
@@ -955,14 +846,14 @@ class AudioPlayerService extends ChangeNotifier {
     if (_worker.hasMove) {
       _currentPosition = position;
       // The move's end saves only if it starts playback
-      _schedulePositionSave();
+      _stateKeeper.schedulePositionSave();
       return _worker.seekDuringMove(position);
     }
     if (_playlist.isNotEmpty && _worker.needsLoad) {
       // Nothing loaded to seek in: play() loads it there
       _pendingResumePosition = position;
       _currentPosition = position;
-      _schedulePositionSave();
+      _stateKeeper.schedulePositionSave();
       return Future.value();
     }
     final generation = _worker.generation;
@@ -974,7 +865,7 @@ class AudioPlayerService extends ChangeNotifier {
       await _audioPlayer.seek(position);
       // A seek while paused gets no position update to save it with
       if (_playbackState != PlaybackState.playing) _currentPosition = position;
-      _schedulePositionSave();
+      _stateKeeper.schedulePositionSave();
     });
   }
 
@@ -1025,7 +916,7 @@ class AudioPlayerService extends ChangeNotifier {
     playlist[index] = updated;
     // Saved with the queue's next save, so a restored queue has the gain
     // without reading the file again
-    _persistence?.queueChanged();
+    _stateKeeper.queueChanged();
     // Not notified: only the gain depends on it
     if (index == _currentIndex) _currentSong = updated;
     _updateGains(onlyIndex: index);
@@ -1034,7 +925,7 @@ class AudioPlayerService extends ChangeNotifier {
   /// The linear gain [song] plays at, see [ReplayGainResolver.gainFor].
   double _gainFor(Song song) => _replayGain.gainFor(
     song,
-    fromAlbum: _playlistSource == QueueSource.album,
+    fromAlbum: _stateKeeper.source == QueueSource.album,
   );
 
   /// Sets the gain of the items in the player's sequence (only those for
@@ -1060,8 +951,8 @@ class AudioPlayerService extends ChangeNotifier {
     if (song == null) return;
     _replayGain.logTrack(
       song,
-      fromAlbum: _playlistSource == QueueSource.album,
-      queue: _playlistSource?.name ?? 'none',
+      fromAlbum: _stateKeeper.source == QueueSource.album,
+      queue: _stateKeeper.source?.name ?? 'none',
     );
   }
 
@@ -1133,7 +1024,7 @@ class AudioPlayerService extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    _networkResume = null;
+    _networkResume.clear();
     // Ends the move in progress and the queued operations, and stops
     // following the player's index and error events
     _worker.dispose();
@@ -1145,7 +1036,7 @@ class AudioPlayerService extends ChangeNotifier {
     unawaited(_networkSubscription?.cancel());
     _sleepTimer.dispose();
     // Not disposed here: AppState owns it and keeps it across logins
-    _persistence?.flushPendingPositionSave();
+    _stateKeeper.flushPositionSave();
     _scrobbleQueue.dispose();
     unawaited(_playbackErrors.close());
     _released = _audioPlayer.dispose().catchError((Object e) {
@@ -1207,4 +1098,74 @@ class _WorkerHost implements PlayerWorkerHost {
   @override
   void playbackFailed(int index, PlayerException error) =>
       _service._onPlaybackFailed(index, error);
+}
+
+/// The service's side of [NetworkResume]
+class _NetworkResumeHost implements NetworkResumeHost {
+  final AudioPlayerService _service;
+
+  _NetworkResumeHost(this._service);
+
+  @override
+  bool get isDisposed => _service._disposed;
+
+  @override
+  int get generation => _service._worker.generation;
+
+  @override
+  int get currentIndex => _service._currentIndex;
+
+  @override
+  bool get hasMove => _service._worker.hasMove;
+
+  @override
+  bool get needsLoad => _service._worker.needsLoad;
+
+  @override
+  Future<void> play() => _service.play();
+}
+
+/// The service's side of [PlaybackStateKeeper]
+class _PlaybackStateHost implements PlaybackStateHost {
+  final AudioPlayerService _service;
+
+  _PlaybackStateHost(this._service);
+
+  @override
+  List<Song> get playlist => _service._playlist;
+
+  @override
+  int get currentIndex => _service._currentIndex;
+
+  @override
+  Duration get currentPosition => _service._currentPosition;
+
+  @override
+  Song? get currentSong => _service._currentSong;
+
+  @override
+  void setPlaylist(List<Song> songs) => _service._worker.setPlaylist(songs);
+
+  // Load the queue but don't auto-play. If that fails (e.g. the server is
+  // unreachable) keep the restored queue: play() loads it again at the
+  // restored position.
+  @override
+  Future<MoveResult> loadRestored(int index, Duration position) =>
+      _service._requestMove(
+        index,
+        position: position,
+        play: false,
+        onFailure: OnFailure.quiet,
+        description: 'restored song',
+      );
+
+  @override
+  void restored(Duration position) {
+    _service._currentPosition = position;
+    // User must manually resume, unless Play was pressed while it loaded
+    if (!_service._audioPlayer.playing) {
+      _service._playbackState = PlaybackState.paused;
+    }
+    _service.notifyListeners();
+  }
 }
